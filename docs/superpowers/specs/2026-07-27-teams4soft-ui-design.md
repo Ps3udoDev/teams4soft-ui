@@ -39,7 +39,8 @@ El diseño de componentes, contratos, tokens, orden de extracción y "definició
   - `dist/tokens.css` — solo los tokens semánticos (`@theme` + variables CSS), para quien solo quiera temar.
 - El consumidor importa el CSS explícitamente: `import "@teams4soft/teams4soft-ui/styles.css"`.
 - **Ventaja:** la librería se **desacopla** del `tailwind.config` del consumidor — no depende de que él añada nuestro `dist` a su `content`. Precompilamos las utilidades que usamos y las enviamos.
-- `sideEffects: ["*.css"]` para que el tree-shaking no elimine los estilos.
+- **Resolución de conflictos de clases:** la utilidad `cn` (**clsx + tailwind-merge**) combina las clases externas **al final**, de modo que una clase custom del consumidor sobrescribe la utilidad interna en conflicto (p. ej. `className="rounded-none"` gana sobre un `rounded-md` interno). Es obligatoria en todo componente público.
+- `sideEffects: ["*.css"]` en `package.json` para que el tree-shaking de los bundlers del consumidor (Webpack, Vite) no elimine `styles.css`.
 
 ### 3.3. `exports` map (tree-shaking por categoría)
 
@@ -146,4 +147,4 @@ Ciclo por componente (todas las fases 1–5): contrato TS → implementación �
 | Duplicación de Radix/TanStack en el bundle del consumidor | peerDependencies + `external` en tsup |
 | Publicar código fuente o secretos por error | `files: [dist]` + `pack --dry-run` en CI que falla el pipeline |
 | Vulnerabilidad en dependencia de terceros | `pnpm audit` + dependency-review + CodeQL en CI; versiones fijadas |
-| Nombre `@teams4soft/teams4soft-ui` ocupado en npm | Verificar disponibilidad del scope antes de Fase 6; scope de org permite reservarlo |
+| Nombre `@teams4soft/teams4soft-ui` ocupado en npm | Resuelto: nombre disponible y organización `@teams4soft` creada en npm (2026-07-27) |
