@@ -11,6 +11,7 @@ const Intro = () => (
 const meta: Meta<typeof Intro> = {
   title: "Introducción/Bienvenida",
   component: Intro,
+  tags: ["autodocs"],
 };
 export default meta;
 

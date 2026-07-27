@@ -43,10 +43,8 @@
   },
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {
-    "@chromatic-com/storybook": "^5.2.1",
     "@storybook/addon-a11y": "^10.5.4",
     "@storybook/addon-docs": "^10.5.4",
-    "@storybook/addon-mcp": "^0.7.0",
     "@storybook/react-vite": "^10.5.4",
     "@tailwindcss/cli": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.0",
