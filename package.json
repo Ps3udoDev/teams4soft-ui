@@ -18,11 +18,15 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
-    }
+    },
+    "./styles.css": "./dist/styles.css",
+    "./tokens.css": "./dist/tokens.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build:js": "tsup",
+    "build:css": "pnpm exec tailwindcss -i src/styles/theme.css -o dist/styles.css --minify && node -e \"require('fs').copyFileSync('src/styles/tokens.css','dist/tokens.css')\"",
+    "build": "pnpm build:js && pnpm build:css",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -36,6 +40,7 @@
   },
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.17",
@@ -43,6 +48,7 @@
     "jsdom": "^29.1.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "tailwindcss": "^4.3.3",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"
