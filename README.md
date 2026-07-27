@@ -22,7 +22,7 @@ import "@teams4soft/teams4soft-ui/styles.css";
 
 ## Estado
 
-En construcción por fases. Ver `docs/superpowers/plans/`.
+En construcción por fases.
 
 ## Publicación (mantenedores)
 
