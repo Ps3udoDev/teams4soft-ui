@@ -29,7 +29,9 @@
     "build": "pnpm build:js && pnpm build:css",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "peerDependencies": {
     "react": ">=18.0.0",
@@ -41,6 +43,11 @@
   },
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {
+    "@chromatic-com/storybook": "^5.2.1",
+    "@storybook/addon-a11y": "^10.5.4",
+    "@storybook/addon-docs": "^10.5.4",
+    "@storybook/addon-mcp": "^0.7.0",
+    "@storybook/react-vite": "^10.5.4",
     "@tailwindcss/cli": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
@@ -49,6 +56,7 @@
     "jsdom": "^29.1.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "storybook": "^10.5.4",
     "tailwindcss": "^4.3.3",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
