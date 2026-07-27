@@ -23,3 +23,8 @@ import "@teams4soft/teams4soft-ui/styles.css";
 ## Estado
 
 En construcción por fases. Ver `docs/superpowers/plans/`.
+
+## Publicación (mantenedores)
+
+1. Crear `NPM_TOKEN` (token de automatización con 2FA) en la organización `@teams4soft` y guardarlo como secret del repo.
+2. Subir un tag y crear un GitHub Release → el workflow `release.yml` publica con provenance.
