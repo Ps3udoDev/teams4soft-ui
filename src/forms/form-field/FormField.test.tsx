@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
@@ -134,19 +134,23 @@ describe("FormField (API de conveniencia)", () => {
     expect(input).toHaveAttribute("aria-required", "true");
   });
 
-  it("no sobrescribe un id ya provisto explícitamente por el hijo", () => {
-    // El hijo trae su propio id, distinto al de FormField: el aviso de
-    // desarrollo sobre la asociación label/aria es esperado aquí, se
-    // silencia para mantener la salida de la suite limpia.
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("FormField gestiona el id del control: sobrescribe un id explícito del hijo para que <label for> siempre coincida", async () => {
+    const user = userEvent.setup();
     render(
       <FormField label="Correo">
         <input type="text" id="custom-id" />
       </FormField>,
     );
     const input = screen.getByRole("textbox");
-    expect(input.id).toBe("custom-id");
-    warnSpy.mockRestore();
+    const label = screen.getByText("Correo");
+
+    // El id que expone FormField gana: la asociación label/control nunca
+    // queda colgante, sin importar qué id traiga el hijo.
+    expect(input.id).not.toBe("custom-id");
+    expect(label.getAttribute("for")).toBe(input.id);
+
+    await user.click(label);
+    expect(input).toHaveFocus();
   });
 });
 
@@ -210,6 +214,38 @@ describe("FormField (API compuesta)", () => {
       "data-disabled",
       "true",
     );
+  });
+
+  it("un FormField.Error anidado (envuelto en un <div>) se sigue detectando: aria-invalid, aria-describedby, y suprime una Description hermana", () => {
+    render(
+      <FormField.Root>
+        <FormField.Label>Correo</FormField.Label>
+        <FormField.Control>
+          <input type="text" />
+        </FormField.Control>
+        <FormField.Description>
+          Usaremos este correo para notificaciones.
+        </FormField.Description>
+        <div className="flex items-center gap-1">
+          <span aria-hidden="true">!</span>
+          <FormField.Error>Correo inválido</FormField.Error>
+        </div>
+      </FormField.Root>,
+    );
+
+    const input = screen.getByRole("textbox");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+
+    const errorNode = screen.getByText("Correo inválido");
+    const describedBy = (input.getAttribute("aria-describedby") ?? "").split(
+      " ",
+    );
+    expect(describedBy).toContain(errorNode.id);
+
+    // El error (aunque anidado) sigue reemplazando a la descripción.
+    expect(
+      screen.queryByText("Usaremos este correo para notificaciones."),
+    ).not.toBeInTheDocument();
   });
 
   it("useFormFieldContext() devuelve null fuera de un FormField", async () => {

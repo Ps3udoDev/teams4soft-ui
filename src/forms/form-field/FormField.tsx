@@ -21,10 +21,14 @@ function isEmptyMessage(children: React.ReactNode): boolean {
 }
 
 /**
- * Recorre los hijos directos de `FormField.Root` para saber, de forma
- * síncrona (sin efectos ni doble render), si hay un `FormField.Error` y/o
- * `FormField.Description` con contenido. El error reemplaza visualmente a
- * la descripción: si hay contenido de error, la descripción no cuenta.
+ * Recorre TODO el subárbol de hijos de `FormField.Root` (no solo los hijos
+ * directos) para saber, de forma síncrona (sin efectos ni doble render), si
+ * hay un `FormField.Error` y/o `FormField.Description` con contenido en
+ * cualquier profundidad — p. ej. envuelto en un `<div>` junto a un icono.
+ * El error reemplaza visualmente a la descripción: si hay contenido de
+ * error, la descripción no cuenta. No es necesario clonar los nodos
+ * anidados aquí: `FormFieldError`/`FormFieldDescription` ya leen su id
+ * desde el contexto por sí mismos; esta función solo detecta su presencia.
  */
 function scanMessageContent(children: React.ReactNode): {
   hasErrorContent: boolean;
@@ -33,19 +37,29 @@ function scanMessageContent(children: React.ReactNode): {
   let hasErrorContent = false;
   let hasDescriptionRaw = false;
 
-  React.Children.forEach(children, (child) => {
-    if (!React.isValidElement(child)) return;
-    const props = child.props as UnknownProps;
-    if (child.type === FormFieldError) {
-      if (!isEmptyMessage(props.children as React.ReactNode)) {
-        hasErrorContent = true;
+  function walk(node: React.ReactNode): void {
+    React.Children.forEach(node, (child) => {
+      if (!React.isValidElement(child)) return;
+      const props = child.props as UnknownProps;
+      if (child.type === FormFieldError) {
+        if (!isEmptyMessage(props.children as React.ReactNode)) {
+          hasErrorContent = true;
+        }
+        return;
       }
-    } else if (child.type === FormFieldDescription) {
-      if (!isEmptyMessage(props.children as React.ReactNode)) {
-        hasDescriptionRaw = true;
+      if (child.type === FormFieldDescription) {
+        if (!isEmptyMessage(props.children as React.ReactNode)) {
+          hasDescriptionRaw = true;
+        }
+        return;
       }
-    }
-  });
+      // No es un slot de mensaje: sigue buscando dentro de sus propios
+      // hijos (soporta wrappers arbitrarios: <div>, Fragment, iconos, etc.).
+      walk(props.children as React.ReactNode);
+    });
+  }
+
+  walk(children);
 
   return {
     hasErrorContent,
@@ -53,11 +67,21 @@ function scanMessageContent(children: React.ReactNode): {
   };
 }
 
-/** Compone `id`/`aria-*`/`disabled`/slot `control` en el único hijo, sin sobrescribir lo que el hijo ya definió. */
+/**
+ * Compone `id`/`aria-*`/`disabled`/slot `control` en el único hijo.
+ *
+ * `id` es el único campo que FormField SIEMPRE gestiona (sobrescribe lo que
+ * el hijo haya definido): es lo que garantiza que `<label htmlFor>` y el
+ * `id` real del control en el DOM coincidan siempre — el patrón estándar en
+ * Radix/MUI `FormControl`. El resto (`aria-invalid`, `aria-required`,
+ * `disabled`) se compone SIN sobrescribir lo que el hijo ya definió
+ * explícitamente, y `aria-describedby` se mezcla (valor del hijo + ids
+ * generados), nunca se reemplaza.
+ */
 function composeControlProps(
   child: React.ReactElement,
   ctx: FormFieldContextValue,
-  internalRef: React.RefObject<HTMLElement | null>,
+  mergedRef: React.RefCallback<unknown>,
 ): React.ReactElement {
   const childElement = child as React.ReactElement<UnknownProps>;
   const childProps = childElement.props;
@@ -80,11 +104,9 @@ function composeControlProps(
     .join(" ");
 
   const nextProps: UnknownProps = {
-    id: childProps.id ?? ctx.id,
-    ref: mergeRefs(
-      (childProps.ref as React.Ref<unknown> | undefined) ?? undefined,
-      internalRef,
-    ),
+    // FormField es dueño del id del control (ver comentario de la función).
+    id: ctx.id,
+    ref: mergedRef,
   };
 
   if (composedDescribedBy.length > 0) {
@@ -128,9 +150,10 @@ const reservedSpaceClassName = "min-h-5 text-sm";
 
 /**
  * Raíz de la API compuesta: genera ids estables, calcula el estado
- * derivado (inválido/descripción activa/error activo) a partir de sus
- * hijos directos y lo expone vía contexto. Consulta
- * `components_docs/migration/03_form_field.md` para el contrato completo.
+ * derivado (inválido/descripción activa/error activo) recorriendo todo su
+ * subárbol de hijos (no solo los directos) y lo expone vía contexto.
+ * Consulta `components_docs/migration/03_form_field.md` para el contrato
+ * completo.
  */
 export const FormFieldRoot = React.forwardRef<HTMLDivElement, FormFieldRootProps>(
   (
@@ -265,13 +288,26 @@ FormFieldLabel.displayName = "FormField.Label";
 
 /**
  * Envuelve al único control hijo componiendo `id`/`aria-*`/`disabled` y el
- * slot `control`, sin sobrescribir lo que el hijo ya definió explícitamente.
+ * slot `control`. `id` siempre lo gestiona FormField (sobrescribe el del
+ * hijo); `aria-invalid`/`aria-required`/`disabled` respetan lo que el hijo
+ * ya definió explícitamente, y `aria-describedby` se mezcla.
  */
 export function FormFieldControl({
   children,
 }: FormFieldControlProps): React.ReactElement {
   const ctx = useFormFieldContextOrThrow("FormField.Control");
   const internalRef = React.useRef<HTMLElement | null>(null);
+
+  const childElement = children as React.ReactElement<UnknownProps>;
+  const childRef = childElement.props.ref as React.Ref<unknown> | undefined;
+
+  // Identidad estable entre renders: evita que React desmonte/reasigne el
+  // ref del control en cada render (mergeRefs(...) inline generaría una
+  // función nueva cada vez).
+  const mergedRef = React.useMemo(
+    () => mergeRefs(childRef, internalRef),
+    [childRef, ctx.id],
+  );
 
   React.useEffect(() => {
     if (
@@ -281,16 +317,24 @@ export function FormFieldControl({
       return;
     }
     const node = internalRef.current;
+    // `id` es siempre gestionado por FormField (ver `composeControlProps`),
+    // así que un desajuste aquí solo puede significar que el componente
+    // hijo no reenvió la prop `id` al elemento real del DOM — la asociación
+    // con <label htmlFor> se rompe silenciosamente en ese caso.
+    // `aria-describedby` no depende de esto: se deriva de `ctx.id`
+    // independientemente de lo que el nodo del DOM termine mostrando.
     if (node && node.id !== ctx.id) {
       console.warn(
-        `[FormField] El control no recibió el id "${ctx.id}" (nodo tiene "${node.id}"). ` +
-          "Revisa que el hijo reenvíe `id` y `ref` al elemento del DOM: sin esto, la " +
-          "asociación con <label> y aria-describedby se rompe.",
+        `[FormField] El control no aplicó el id "${ctx.id}" que FormField le asignó ` +
+          `(el nodo del DOM tiene "${node.id}"). FormField gestiona el id del control ` +
+          "(sobrescribe cualquier id que el hijo defina) para garantizar la asociación " +
+          "con <label for>; revisa que el componente hijo reenvíe la prop `id` recibida " +
+          "al elemento real del DOM.",
       );
     }
   }, [ctx.id]);
 
-  return composeControlProps(children, ctx, internalRef);
+  return composeControlProps(children, ctx, mergedRef);
 }
 FormFieldControl.displayName = "FormField.Control";
 

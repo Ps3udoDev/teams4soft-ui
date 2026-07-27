@@ -40,8 +40,18 @@ export interface FormFieldProps extends FormFieldSharedProps {
   children: React.ReactElement;
 }
 
-/** Props de `FormField.Root` (API compuesta). */
-export interface FormFieldRootProps extends FormFieldSharedProps {
+/**
+ * Props de `FormField.Root` (API compuesta). Extiende los atributos HTML de
+ * `<div>` (menos los que `FormFieldSharedProps`/`children` ya redeclaran)
+ * para que el `...rest` que `FormFieldRoot` reenvía a la raíz sea alcanzable
+ * a nivel de tipos por consumidores externos (p. ej. `data-*`, `onClick`).
+ */
+export interface FormFieldRootProps
+  extends FormFieldSharedProps,
+    Omit<
+      React.HTMLAttributes<HTMLDivElement>,
+      keyof FormFieldSharedProps | "children"
+    > {
   children?: React.ReactNode;
 }
 
