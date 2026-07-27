@@ -69,6 +69,34 @@ describe("RadioGroup", () => {
     expect(screen.getByText("Elige una")).toHaveAttribute("id", describedby!);
   });
 
+  it("el control sigue el data-state real del Item (group-data-*), no se congela en modo no controlado", async () => {
+    const user = userEvent.setup();
+    render(<RadioGroup options={options} defaultValue="a" />);
+
+    const radioA = screen.getByRole("radio", { name: "Opción A" });
+    const radioB = screen.getByRole("radio", { name: "Opción B" });
+
+    // El `Item` (option slot) lleva la clase `group`; el control descendiente
+    // lee su estado vía `group-data-[state=checked]`, nunca vía un
+    // `data-state` propio congelado en el primer render.
+    expect(radioA.className.split(" ")).toContain("group");
+    const controlA = radioA.querySelector("span");
+    expect(controlA?.className).toContain("group-data-[state=checked]:border-ui-primary");
+    // El control ya no fija su propio `data-state`: el que importa es el del `Item`.
+    expect(controlA).not.toHaveAttribute("data-state");
+
+    expect(radioA).toHaveAttribute("data-state", "checked");
+    expect(radioB).toHaveAttribute("data-state", "unchecked");
+
+    await user.click(radioB);
+
+    // Tras la interacción en modo NO controlado, Radix actualiza el
+    // `data-state` real del `Item` — la fuente de verdad que lee
+    // `group-data-[state=checked]` en el control, sin quedar obsoleta.
+    expect(radioA).toHaveAttribute("data-state", "unchecked");
+    expect(radioB).toHaveAttribute("data-state", "checked");
+  });
+
   it("usa renderOption para tarjetas sin perder rol radio", () => {
     render(
       <RadioGroup

@@ -53,9 +53,13 @@ export interface RadioGroupProps<TValue extends string> {
    * (sin `value`), este componente no rastrea el estado interno de Radix,
    * por lo que `state.checked` puede no reflejar el estado real tras la
    * primera interacción. El estado real y fiable vive en el atributo DOM
-   * `data-state="checked"` que Radix aplica al `Item`; para estilos usa
-   * siempre el selector `data-[state=checked]` en `classNames.option`/
-   * `classNames.control`, nunca `state.checked`.
+   * `data-state="checked"` que Radix aplica al `Item` (el `option` slot,
+   * el botón `role="radio"`) — nunca en descendientes como `control`. Para
+   * estilos usa siempre atributos, nunca `state.checked`: `data-[state=checked]`
+   * en `classNames.option` (el propio `Item`), o `group-data-[state=checked]`
+   * en `classNames.control`/otros slots descendientes (el `Item` ya lleva la
+   * clase `group`, así que la variante `group-data-*` de Tailwind lee su
+   * estado real de forma fiable en modo controlado Y no controlado).
    */
   renderOption?: (
     option: RadioOption<TValue>,

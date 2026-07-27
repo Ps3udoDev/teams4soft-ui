@@ -113,11 +113,12 @@ export const CardOptions: Story = {
     options: cardOptions,
     defaultValue: "monthly",
     orientation: "horizontal",
-    renderOption: (option, state) => (
-      <div
-        data-state={state.checked ? "checked" : "unchecked"}
-        className="flex w-40 flex-col gap-1 rounded-(--radius-ui-md) border border-ui-border p-4 transition-colors data-[state=checked]:border-ui-primary data-[state=checked]:bg-ui-primary/5"
-      >
+    renderOption: (option) => (
+      // No leas `state.checked` para estilos (es best-effort y se congela en
+      // modo no controlado tras la primera interacción): el `Item` ancestro
+      // ya lleva la clase `group`, así que `group-data-[state=checked]` lee
+      // el `data-state` REAL que Radix mantiene actualizado en todo momento.
+      <div className="flex w-40 flex-col gap-1 rounded-(--radius-ui-md) border border-ui-border p-4 transition-colors group-data-[state=checked]:border-ui-primary group-data-[state=checked]:bg-ui-primary/5">
         <span className="text-sm font-semibold text-ui-foreground">
           {option.label}
         </span>
@@ -134,7 +135,7 @@ export const CardOptions: Story = {
     docs: {
       description: {
         story:
-          "`renderOption` reemplaza el contenido visual dentro de cada `Item` sin perder `role=\"radio\"`. El estilo `data-[state=checked]` (aplicado por Radix al `Item`) es la fuente de verdad para el estado visual; `state.checked` es solo un valor best-effort para render condicional.",
+          "`renderOption` reemplaza el contenido visual dentro de cada `Item` sin perder `role=\"radio\"`. El `Item` lleva la clase `group`, así que el `data-state` REAL que Radix mantiene ahí es legible desde cualquier descendiente con `group-data-[state=checked]:...` — la fuente de verdad para el estado visual, tanto en modo controlado como no controlado. `state.checked` (el segundo argumento de `renderOption`) es solo un valor best-effort para render condicional (p. ej. decidir qué ícono mostrar), nunca para estilos.",
       },
     },
   },
@@ -147,7 +148,7 @@ export const CustomClasses: Story = {
       options: "gap-3",
       option:
         "rounded-xl border p-3 data-[state=checked]:border-emerald-600 data-[state=checked]:bg-emerald-50",
-      control: "border-emerald-600 data-[state=checked]:border-emerald-600",
+      control: "border-emerald-600 group-data-[state=checked]:border-emerald-600",
       indicator: "after:bg-emerald-600",
       optionLabel: "font-semibold text-emerald-950",
     },

@@ -24,8 +24,16 @@ const optionsOrientationClassName: Record<"horizontal" | "vertical", string> = {
 
 const optionBaseClassName = "flex items-start gap-2";
 
+// El estado real (`data-state`, `data-disabled`) y el foco viven en el
+// `RadioGroupPrimitive.Item` (el botón `role="radio"`), no en este `<span>`
+// decorativo. El `Item` lleva la clase utilitaria `group`, así que este
+// control se estiliza vía las variantes `group-*` de Tailwind, que SÍ leen
+// los atributos reales del ancestro — nunca `data-[state=…]`/`disabled:`/
+// `focus-visible:` "planos" aquí, porque ese `<span>` nunca es `:disabled`
+// ni recibe foco. `data-[invalid]` sí es directo: lo fija este componente
+// explícitamente en el propio `<span>` (ver más abajo), no proviene de Radix.
 const controlBaseClassName =
-  "size-4 shrink-0 rounded-full border border-ui-border bg-ui-background data-[state=checked]:border-ui-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:cursor-not-allowed disabled:opacity-50 data-[invalid]:border-ui-danger";
+  "size-4 shrink-0 rounded-full border border-ui-border bg-ui-background group-data-[state=checked]:border-ui-primary group-focus-visible:outline-none group-focus-visible:ring-2 group-focus-visible:ring-ui-focus group-data-[disabled]:cursor-not-allowed group-data-[disabled]:opacity-50 data-[invalid]:border-ui-danger";
 
 const indicatorBaseClassName =
   "flex items-center justify-center after:size-2 after:rounded-full after:bg-ui-primary";
@@ -168,7 +176,17 @@ export function RadioGroup<TValue extends string>({
                   ? optionDescriptionId
                   : undefined
               }
-              className={cn(!unstyled && optionBaseClassName, classNames?.option)}
+              className={cn(
+                // `group` no aplica ningún estilo visual por sí solo: solo
+                // habilita que descendientes (p. ej. el `control`) lean el
+                // `data-state`/`data-disabled` real del `Item` vía variantes
+                // `group-*`. Se mantiene incluso en modo `unstyled` para que
+                // un `classNames.control` custom con `group-data-*` siga
+                // funcionando.
+                "group",
+                !unstyled && optionBaseClassName,
+                classNames?.option,
+              )}
               style={styles?.option}
             >
               {renderOption ? (
@@ -181,7 +199,6 @@ export function RadioGroup<TValue extends string>({
                   <span
                     className={cn(!unstyled && controlBaseClassName, classNames?.control)}
                     style={styles?.control}
-                    data-state={checked ? "checked" : "unchecked"}
                     data-invalid={effectiveInvalid || undefined}
                   >
                     <RadioGroupPrimitive.Indicator
