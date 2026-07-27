@@ -19,20 +19,64 @@ import "@teams4soft/teams4soft-ui/styles.css";
 Algunos componentes usan primitivas de [Radix UI](https://www.radix-ui.com/) como peer dependencies — no se instalan automáticamente, tu proyecto debe declararlas:
 
 - `Tooltip` requiere `@radix-ui/react-tooltip`.
+- `CheckboxField` requiere `@radix-ui/react-checkbox`.
+- `RadioGroup` requiere `@radix-ui/react-radio-group`.
 - Los componentes con soporte `asChild` (composición vía Slot, p. ej. `Button`) requieren `@radix-ui/react-slot`.
 
 ```bash
-pnpm add @radix-ui/react-slot @radix-ui/react-tooltip
+pnpm add @radix-ui/react-slot @radix-ui/react-tooltip @radix-ui/react-checkbox @radix-ui/react-radio-group
 ```
 
 ## Componentes disponibles
 
-Importables desde el paquete raíz (`@teams4soft/teams4soft-ui`) o desde los subpaths `@teams4soft/teams4soft-ui/primitives` y `@teams4soft/teams4soft-ui/forms`:
+Importables desde el paquete raíz (`@teams4soft/teams4soft-ui`) o desde los subpaths `@teams4soft/teams4soft-ui/primitives`, `@teams4soft/teams4soft-ui/forms` y `@teams4soft/teams4soft-ui/layout`:
 
 - **Button** (`primitives`) — botón con variantes, tamaños, estado `loading` y soporte `asChild`.
 - **Tooltip** / **TooltipProvider** (`primitives`) — tooltip accesible sobre `@radix-ui/react-tooltip`.
 - **FormField** (`forms`) — wiring de accesibilidad (label, descripción, error) para controles de formulario.
 - **TextField** (`forms`) — campo de texto controlado/no controlado, con soporte de `clear`, password y `loading`, integrado con `FormField`.
+- **CheckboxField** (`forms`) — control booleano/indeterminado con label, descripción y error, sobre Radix `Checkbox`.
+- **RadioGroup** (`forms`) — selección única de un conjunto de opciones, sobre Radix `RadioGroup`.
+- **Fieldset** (`layout`) — agrupación semántica nativa de controles relacionados, sobre `<fieldset>`/`<legend>`.
+- **FormGrid** / **FormGrid.Item** (`layout`) — grid responsivo para formularios, construido sobre CSS Grid + Tailwind.
+
+### Fase 2a: ejemplos mínimos
+
+```tsx
+import { CheckboxField, RadioGroup } from "@teams4soft/teams4soft-ui/forms";
+import { Fieldset, FormGrid } from "@teams4soft/teams4soft-ui/layout";
+
+// CheckboxField
+<CheckboxField
+  label="Acepto los términos"
+  checked={accepted}
+  onCheckedChange={(next) => setAccepted(next === true)}
+/>;
+
+// RadioGroup
+<RadioGroup
+  label="Plan"
+  value={plan}
+  onValueChange={setPlan}
+  options={[
+    { value: "basic", label: "Básico" },
+    { value: "pro", label: "Pro" },
+  ]}
+/>;
+
+// Fieldset
+<Fieldset legend="Datos de contacto" description="Usamos esto solo para notificarte">
+  <TextField label="Email" />
+</Fieldset>;
+
+// FormGrid
+<FormGrid columns={{ base: 1, md: 2 }} gap="md">
+  <FormGrid.Item span={{ base: 1, md: 2 }}>
+    <TextField label="Nombre completo" />
+  </FormGrid.Item>
+  <TextField label="Ciudad" />
+</FormGrid>;
+```
 
 ## Utilidades
 
