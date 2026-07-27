@@ -5,6 +5,7 @@ export default defineConfig({
     index: "src/index.ts",
     primitives: "src/primitives/index.ts",
     forms: "src/forms/index.ts",
+    layout: "src/layout/index.ts",
   },
   format: ["esm", "cjs"],
   dts: true,
