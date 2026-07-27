@@ -24,3 +24,10 @@ export type {
   CheckedState,
 } from "./checkbox-field/CheckboxField.types";
 
+export { RadioGroup } from "./radio-group/RadioGroup";
+export type {
+  RadioGroupProps,
+  RadioGroupClassNames,
+  RadioOption,
+} from "./radio-group/RadioGroup.types";
+
