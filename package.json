@@ -28,7 +28,8 @@
     "build:css": "pnpm exec tailwindcss -i src/styles/theme.css -o dist/styles.css --minify && node -e \"require('fs').copyFileSync('src/styles/tokens.css','dist/tokens.css')\"",
     "build": "pnpm build:js && pnpm build:css",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
     "react": ">=18.0.0",
