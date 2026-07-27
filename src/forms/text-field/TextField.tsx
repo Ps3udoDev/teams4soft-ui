@@ -102,6 +102,21 @@ const auxButtonBaseClassName =
 const slotBaseClassName = "flex shrink-0 items-center text-ui-foreground/60";
 
 /**
+ * Une listas de ids separados por espacio (p. ej. varios `aria-describedby`)
+ * deduplicando tokens repetidos, preservando el orden de primera aparición.
+ */
+function mergeTokenLists(
+  ...lists: Array<string | undefined>
+): string | undefined {
+  const tokens = lists
+    .flatMap((list) => (list ? list.split(" ") : []))
+    .map((token) => token.trim())
+    .filter(Boolean);
+  const deduped = Array.from(new Set(tokens));
+  return deduped.length > 0 ? deduped.join(" ") : undefined;
+}
+
+/**
  * Campo de texto accesible y controlable, compuesto con `FormField`.
  * Consulta `components_docs/migration/04_text_field.md` para el contrato
  * completo.
@@ -202,12 +217,10 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
           .filter((v): v is string => Boolean(v))
           .join(" ")
       : "";
-    const resolvedAriaDescribedBy =
-      ariaDescribedByProp !== undefined
-        ? ariaDescribedByProp
-        : generatedDescribedBy.length > 0
-          ? generatedDescribedBy
-          : undefined;
+    const resolvedAriaDescribedBy = mergeTokenLists(
+      ariaDescribedByProp,
+      generatedDescribedBy.length > 0 ? generatedDescribedBy : undefined,
+    );
 
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       const next = event.target.value;
@@ -238,9 +251,9 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
       clearable && currentValue.length > 0 && !resolvedDisabled && !readOnly;
     const showPasswordToggle = isPasswordField && revealPassword;
     const hasLeading = Boolean(leading);
-    const hasTrailing = Boolean(
-      trailing || loading || showClear || showPasswordToggle,
-    );
+    // Refleja únicamente el prop `trailing` (contenido custom del consumidor),
+    // no los controles auxiliares (clear/password/spinner) que conviven con él.
+    const hasTrailing = Boolean(trailing);
 
     const rootClassName = unstyled
       ? cn(className, classNames?.root)
@@ -292,16 +305,16 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
           style={styles?.input}
           {...rest}
         />
-        {loading ? (
+        {trailing ? (
           <span
             className={cn(!unstyled && slotBaseClassName, classNames?.trailing)}
             style={styles?.trailing}
             aria-hidden="true"
           >
-            <TextFieldSpinner />
+            {trailing}
           </span>
         ) : null}
-        {!loading && showClear ? (
+        {showClear ? (
           <button
             type="button"
             className={cn(!unstyled && auxButtonBaseClassName, classNames?.clearButton)}
@@ -312,7 +325,7 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
             <IconX />
           </button>
         ) : null}
-        {!loading && showPasswordToggle ? (
+        {showPasswordToggle ? (
           <button
             type="button"
             className={cn(!unstyled && auxButtonBaseClassName, classNames?.passwordToggle)}
@@ -325,13 +338,13 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
             {passwordVisible ? <IconEyeOff /> : <IconEye />}
           </button>
         ) : null}
-        {!loading && !showClear && !showPasswordToggle && trailing ? (
+        {loading ? (
           <span
             className={cn(!unstyled && slotBaseClassName, classNames?.trailing)}
             style={styles?.trailing}
             aria-hidden="true"
           >
-            {trailing}
+            <TextFieldSpinner />
           </span>
         ) : null}
       </div>

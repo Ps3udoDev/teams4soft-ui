@@ -6,6 +6,9 @@ import "@testing-library/jest-dom/vitest";
 import { TextField } from "./TextField";
 import { FormField } from "../form-field/FormField";
 
+const { Root: FormFieldRoot, Label: FormFieldLabel, Error: FormFieldError } =
+  FormField;
+
 afterEach(() => {
   cleanup();
 });
@@ -160,6 +163,37 @@ describe("TextField", () => {
     render(<TextField classNames={{ input: "font-mono" }} aria-label="Nombre" />);
     const input = screen.getByRole("textbox", { name: "Nombre" });
     expect(input).toHaveClass("font-mono");
+  });
+
+  it("trailing custom convive con los controles auxiliares (loading): ambos se renderizan a la vez", () => {
+    render(
+      <TextField
+        trailing={<span data-testid="suffix">USD</span>}
+        loading
+        aria-label="Monto"
+      />,
+    );
+    expect(screen.getByTestId("suffix")).toBeInTheDocument();
+    const input = screen.getByRole("textbox", { name: "Monto" });
+    expect(input).toHaveAttribute("data-loading", "true");
+    expect(document.querySelector("svg.animate-spin")).toBeInTheDocument();
+  });
+
+  it("aria-describedby explícito se MEZCLA con el id de error del contexto (API compuesta sin FormField.Control)", () => {
+    render(
+      <FormFieldRoot>
+        <FormFieldLabel>Usuario</FormFieldLabel>
+        <TextField aria-describedby="external-hint" />
+        <FormFieldError>Requerido</FormFieldError>
+      </FormFieldRoot>,
+    );
+    const input = screen.getByRole("textbox");
+    const errorNode = screen.getByText("Requerido");
+    const describedBy = (input.getAttribute("aria-describedby") ?? "").split(
+      " ",
+    );
+    expect(describedBy).toContain("external-hint");
+    expect(describedBy).toContain(errorNode.id);
   });
 
   it("readOnly y disabled producen data-readonly/data-disabled distintos", () => {
