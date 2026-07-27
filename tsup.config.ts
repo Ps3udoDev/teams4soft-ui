@@ -1,7 +1,11 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: {
+    index: "src/index.ts",
+    primitives: "src/primitives/index.ts",
+    forms: "src/forms/index.ts",
+  },
   format: ["esm", "cjs"],
   dts: true,
   splitting: false,
@@ -15,8 +19,7 @@ export default defineConfig({
     "react",
     "react-dom",
     "react/jsx-runtime",
-    // Peer deps de comportamiento (se añadirán al usarse):
-    "@radix-ui/*",
+    /^@radix-ui\//,
     "@tanstack/react-table",
     "@floating-ui/react",
   ],
