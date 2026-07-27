@@ -65,6 +65,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       classNames,
       unstyled = false,
       styles,
+      style,
       disabled,
       type,
       onClick,
@@ -78,8 +79,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const isBlocked = Boolean(disabled) || loading;
 
     if (
+      typeof process !== "undefined" &&
       process.env.NODE_ENV !== "production" &&
       size === "icon" &&
+      !asChild &&
       !hasAccessibleName(ariaLabel, ariaLabelledBy, children)
     ) {
       console.warn(
@@ -156,7 +159,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     const sharedProps = {
       className: rootClassName,
-      style: styles?.root,
+      style: { ...styles?.root, ...style },
       "data-variant": variant,
       "data-size": size,
       "data-loading": loading,

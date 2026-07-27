@@ -72,6 +72,17 @@ describe("Button", () => {
     warnSpy.mockRestore();
   });
 
+  it("size='icon' con asChild NO advierte (no se puede introspectar el hijo)", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    render(
+      <Button size="icon" asChild>
+        <a href="/destino">Ir</a>
+      </Button>,
+    );
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
   it("reenvía ref al <button>", () => {
     const ref = createRef<HTMLButtonElement>();
     render(<Button ref={ref}>Guardar</Button>);
@@ -81,8 +92,18 @@ describe("Button", () => {
 
   it("la clase externa className='rounded-none' prevalece", () => {
     render(<Button className="rounded-none">Guardar</Button>);
-    expect(screen.getByRole("button", { name: "Guardar" })).toHaveClass(
-      "rounded-none",
+    const button = screen.getByRole("button", { name: "Guardar" });
+    expect(button).toHaveClass("rounded-none");
+    // tailwind-merge debe haber eliminado la clase interna de radio en conflicto,
+    // no solo agregado "rounded-none" al lado de ella.
+    expect(button.className).not.toMatch(/rounded-\(/);
+  });
+
+  it("type='submit' se respeta cuando el consumidor lo declara", () => {
+    render(<Button type="submit">Enviar</Button>);
+    expect(screen.getByRole("button", { name: "Enviar" })).toHaveAttribute(
+      "type",
+      "submit",
     );
   });
 
