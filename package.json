@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "Librería de componentes UI de Teams4Soft: React + TypeScript, tematizable y accesible.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ps3udoDev/teams4soft-ui.git"
+  },
+  "homepage": "https://github.com/Ps3udoDev/teams4soft-ui#readme",
+  "bugs": {
+    "url": "https://github.com/Ps3udoDev/teams4soft-ui/issues"
+  },
   "type": "module",
   "sideEffects": [
     "*.css"
