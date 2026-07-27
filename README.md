@@ -43,7 +43,7 @@ Importables desde el paquete raíz (`@teams4soft/teams4soft-ui`) o desde los sub
 ### Fase 2a: ejemplos mínimos
 
 ```tsx
-import { CheckboxField, RadioGroup } from "@teams4soft/teams4soft-ui/forms";
+import { CheckboxField, FormField, RadioGroup, TextField } from "@teams4soft/teams4soft-ui/forms";
 import { Fieldset, FormGrid } from "@teams4soft/teams4soft-ui/layout";
 
 // CheckboxField
@@ -64,17 +64,23 @@ import { Fieldset, FormGrid } from "@teams4soft/teams4soft-ui/layout";
   ]}
 />;
 
-// Fieldset
+// Fieldset (TextField no tiene prop `label`: se etiqueta envolviéndolo en FormField)
 <Fieldset legend="Datos de contacto" description="Usamos esto solo para notificarte">
-  <TextField label="Email" />
+  <FormField label="Email">
+    <TextField type="email" />
+  </FormField>
 </Fieldset>;
 
 // FormGrid
 <FormGrid columns={{ base: 1, md: 2 }} gap="md">
   <FormGrid.Item span={{ base: 1, md: 2 }}>
-    <TextField label="Nombre completo" />
+    <FormField label="Nombre completo">
+      <TextField />
+    </FormField>
   </FormGrid.Item>
-  <TextField label="Ciudad" />
+  <FormField label="Ciudad">
+    <TextField />
+  </FormField>
 </FormGrid>;
 ```
 
