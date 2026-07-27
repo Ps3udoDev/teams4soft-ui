@@ -1,6 +1,6 @@
 {
   "name": "@teams4soft/teams4soft-ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Librería de componentes UI de Teams4Soft: React + TypeScript, tematizable y accesible.",
   "license": "MIT",
   "repository": {
