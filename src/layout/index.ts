@@ -5,3 +5,9 @@ export type {
   FieldsetProps,
   FieldsetClassNames,
 } from "./fieldset/Fieldset.types";
+export { FormGrid } from "./form-grid/FormGrid";
+export type {
+  FormGridProps,
+  FormGridItemProps,
+  ResponsiveValue,
+} from "./form-grid/FormGrid.types";
