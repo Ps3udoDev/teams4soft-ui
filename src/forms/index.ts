@@ -17,3 +17,10 @@ export type {
   TextFieldSize,
 } from "./text-field/TextField.types";
 
+export { CheckboxField } from "./checkbox-field/CheckboxField";
+export type {
+  CheckboxFieldProps,
+  CheckboxFieldClassNames,
+  CheckedState,
+} from "./checkbox-field/CheckboxField.types";
+
