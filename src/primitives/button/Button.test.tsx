@@ -99,6 +99,27 @@ describe("Button", () => {
     expect(button.className).not.toMatch(/rounded-\(/);
   });
 
+  it("data-loading/data-disabled son atributos de presencia (no 'true'/'false' siempre)", () => {
+    const { rerender } = render(<Button>Guardar</Button>);
+    const normalButton = screen.getByRole("button", { name: "Guardar" });
+    expect(normalButton).not.toHaveAttribute("data-disabled");
+    expect(normalButton).not.toHaveAttribute("data-loading");
+
+    rerender(<Button disabled>Guardar</Button>);
+    expect(screen.getByRole("button", { name: "Guardar" })).toHaveAttribute(
+      "data-disabled",
+    );
+
+    rerender(
+      <Button loading loadingLabel="Guardando">
+        Guardar
+      </Button>,
+    );
+    expect(
+      screen.getByRole("button", { name: "Guardando" }),
+    ).toHaveAttribute("data-loading");
+  });
+
   it("type='submit' se respeta cuando el consumidor lo declara", () => {
     render(<Button type="submit">Enviar</Button>);
     expect(screen.getByRole("button", { name: "Enviar" })).toHaveAttribute(
