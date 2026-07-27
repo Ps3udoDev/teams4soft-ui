@@ -181,6 +181,7 @@ export function RadioGroup<TValue extends string>({
                   <span
                     className={cn(!unstyled && controlBaseClassName, classNames?.control)}
                     style={styles?.control}
+                    data-state={checked ? "checked" : "unchecked"}
                     data-invalid={effectiveInvalid || undefined}
                   >
                     <RadioGroupPrimitive.Indicator

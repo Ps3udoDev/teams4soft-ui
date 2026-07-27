@@ -20,7 +20,7 @@ describe("RadioGroup", () => {
     expect(onValueChange).toHaveBeenCalledWith("b");
   });
 
-  it("navega con flechas saltando opciones deshabilitadas", async () => {
+  it("navega con flechas moviendo el foco y saltando opciones deshabilitadas", async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
     render(
@@ -33,9 +33,15 @@ describe("RadioGroup", () => {
     );
     screen.getByRole("radio", { name: "Opción A" }).focus();
     await user.keyboard("{ArrowDown}"); // A -> B
-    expect(onValueChange).toHaveBeenLastCalledWith("b");
+    await new Promise((r) => setTimeout(r, 0)); // let Radix roving-focus setTimeout(0) run
+    expect(document.activeElement).toBe(
+      screen.getByRole("radio", { name: "Opción B" }),
+    );
     await user.keyboard("{ArrowDown}"); // B -> (C disabled) -> A (wrap)
-    expect(onValueChange).toHaveBeenLastCalledWith("a");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(document.activeElement).toBe(
+      screen.getByRole("radio", { name: "Opción A" }),
+    );
   });
 
   it("comparte name entre las opciones", () => {
