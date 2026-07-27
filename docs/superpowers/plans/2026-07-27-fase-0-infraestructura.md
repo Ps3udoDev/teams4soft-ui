@@ -15,7 +15,7 @@
 - React como **peerDependency** `>=18.0.0` (nunca en `dependencies`).
 - `package.json` debe tener `"files": ["dist"]` (allowlist) y `"sideEffects": ["*.css"]`.
 - Peer deps de comportamiento (Radix, `@tanstack/react-table`, etc.) van en `peerDependencies`, nunca en `dependencies`; y en `external` de tsup.
-- Nunca publicar `src/`, config de Storybook, `.env` ni secretos. Verificar con `pnpm pack --dry-run` en CI.
+- Nunca publicar `src/`, config de Storybook, `.env` ni secretos. Verificar con `pnpm publish --dry-run --no-git-checks` en CI (pnpm 9.0.0 no soporta `pnpm pack --dry-run`).
 - Tokens semánticos con prefijo `--ui-*`; ningún color de producto hardcodeado.
 - Nombres de API en inglés; documentación en español.
 - Acciones de GitHub **pinneadas por SHA** (ver Task 8 para el procedimiento de pinning).
@@ -937,8 +937,9 @@ jobs:
       - name: Build
         run: pnpm build
       - name: Verify package contents
-        run: pnpm pack --dry-run
+        run: pnpm publish --dry-run --no-git-checks
 ```
+Nota: pnpm 9.0.0 **no** soporta `pnpm pack --dry-run` (falla). `pnpm publish --dry-run` sí está soportado, empaqueta y lista el contenido del tarball **sin publicar** (no requiere token). Es la forma portable de la verificación anti-fugas.
 
 - [ ] **Step 2: Pinear las acciones a SHA**
 
@@ -1144,7 +1145,7 @@ Expected: instala sin errores.
 
 Run:
 ```bash
-pnpm typecheck && pnpm test && pnpm build && pnpm pack --dry-run
+pnpm typecheck && pnpm test && pnpm build && pnpm publish --dry-run --no-git-checks
 ```
 Expected: los cuatro pasan; el tarball solo contiene `dist/`, `package.json`, `README.md`, `LICENSE`.
 
