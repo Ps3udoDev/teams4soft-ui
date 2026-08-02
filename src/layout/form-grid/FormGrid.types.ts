@@ -26,8 +26,15 @@ export interface FormGridItemProps
   extends React.HTMLAttributes<HTMLDivElement> {
   /** Cantidad de columnas que ocupa el item, opcionalmente por punto de ruptura. */
   span?: ResponsiveValue<1 | 2 | 3 | 4 | 6 | 12 | "full">;
-  /** Línea de inicio del item, opcionalmente por punto de ruptura. */
-  start?: ResponsiveValue<number | "auto">;
+  /**
+   * Línea de inicio del item, opcionalmente por punto de ruptura. La unión es
+   * cerrada (1-12) porque el mapa de clases de `FormGrid.tsx` es estático:
+   * Tailwind no detecta clases construidas en ejecución, así que un valor
+   * fuera de rango no generaría ninguna clase.
+   */
+  start?: ResponsiveValue<
+    1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | "auto"
+  >;
   className?: string;
   unstyled?: boolean;
 }
