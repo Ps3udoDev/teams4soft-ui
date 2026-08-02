@@ -9,3 +9,8 @@ coverage/
 !.env.example
 
 *storybook.log
+
+# Presentación desechable (no commiteable) y skills instaladas localmente
+docs/presentation/
+.agents/
+skills-lock.json
