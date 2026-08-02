@@ -21,10 +21,11 @@ Algunos componentes usan primitivas de [Radix UI](https://www.radix-ui.com/) com
 - `Tooltip` requiere `@radix-ui/react-tooltip`.
 - `CheckboxField` requiere `@radix-ui/react-checkbox`.
 - `RadioGroup` requiere `@radix-ui/react-radio-group`.
+- `DateField` y `SearchableSelectField` requieren `@radix-ui/react-popover`.
 - Los componentes con soporte `asChild` (composición vía Slot, p. ej. `Button`) requieren `@radix-ui/react-slot`.
 
 ```bash
-pnpm add @radix-ui/react-slot @radix-ui/react-tooltip @radix-ui/react-checkbox @radix-ui/react-radio-group
+pnpm add @radix-ui/react-slot @radix-ui/react-tooltip @radix-ui/react-checkbox @radix-ui/react-radio-group @radix-ui/react-popover
 ```
 
 ## Componentes disponibles
@@ -37,6 +38,8 @@ Importables desde el paquete raíz (`@teams4soft/teams4soft-ui`) o desde los sub
 - **TextField** (`forms`) — campo de texto controlado/no controlado, con soporte de `clear`, password y `loading`, integrado con `FormField`.
 - **CheckboxField** (`forms`) — control booleano/indeterminado con label, descripción y error, sobre Radix `Checkbox`.
 - **RadioGroup** (`forms`) — selección única de un conjunto de opciones, sobre Radix `RadioGroup`.
+- **DateField** (`forms`) — fecha con escritura directa y calendario accesible; valor ISO `YYYY-MM-DD` sin desplazamiento por zona horaria.
+- **SearchableSelectField** (`forms`) — select genérico con texto editable para filtrar colecciones locales (patrón combobox + listbox).
 - **Fieldset** (`layout`) — agrupación semántica nativa de controles relacionados, sobre `<fieldset>`/`<legend>`.
 - **FormGrid** / **FormGrid.Item** (`layout`) — grid responsivo para formularios, construido sobre CSS Grid + Tailwind.
 
@@ -82,6 +85,63 @@ import { Fieldset, FormGrid } from "@teams4soft/teams4soft-ui/layout";
     <TextField />
   </FormField>
 </FormGrid>;
+```
+
+### Fase 2b: campos avanzados
+
+```tsx
+import {
+  DateField,
+  SearchableSelectField,
+  type DateFieldValue,
+} from "@teams4soft/teams4soft-ui/forms";
+
+// DateField — el valor público es siempre la cadena ISO "YYYY-MM-DD" o null.
+const [startDate, setStartDate] = useState<DateFieldValue>("2026-07-27");
+
+<DateField
+  name="startDate"
+  label="Desde"
+  value={startDate}
+  onValueChange={setStartDate}
+  locale="es-EC"
+  min="2020-01-01"
+  max="2030-12-31"
+  required
+  clearable
+/>;
+
+// SearchableSelectField — genérico, con accesores tipados.
+type Currency = { code: string; name: string; aliases: string[] };
+
+<SearchableSelectField<Currency, string>
+  name="currency"
+  label="Moneda"
+  options={currencies}
+  value={currencyCode}
+  onValueChange={(code) => setCurrencyCode(code)}
+  getOptionValue={(option) => option.code}
+  getOptionLabel={(option) => `${option.code} — ${option.name}`}
+  getOptionKeywords={(option) => option.aliases}
+  clearable
+/>;
+```
+
+`DateField` nunca borra una entrada irresoluble: conserva el texto con `aria-invalid` y un mensaje.
+`SearchableSelectField` no selecciona nada implícitamente (`autoSelectFirst` es `false` por defecto) y nunca muta `options`.
+
+Adaptadores exportados para interoperar con `Date`:
+
+```tsx
+import {
+  toDateFieldValue,
+  fromDateFieldValue,
+  formatDateFieldValue,
+} from "@teams4soft/teams4soft-ui/forms";
+
+toDateFieldValue(new Date());              // "2026-08-02"
+fromDateFieldValue("2026-07-27");          // Date a medianoche LOCAL
+formatDateFieldValue("2026-07-27", "es-EC"); // "27 de julio de 2026"
 ```
 
 ## Utilidades
