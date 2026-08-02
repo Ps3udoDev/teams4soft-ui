@@ -38,6 +38,14 @@ export {
   formatDateFieldValue,
 } from "./date-field/date-utils";
 
+export { SearchableSelectField } from "./searchable-select-field/SearchableSelectField";
+export type {
+  SearchableSelectFieldProps,
+  SearchableSelectFieldClassNames,
+  ResolutionStrategy,
+  UnmatchedBehavior,
+} from "./searchable-select-field/SearchableSelectField.types";
+
 export { RadioGroup } from "./radio-group/RadioGroup";
 export type {
   RadioGroupProps,
