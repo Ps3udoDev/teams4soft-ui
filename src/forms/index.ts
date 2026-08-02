@@ -24,6 +24,28 @@ export type {
   CheckedState,
 } from "./checkbox-field/CheckboxField.types";
 
+export { DateField } from "./date-field/DateField";
+export type {
+  DateFieldProps,
+  DateFieldClassNames,
+  DateFieldValue,
+  DateInputStatus,
+  DisplayFormat,
+} from "./date-field/DateField.types";
+export {
+  toDateFieldValue,
+  fromDateFieldValue,
+  formatDateFieldValue,
+} from "./date-field/date-utils";
+
+export { SearchableSelectField } from "./searchable-select-field/SearchableSelectField";
+export type {
+  SearchableSelectFieldProps,
+  SearchableSelectFieldClassNames,
+  ResolutionStrategy,
+  UnmatchedBehavior,
+} from "./searchable-select-field/SearchableSelectField.types";
+
 export { RadioGroup } from "./radio-group/RadioGroup";
 export type {
   RadioGroupProps,
