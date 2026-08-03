@@ -118,6 +118,7 @@ Como la store existe desde la carga del módulo, una llamada anterior al montaje
 |---|---|
 | **SSR:** una store a nivel de módulo compartida entre peticiones filtraría estado entre usuarios | La store global solo se escribe desde cliente; el `toast` importable se documenta como **API client-only**; el provider `global` limpia la store al desmontarse |
 | **Acumulación sin provider:** la cola crecería sin límite si nadie monta el provider | Tope `maxQueued` (default 50) que descarta lo más antiguo con dev-warning |
+| **Copias múltiples del módulo:** `tsup` construye cinco entries con `splitting: false`, así que una store a nivel de módulo se duplica en cada bundle — mezclar un import de la raíz con uno de `/feedback` daría al provider y al `toast` dos singletons distintos, y nada se renderizaría | La store y el flag de reclamación viven en `globalThis` bajo `Symbol.for("@teams4soft/teams4soft-ui.toast")`, así que la primera copia que cargue crea el estado y el resto lo reutiliza. Cubre además el caso de dos copias del paquete instaladas en el árbol del consumidor |
 | **Dos providers reclamando `global`** | Dev-warning explícito; gana el primero montado |
 
 ## 5. Desviaciones respecto a los documentos de origen
@@ -179,7 +180,6 @@ export interface ToastClassNames {
   message: string;
   action: string;
   closeButton: string;
-  progress: string;
 }
 
 export interface ToastProviderProps {
