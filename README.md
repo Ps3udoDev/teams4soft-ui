@@ -23,14 +23,15 @@ Algunos componentes usan primitivas de [Radix UI](https://www.radix-ui.com/) com
 - `RadioGroup` requiere `@radix-ui/react-radio-group`.
 - `DateField` y `SearchableSelectField` requieren `@radix-ui/react-popover`.
 - Los componentes con soporte `asChild` (composición vía Slot, p. ej. `Button`) requieren `@radix-ui/react-slot`.
+- `ToastProvider` requiere `@radix-ui/react-toast`.
 
 ```bash
-pnpm add @radix-ui/react-slot @radix-ui/react-tooltip @radix-ui/react-checkbox @radix-ui/react-radio-group @radix-ui/react-popover
+pnpm add @radix-ui/react-slot @radix-ui/react-tooltip @radix-ui/react-checkbox @radix-ui/react-radio-group @radix-ui/react-popover @radix-ui/react-toast
 ```
 
 ## Componentes disponibles
 
-Importables desde el paquete raíz (`@teams4soft/teams4soft-ui`) o desde los subpaths `@teams4soft/teams4soft-ui/primitives`, `@teams4soft/teams4soft-ui/forms` y `@teams4soft/teams4soft-ui/layout`:
+Importables desde el paquete raíz (`@teams4soft/teams4soft-ui`) o desde los subpaths `@teams4soft/teams4soft-ui/primitives`, `@teams4soft/teams4soft-ui/forms`, `@teams4soft/teams4soft-ui/layout` y `@teams4soft/teams4soft-ui/feedback`:
 
 - **Button** (`primitives`) — botón con variantes, tamaños, estado `loading` y soporte `asChild`.
 - **Tooltip** / **TooltipProvider** (`primitives`) — tooltip accesible sobre `@radix-ui/react-tooltip`.
@@ -42,6 +43,8 @@ Importables desde el paquete raíz (`@teams4soft/teams4soft-ui`) o desde los sub
 - **SearchableSelectField** (`forms`) — select genérico con texto editable para filtrar colecciones locales (patrón combobox + listbox).
 - **Fieldset** (`layout`) — agrupación semántica nativa de controles relacionados, sobre `<fieldset>`/`<legend>`.
 - **FormGrid** / **FormGrid.Item** (`layout`) — grid responsivo para formularios, construido sobre CSS Grid + Tailwind.
+- **ToastProvider** / **useToast** / **toast** (`feedback`) — mensajes breves no bloqueantes, con cola, deduplicación y API imperativa llamable desde fuera de React.
+- **Spinner**, **Skeleton**, **Progress**, **LoadingOverlay** (`feedback`) — indicadores de espera y progreso.
 
 ### Fase 2a: ejemplos mínimos
 
@@ -143,6 +146,31 @@ toDateFieldValue(new Date());              // "2026-08-02"
 fromDateFieldValue("2026-07-27");          // Date a medianoche LOCAL
 formatDateFieldValue("2026-07-27", "es-EC"); // "27 de julio de 2026"
 ```
+
+### Fase 3a: feedback
+
+```tsx
+import { ToastProvider, useToast, toast } from "@teams4soft/teams4soft-ui/feedback";
+
+// En la raíz de la aplicación. `global` habilita el `toast` importable.
+<ToastProvider global position="top-right" maxVisible={4}>
+  <App />
+</ToastProvider>;
+
+// Desde un componente:
+const { success, error } = useToast();
+success({ title: "Cambios guardados" });
+
+// Desde un interceptor HTTP o una capa de servicio, sin React:
+toast.error({
+  title: "No se pudo guardar",
+  message: "Revisa la conexión e intenta nuevamente.",
+  duration: "persistent",
+  action: { label: "Reintentar", onClick: retry },
+});
+```
+
+El `toast` importable es **API de cliente**: requiere un `<ToastProvider global />` montado.
 
 ## Utilidades
 
