@@ -45,6 +45,17 @@ describe("LoadingOverlay", () => {
     warn.mockRestore();
   });
 
+  it("no avisa si target es container y el padre está posicionado", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    render(
+      <div style={{ position: "relative" }}>
+        <LoadingOverlay open target="container" />
+      </div>,
+    );
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it("aplica classNames por slot y respeta unstyled", () => {
     const { container, rerender } = render(
       <LoadingOverlay open className="mi-raiz" classNames={{ panel: "mi-panel" }} />,
@@ -54,5 +65,9 @@ describe("LoadingOverlay", () => {
 
     rerender(<LoadingOverlay open unstyled className="solo-esta" />);
     expect(container.firstElementChild?.className).toBe("solo-esta");
+
+    // Verifica que el spinner dentro también es unstyled
+    const spinner = container.querySelector("[data-size='lg']") as HTMLElement;
+    expect(spinner).not.toHaveClass("inline-flex");
   });
 });

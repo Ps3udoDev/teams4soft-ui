@@ -93,6 +93,7 @@ export const LoadingOverlay = React.forwardRef<
         <Spinner
           decorative
           size="lg"
+          unstyled={unstyled}
           className={classNames?.spinner}
           style={styles?.spinner}
         />
