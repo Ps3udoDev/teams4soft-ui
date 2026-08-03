@@ -204,6 +204,29 @@ describe("SearchableSelectField — selección", () => {
     expect(active).toHaveTextContent("Ecuador");
   });
 
+  it("dos flechas seguidas sobre la lista cerrada avanzan dos posiciones", async () => {
+    render(<Controlled />);
+
+    const input = screen.getByRole("combobox");
+    input.focus();
+
+    // Ambas pulsaciones en el mismo lote, con la lista CERRADA. La primera
+    // debe abrir y activar la primera opción; la segunda debe avanzar a la
+    // siguiente. Si el handler decide entre "abrir" y "avanzar" leyendo
+    // `isOpen` del closure, la segunda vuelve a ver la lista cerrada, repite
+    // "abrir + primera" y el foco activo se queda en "Estados Unidos".
+    act(() => {
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+    });
+
+    await screen.findByRole("listbox");
+    const active = document.getElementById(
+      input.getAttribute("aria-activedescendant")!,
+    );
+    expect(active).toHaveTextContent("México");
+  });
+
   it("selecciona con clic y cierra", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

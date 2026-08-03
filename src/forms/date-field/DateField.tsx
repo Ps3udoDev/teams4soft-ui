@@ -199,6 +199,16 @@ export const DateField = React.forwardRef<HTMLInputElement, DateFieldProps>(
     const isOpenControlled = open !== undefined;
     const isOpen = isOpenControlled ? open : openState;
 
+    /**
+     * Espejo síncrono de `isOpen` para los manejadores de teclado, por el mismo
+     * motivo que `activeIsoRef`: dos pulsaciones del mismo lote no re-renderizan
+     * entre ellas, así que leer el estado del closure haría que la segunda
+     * volviera a pedir la apertura y el consumidor recibiera `onOpenChange`
+     * repetido para una sola acción.
+     */
+    const isOpenRef = React.useRef(isOpen);
+    isOpenRef.current = isOpen;
+
     // --- Mes visible y día activo (roving tabindex) -------------------------
     // Mes de partida al abrir: el del valor confirmado; si no hay valor, el mes
     // actual; y si hoy cae fuera del rango permitido, el primer mes permitido.
@@ -246,6 +256,7 @@ export const DateField = React.forwardRef<HTMLInputElement, DateFieldProps>(
         setView({ year: base.year, month: base.month });
         commitActiveIso(toIso(base.year, base.month, base.day));
       }
+      isOpenRef.current = next;
       if (!isOpenControlled) setOpenState(next);
       onOpenChange?.(next);
     };
@@ -331,12 +342,14 @@ export const DateField = React.forwardRef<HTMLInputElement, DateFieldProps>(
         confirmText(inputText);
         return;
       }
-      if (event.key === "Escape" && isOpen) {
+      // Se lee del ref, no del estado, para que dos pulsaciones del mismo lote
+      // vean la apertura que provocó la primera (ver el JSDoc de `isOpenRef`).
+      if (event.key === "Escape" && isOpenRef.current) {
         event.preventDefault();
         handleOpenChange(false);
         return;
       }
-      if (event.key === "ArrowDown" && !isOpen) {
+      if (event.key === "ArrowDown" && !isOpenRef.current) {
         event.preventDefault();
         handleOpenChange(true);
       }

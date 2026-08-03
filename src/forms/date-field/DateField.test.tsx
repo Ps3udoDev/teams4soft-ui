@@ -251,6 +251,23 @@ describe("DateField — calendario", () => {
     );
   });
 
+  it("no notifica onOpenChange dos veces por dos flechas del mismo lote", () => {
+    const onOpenChange = vi.fn();
+    render(<Controlled initial="2026-07-10" onOpenChange={onOpenChange} />);
+
+    const input = screen.getByLabelText("Fecha");
+    // Ambas en el mismo lote, con el calendario cerrado. La segunda debe ver
+    // que la primera ya lo abrió; si lee `isOpen` del closure, vuelve a pedir
+    // la apertura y el consumidor recibe la notificación repetida.
+    act(() => {
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+    });
+
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+  });
+
   it("mantiene un único día en el orden de tabulación", async () => {
     const user = userEvent.setup();
     render(<Controlled initial="2026-07-10" />);
