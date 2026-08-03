@@ -747,7 +747,7 @@ export function createToastStore(config: ToastStoreConfig = {}): ToastStore {
 - [ ] **Step 4: Verificar que pasan**
 
 Run: `pnpm test -- src/feedback/toast/toast-store`
-Expected: PASS (26 pruebas).
+Expected: PASS (25 pruebas).
 
 - [ ] **Step 5: Typecheck y commit**
 
