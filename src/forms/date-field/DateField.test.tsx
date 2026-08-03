@@ -1,6 +1,6 @@
 import * as React from "react";
 import { describe, it, expect, vi, beforeAll } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DateField } from "./DateField";
 import type { DateFieldValue } from "./DateField.types";
@@ -225,6 +225,30 @@ describe("DateField — calendario", () => {
     await user.keyboard("{Enter}");
 
     expect(onChange).toHaveBeenCalledWith("2026-07-18");
+  });
+
+  it("no pierde pasos cuando varias flechas se procesan en el mismo lote", async () => {
+    const user = userEvent.setup();
+    render(<Controlled initial="2026-07-10" />);
+
+    await user.click(screen.getByRole("button", { name: /abrir calendario/i }));
+    await screen.findByRole("dialog");
+    await waitFor(() => expect(day("2026-07-10")).toHaveFocus());
+
+    // Tres pulsaciones dentro de un único `act` fuerzan que React las procese
+    // en el mismo lote, sin re-renderizar entre ellas — igual que al mantener
+    // pulsada la flecha. Si el handler lee `activeIso` del closure, la segunda
+    // y la tercera parten de un valor obsoleto y el día activo se queda corto.
+    const grid = screen.getByRole("grid");
+    act(() => {
+      fireEvent.keyDown(grid, { key: "ArrowRight" });
+      fireEvent.keyDown(grid, { key: "ArrowRight" });
+      fireEvent.keyDown(grid, { key: "ArrowRight" });
+    });
+
+    await waitFor(() =>
+      expect(day("2026-07-13")).toHaveAttribute("tabindex", "0"),
+    );
   });
 
   it("mantiene un único día en el orden de tabulación", async () => {

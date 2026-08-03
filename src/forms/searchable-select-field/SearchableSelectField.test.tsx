@@ -1,6 +1,6 @@
 import * as React from "react";
 import { describe, it, expect, vi, beforeAll } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SearchableSelectField } from "./SearchableSelectField";
 
@@ -168,6 +168,38 @@ describe("SearchableSelectField — selección", () => {
     await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}");
     const active = document.getElementById(
       screen.getByRole("combobox").getAttribute("aria-activedescendant")!,
+    );
+    expect(active).toHaveTextContent("Ecuador");
+  });
+
+  it("no pierde pasos cuando varias flechas se procesan en el mismo lote", async () => {
+    const user = userEvent.setup();
+    render(<Controlled />);
+
+    const input = screen.getByRole("combobox");
+    input.focus();
+
+    // Primera flecha aparte: abre la lista y activa "Estados Unidos".
+    await user.keyboard("{ArrowDown}");
+    await screen.findByRole("listbox");
+    expect(
+      document.getElementById(input.getAttribute("aria-activedescendant")!),
+    ).toHaveTextContent("Estados Unidos");
+
+    // Las dos siguientes van dentro de un único `act`, así que React las
+    // procesa en el mismo lote y NO re-renderiza entre ellas. Es lo que ocurre
+    // al mantener pulsada la flecha (key repeat), y es lo que destapó la CI:
+    // si el handler lee `activeIndex` del closure en vez de usar el
+    // actualizador funcional, la segunda parte de un valor obsoleto y se
+    // queda en "México".
+    act(() => {
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+    });
+
+    // US -> MX -> (PE deshabilitada, se salta) -> EC
+    const active = document.getElementById(
+      input.getAttribute("aria-activedescendant")!,
     );
     expect(active).toHaveTextContent("Ecuador");
   });

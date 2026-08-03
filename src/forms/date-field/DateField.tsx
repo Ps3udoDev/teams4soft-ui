@@ -223,12 +223,28 @@ export const DateField = React.forwardRef<HTMLInputElement, DateFieldProps>(
     });
     const [focusTick, setFocusTick] = React.useState(0);
 
+    /**
+     * Espejo síncrono de `activeIso`. Al mantener pulsada una flecha, React
+     * puede procesar varias pulsaciones en el mismo lote sin re-renderizar
+     * entre ellas; leer el estado del closure haría que la segunda partiera de
+     * un valor obsoleto y el día activo se quedara corto. El ref se escribe en
+     * el mismo momento que el estado, así que los handlers encadenados siempre
+     * ven el día real. No se puede usar el actualizador funcional aquí porque
+     * del mismo cálculo salen también `view` y `focusTick`, y un actualizador
+     * debe ser puro.
+     */
+    const activeIsoRef = React.useRef(activeIso);
+    const commitActiveIso = React.useCallback((iso: string) => {
+      activeIsoRef.current = iso;
+      setActiveIso(iso);
+    }, []);
+
     const handleOpenChange = (next: boolean) => {
       if (next && (disabled || readOnly)) return;
       if (next) {
         const base = baseParts();
         setView({ year: base.year, month: base.month });
-        setActiveIso(toIso(base.year, base.month, base.day));
+        commitActiveIso(toIso(base.year, base.month, base.day));
       }
       if (!isOpenControlled) setOpenState(next);
       onOpenChange?.(next);
@@ -363,7 +379,7 @@ export const DateField = React.forwardRef<HTMLInputElement, DateFieldProps>(
     };
 
     const moveActiveDay = (deltaDays: number) => {
-      const parts = parseIsoParts(activeIso);
+      const parts = parseIsoParts(activeIsoRef.current);
       if (!parts) return;
       const cursor = new Date(parts.year, parts.month - 1, parts.day + deltaDays);
       cursor.setFullYear(parts.year, parts.month - 1, parts.day + deltaDays);
@@ -372,26 +388,28 @@ export const DateField = React.forwardRef<HTMLInputElement, DateFieldProps>(
         cursor.getMonth() + 1,
         cursor.getDate(),
       );
-      setActiveIso(nextIso);
+      commitActiveIso(nextIso);
       setView({ year: cursor.getFullYear(), month: cursor.getMonth() + 1 });
       setFocusTick((tick) => tick + 1);
     };
 
     const moveActiveMonth = (monthDelta: number) => {
-      const parts = parseIsoParts(activeIso);
+      const parts = parseIsoParts(activeIsoRef.current);
       if (!parts) return;
       const next = addMonths(parts.year, parts.month, monthDelta);
       // El día se recorta al último día real del mes destino (31 → 28/30).
       const lastDay = new Date(next.year, next.month, 0);
       lastDay.setFullYear(next.year, next.month, 0);
       const day = Math.min(parts.day, lastDay.getDate());
-      setActiveIso(toIso(next.year, next.month, day));
+      commitActiveIso(toIso(next.year, next.month, day));
       setView(next);
       setFocusTick((tick) => tick + 1);
     };
 
     const handleGridKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-      const parts = parseIsoParts(activeIso);
+      // Igual que en `moveActiveDay`: se lee del ref, no del estado, para que
+      // varias pulsaciones en el mismo lote encadenen bien.
+      const parts = parseIsoParts(activeIsoRef.current);
       if (!parts) return;
       switch (event.key) {
         case "ArrowLeft":
@@ -656,7 +674,7 @@ export const DateField = React.forwardRef<HTMLInputElement, DateFieldProps>(
                           aria-current={isToday ? "date" : undefined}
                           tabIndex={cell.iso === activeIso ? 0 : -1}
                           onClick={() => handleSelectDay(cell.iso)}
-                          onFocus={() => setActiveIso(cell.iso)}
+                          onFocus={() => commitActiveIso(cell.iso)}
                           className={cn(
                             !unstyled && dayBaseClassName,
                             !unstyled && selected && selectedDayBaseClassName,
