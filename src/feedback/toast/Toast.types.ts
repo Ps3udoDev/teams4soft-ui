@@ -97,7 +97,6 @@ export interface ToastClassNames {
   message: string;
   action: string;
   closeButton: string;
-  progress: string;
 }
 
 export interface ToastProviderProps {
@@ -108,11 +107,20 @@ export interface ToastProviderProps {
   maxVisible?: number;
   /** Milisegundos por defecto. Default 4000. */
   defaultDuration?: number;
-  /** Tope de entradas en la store. Default 50. */
+  /**
+   * Tope de entradas en la store. Default 50.
+   * Se ignora si `global` es `true`: la store global ya existe con su propio
+   * tope al montarse este provider, y no se reconfigura en caliente.
+   */
   maxQueued?: number;
   /** Conecta este provider a la store del módulo, habilitando el `toast` importable. Default `false`. */
   global?: boolean;
-  /** Reemplaza globalmente la iconografía por tono. */
+  /**
+   * Sobrescribe, tono a tono, el icono por defecto que ya trae cada toast (no
+   * "reemplaza" una iconografía inexistente: sin esta prop y sin `icon` por
+   * toast, cada tono ya muestra su propio icono). Omite un tono en el objeto
+   * para conservar su icono por defecto.
+   */
   icons?: Partial<Record<ToastTone, React.ReactNode>>;
   /** Default `true`. Ponlo en `false` para colocar `<ToastViewport />` a mano. */
   renderViewport?: boolean;

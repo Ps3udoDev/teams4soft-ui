@@ -8,7 +8,6 @@ export { ToastProvider } from "./toast/ToastProvider";
 export { ToastViewport } from "./toast/ToastViewport";
 export { useToast } from "./toast/useToast";
 export { toast } from "./toast/toast-global";
-export { createToastStore } from "./toast/toast-store";
 export type {
   LoadingOverlayProps,
   LoadingOverlayClassNames,
@@ -34,6 +33,7 @@ export type {
   ToastClassNames,
   ToastProviderProps,
   ToastStore,
-  ToastStoreConfig,
+  ToastStoreState,
+  ToastStatus,
   ToastEntry,
 } from "./toast/Toast.types";

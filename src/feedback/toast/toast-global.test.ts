@@ -59,3 +59,34 @@ describe("claim / release", () => {
     expect(claimGlobalToastStore()).toBe(true);
   });
 });
+
+describe("persistencia entre copias del módulo (simula el bundling duplicado)", () => {
+  // `tsup` inlina este archivo por separado en cada entrada del build
+  // (index/feedback × esm/cjs), así que en producción existen hasta cuatro
+  // copias del módulo. Esta prueba simula esa situación reimportando el
+  // módulo tras `vi.resetModules()` y comprobando que la "segunda copia" ve
+  // el estado escrito por la primera, porque ambas comparten el slot de
+  // `globalThis` en lugar de tener cada una su propia variable de módulo.
+  it("una reimportación del módulo observa el estado escrito por la primera copia", async () => {
+    claimGlobalToastStore();
+    toast.show({ title: "desde la primera copia", duration: "persistent" });
+    expect(defaultToastStore.getState().toasts).toHaveLength(1);
+
+    vi.resetModules();
+    const reimported = await import("./toast-global");
+
+    // Misma store: ve la entrada escrita a través de la primera copia.
+    expect(reimported.defaultToastStore.getState().toasts).toHaveLength(1);
+    expect(reimported.defaultToastStore.getState().toasts[0]!.title).toBe(
+      "desde la primera copia",
+    );
+
+    // Mismo flag `claimed`: la copia reimportada no puede reclamar de nuevo.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(reimported.claimGlobalToastStore()).toBe(false);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+
+    reimported.releaseGlobalToastStore();
+  });
+});

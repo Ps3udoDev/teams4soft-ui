@@ -212,6 +212,28 @@ describe("ToastProvider", () => {
       container.ownerDocument.querySelector(".mi-viewport"),
     ).not.toBeNull();
   });
+
+  it("muestra un icono por defecto según el tono sin `icon` ni `icons`", async () => {
+    const holder = createHolder();
+    const { container } = render(
+      <ToastProvider>
+        <Trigger holder={holder} />
+      </ToastProvider>,
+    );
+
+    act(() => {
+      holder.api!.success({ title: "con icono por defecto" });
+    });
+    await screen.findByText("con icono por defecto");
+
+    // El wrapper del icono es el único `span[aria-hidden]` de la raíz: lo
+    // aísla del svg del botón de cierre, que también es aria-hidden pero no
+    // vive dentro de un span.
+    const iconWrapper = container.querySelector(
+      '[data-tone="success"] span[aria-hidden="true"]',
+    );
+    expect(iconWrapper?.querySelector("svg")).not.toBeNull();
+  });
 });
 
 describe("ToastProvider global", () => {
@@ -261,5 +283,29 @@ describe("ToastProvider global", () => {
 
     unmount();
     expect(defaultToastStore.getState().toasts).toHaveLength(0);
+  });
+
+  it("avisa si se pasa `maxQueued` junto con `global`, porque se ignora", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    render(
+      <ToastProvider global maxQueued={10}>
+        <Trigger />
+      </ToastProvider>,
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("`maxQueued` se ignora"),
+    );
+    warn.mockRestore();
+  });
+
+  it("no avisa por `maxQueued` cuando no hay `global`", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    render(
+      <ToastProvider maxQueued={10}>
+        <Trigger />
+      </ToastProvider>,
+    );
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

@@ -54,7 +54,7 @@ export const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
     const safeMax = max > 0 ? max : 0;
     if (max <= 0) {
       devWarn(
-        "[teams4soft-ui] <Progress> recibió un `max` no positivo. Usa `max` > 0.",
+        "<Progress> recibió un `max` no positivo. Usa `max` > 0.",
       );
     }
 

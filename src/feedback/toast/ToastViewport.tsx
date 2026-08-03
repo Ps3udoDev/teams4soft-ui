@@ -63,6 +63,113 @@ function IconX() {
   );
 }
 
+function IconCheck() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path d="m5 13 4 4L19 7" />
+    </svg>
+  );
+}
+
+function IconAlertCircle() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5.5" />
+      <path d="M12 16.5h.01" />
+    </svg>
+  );
+}
+
+function IconAlertTriangle() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+function IconInfo() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 16.5v-5" />
+      <path d="M12 7.5h.01" />
+    </svg>
+  );
+}
+
+function IconDot() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/**
+ * Icono por defecto de cada tono. El tono nunca depende solo del color (§8 del
+ * spec): esto es lo que hace que un toast sea distinguible incluso con
+ * `success` e `info` compartiendo acento de color hasta que existan los
+ * tokens `ui-success`/`ui-warning`. `entry.icon` (por toast) y `icons` (del
+ * provider) siguen ganando sobre este valor; ver el orden de resolución en
+ * `ToastItem`.
+ */
+const defaultToneIcon: Record<ToastTone, React.ReactNode> = {
+  success: <IconCheck />,
+  error: <IconAlertCircle />,
+  warning: <IconAlertTriangle />,
+  info: <IconInfo />,
+  neutral: <IconDot />,
+};
+
 function ToastItem({ entry }: { entry: ToastEntry }) {
   const { store, defaultDuration, icons, classNames, styles, unstyled } =
     useToastContext();
@@ -77,7 +184,7 @@ function ToastItem({ entry }: { entry: ToastEntry }) {
 
   const duration = resolveToastDuration(entry.duration, defaultDuration);
 
-  const icon = entry.icon ?? icons?.[entry.tone];
+  const icon = entry.icon ?? icons?.[entry.tone] ?? defaultToneIcon[entry.tone];
 
   const handleAction = () => {
     if (!entry.action) return;

@@ -1,5 +1,6 @@
 import * as React from "react";
 import * as ToastPrimitive from "@radix-ui/react-toast";
+import { devWarn } from "../../lib";
 import { ToastContext } from "./Toast.context";
 import { createToastStore } from "./toast-store";
 import {
@@ -33,7 +34,7 @@ export function ToastProvider({
   position = "top-right",
   maxVisible = 4,
   defaultDuration = 4000,
-  maxQueued = 50,
+  maxQueued: maxQueuedProp,
   global: isGlobal = false,
   icons,
   renderViewport = true,
@@ -43,6 +44,18 @@ export function ToastProvider({
   style,
   styles,
 }: ToastProviderProps): React.ReactElement {
+  // `defaultToastStore` (ver toast-global.ts) ya existe con su propio tope
+  // cuando este provider se monta: `maxQueued` solo puede aplicarse a una
+  // store que se cree aquí, es decir, a la store privada. Con `global`, pasar
+  // `maxQueued` explícitamente no hace nada — se avisa más abajo en vez de
+  // reconfigurar en silencio una store en la que puede haber otro código
+  // escribiendo ya.
+  if (isGlobal && maxQueuedProp !== undefined) {
+    devWarn(
+      "`maxQueued` se ignora en <ToastProvider global />: la store global ya existe con su propio tope y este prop solo aplica al crear una store nueva (sin `global`).",
+    );
+  }
+  const maxQueued = maxQueuedProp ?? 50;
   const [privateStore] = React.useState(() => createToastStore({ maxQueued }));
   const store = isGlobal ? defaultToastStore : privateStore;
 
