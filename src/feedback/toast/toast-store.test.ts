@@ -144,6 +144,18 @@ describe("createToastStore — show sobre un id existente", () => {
     expect(entry.title).toBe("después");
     expect(entry.restartedAt).toBe(1);
   });
+
+  it("revive un toast closing: reusing an explicit id revives a dismissed toast", () => {
+    const store = createToastStore();
+    const id = store.show({ id: "fijo", title: "original" });
+    store.dismiss(id);
+    expect(store.getState().toasts[0]!.status).toBe("closing");
+    store.show({ id: "fijo", title: "revived" });
+    const entry = store.getState().toasts[0]!;
+    expect(entry.status).toBe("open");
+    expect(entry.title).toBe("revived");
+    expect(entry.restartedAt).toBe(1);
+  });
 });
 
 describe("createToastStore — update", () => {
@@ -178,6 +190,33 @@ describe("createToastStore — update", () => {
     const before = store.getState();
     store.update("no-existe", { title: "b" });
     expect(store.getState()).toBe(before);
+  });
+
+  it("preserva el valor anterior si el campo es explícitamente undefined", () => {
+    const store = createToastStore();
+    const id = store.show({ title: "a", message: "detalle" });
+    store.update(id, { title: "b", message: undefined });
+    const entry = store.getState().toasts[0]!;
+    expect(entry.title).toBe("b");
+    expect(entry.message).toBe("detalle");
+  });
+
+  it("una duración explícitamente undefined no reinicia el temporizador", () => {
+    const store = createToastStore();
+    const id = store.show({ title: "a", duration: 1000 });
+    const beforeRestarted = store.getState().toasts[0]!.restartedAt;
+    store.update(id, { title: "b", duration: undefined });
+    expect(store.getState().toasts[0]!.restartedAt).toBe(beforeRestarted);
+  });
+
+  it("sobre un toast closing es no-op", () => {
+    const store = createToastStore();
+    const id = store.show({ title: "a" });
+    store.dismiss(id);
+    const beforeUpdate = store.getState();
+    store.update(id, { title: "b" });
+    expect(store.getState()).toBe(beforeUpdate);
+    expect(store.getState().toasts[0]!.title).toBe("a");
   });
 });
 

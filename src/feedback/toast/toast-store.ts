@@ -87,15 +87,21 @@ export function createToastStore(config: ToastStoreConfig = {}): ToastStore {
     forceRestart: boolean,
   ): void {
     const previous = state.toasts[index]!;
+
+    // Strip undefined values to avoid erasing existing fields.
+    const stripped = Object.fromEntries(
+      Object.entries(options).filter(([, value]) => value !== undefined),
+    ) as Partial<ToastOptions>;
+
     const durationChanged =
-      options.duration !== undefined && options.duration !== previous.duration;
+      stripped.duration !== undefined && stripped.duration !== previous.duration;
 
     replaceAt(index, {
       ...previous,
-      ...options,
+      ...stripped,
       id: previous.id,
-      tone: options.tone ?? previous.tone,
-      dismissible: options.dismissible ?? previous.dismissible,
+      tone: stripped.tone ?? previous.tone,
+      dismissible: stripped.dismissible ?? previous.dismissible,
       status: "open",
       restartedAt:
         forceRestart || durationChanged
@@ -120,6 +126,10 @@ export function createToastStore(config: ToastStoreConfig = {}): ToastStore {
     if (options.id !== undefined) {
       const index = indexOf(options.id);
       if (index >= 0) {
+        // Reusing an explicit id DOES revive a closing toast. The caller deliberately
+        // reused the id, so we honor their intent. This is distinct from `update()`,
+        // which must not revive a closing toast: late promises should not bring back
+        // dismissed messages.
         patch(index, options, true);
         return options.id;
       }
@@ -149,6 +159,11 @@ export function createToastStore(config: ToastStoreConfig = {}): ToastStore {
   function update(id: string, options: Partial<ToastOptions>): void {
     const index = indexOf(id);
     if (index < 0) {
+      devWarn(`update() sobre un toast inexistente o ya retirado: "${id}".`);
+      return;
+    }
+    const entry = state.toasts[index]!;
+    if (entry.status === "closing") {
       devWarn(`update() sobre un toast inexistente o ya retirado: "${id}".`);
       return;
     }
