@@ -193,9 +193,26 @@ export function SearchableSelectField<TOption, TValue>({
   const isOpenControlled = open !== undefined;
   const isOpen = isOpenControlled ? open : openState;
 
+  /**
+   * Espejo síncrono de `isOpen` para los manejadores de teclado.
+   *
+   * `handleInputKeyDown` decide entre «abrir y saltar al extremo» y «avanzar»
+   * según si la lista está abierta. Leyendo el estado del render, dos flechas
+   * procesadas en el mismo lote —al mantener la tecla pulsada— verían ambas la
+   * lista cerrada y repetirían «abrir + primera» en vez de avanzar.
+   *
+   * Se reasigna en cada render para reflejar la verdad (incluido el modo
+   * controlado, donde el consumidor puede no honrar la apertura), y `setOpen`
+   * lo escribe de forma optimista para que las pulsaciones encadenadas dentro
+   * de un mismo lote vean ya el valor nuevo.
+   */
+  const isOpenRef = React.useRef(isOpen);
+  isOpenRef.current = isOpen;
+
   const setOpen = React.useCallback(
     (next: boolean) => {
       if (next && (disabled || readOnly)) return;
+      isOpenRef.current = next;
       if (!isOpenControlled) setOpenState(next);
       onOpenChange?.(next);
     },
@@ -403,10 +420,14 @@ export function SearchableSelectField<TOption, TValue>({
   const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (disabled || readOnly) return;
 
+    // Se lee del ref, no del estado: dos pulsaciones del mismo lote deben ver
+    // la apertura que provocó la primera (ver el JSDoc de `isOpenRef`).
+    const openNow = isOpenRef.current;
+
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
-        if (!isOpen) {
+        if (!openNow) {
           setOpen(true);
           if (!event.altKey) moveToEdge("first");
           return;
@@ -415,7 +436,7 @@ export function SearchableSelectField<TOption, TValue>({
         return;
       case "ArrowUp":
         event.preventDefault();
-        if (!isOpen) {
+        if (!openNow) {
           setOpen(true);
           moveToEdge("last");
           return;
@@ -423,18 +444,19 @@ export function SearchableSelectField<TOption, TValue>({
         moveActive(-1);
         return;
       case "Home":
-        if (!isOpen) return;
+        if (!openNow) return;
         event.preventDefault();
         moveToEdge("first");
         return;
       case "End":
-        if (!isOpen) return;
+        if (!openNow) return;
         event.preventDefault();
         moveToEdge("last");
         return;
       case "Enter": {
         event.preventDefault();
-        const active = isOpen && activeIndex >= 0 ? visibleOptions[activeIndex] : undefined;
+        const active =
+          openNow && activeIndex >= 0 ? visibleOptions[activeIndex] : undefined;
         if (active) {
           selectOption(active);
           return;
@@ -444,16 +466,16 @@ export function SearchableSelectField<TOption, TValue>({
         return;
       }
       case "Escape":
-        if (!isOpen) return;
+        if (!openNow) return;
         event.preventDefault();
         restoreConfirmedText();
         setOpen(false);
         return;
       case "Tab": {
         const active =
-          isOpen && activeIndex >= 0 ? visibleOptions[activeIndex] : undefined;
+          openNow && activeIndex >= 0 ? visibleOptions[activeIndex] : undefined;
         if (active) selectOption(active, false);
-        else if (isOpen) setOpen(false);
+        else if (openNow) setOpen(false);
         return;
       }
       default:
@@ -466,7 +488,7 @@ export function SearchableSelectField<TOption, TValue>({
     setUnresolved(false);
     setText(next);
     setFilterQuery(next);
-    if (!isOpen) setOpen(true);
+    if (!isOpenRef.current) setOpen(true);
     if (autoSelectFirst) {
       const list = next.trim()
         ? orderedOptions.filter((option) =>
@@ -583,7 +605,7 @@ export function SearchableSelectField<TOption, TValue>({
               onChange={handleInputChange}
               onKeyDown={handleInputKeyDown}
               onClick={() => {
-                if (!isOpen) setOpen(true);
+                if (!isOpenRef.current) setOpen(true);
               }}
               className={cn(!unstyled && inputBaseClassName, classNames?.input)}
               style={styles?.input}
