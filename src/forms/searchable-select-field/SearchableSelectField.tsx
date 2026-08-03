@@ -359,24 +359,31 @@ export function SearchableSelectField<TOption, TValue>({
     setText(selectedLabel);
   };
 
-  /** Avanza al siguiente/anterior habilitado, con envolvente y saltando disabled. */
+  /**
+   * Avanza al siguiente/anterior habilitado, con envolvente y saltando disabled.
+   *
+   * Usa el actualizador funcional a propósito: al mantener pulsada la flecha,
+   * React puede procesar varias pulsaciones en el mismo lote sin re-renderizar
+   * entre ellas, y leer `activeIndex` del closure haría que la segunda partiera
+   * de un valor obsoleto y se perdieran pasos.
+   */
   const moveActive = (direction: 1 | -1) => {
     const total = visibleOptions.length;
     if (total === 0) return;
-    let index = activeIndex;
-    for (let step = 0; step < total; step += 1) {
-      index =
-        index === -1
-          ? direction === 1
-            ? 0
-            : total - 1
-          : (index + direction + total) % total;
-      const candidate = visibleOptions[index];
-      if (candidate && !isDisabledOption(candidate)) {
-        setActiveIndex(index);
-        return;
+    setActiveIndex((current) => {
+      let index = current;
+      for (let step = 0; step < total; step += 1) {
+        index =
+          index === -1
+            ? direction === 1
+              ? 0
+              : total - 1
+            : (index + direction + total) % total;
+        const candidate = visibleOptions[index];
+        if (candidate && !isDisabledOption(candidate)) return index;
       }
-    }
+      return current;
+    });
   };
 
   const moveToEdge = (edge: "first" | "last") => {
