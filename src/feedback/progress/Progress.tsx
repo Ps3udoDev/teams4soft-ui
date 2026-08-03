@@ -1,5 +1,5 @@
 import * as React from "react";
-import { cn } from "../../lib";
+import { cn, devWarn } from "../../lib";
 import type {
   ProgressProps,
   ProgressSize,
@@ -51,12 +51,19 @@ export const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
     },
     ref,
   ) {
+    const safeMax = max > 0 ? max : 0;
+    if (max <= 0) {
+      devWarn(
+        "[teams4soft-ui] <Progress> recibió un `max` no positivo. Usa `max` > 0.",
+      );
+    }
+
     const isIndeterminate = value === undefined;
     const clamped = isIndeterminate
       ? undefined
-      : Math.min(Math.max(value, 0), max);
+      : Math.min(Math.max(value, 0), safeMax);
     const percent =
-      clamped === undefined || max <= 0 ? 0 : Math.round((clamped / max) * 100);
+      clamped === undefined || safeMax <= 0 ? 0 : Math.round((clamped / safeMax) * 100);
 
     const generatedId = React.useId();
     const labelId = `${generatedId}-label`;
@@ -72,7 +79,7 @@ export const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
         // `label` es un ReactNode y no una cadena.
         aria-labelledby={hasLabel ? labelId : undefined}
         aria-valuemin={0}
-        aria-valuemax={max}
+        aria-valuemax={safeMax}
         aria-valuenow={clamped}
         data-tone={tone}
         data-size={size}
