@@ -6,6 +6,7 @@ export default defineConfig({
     primitives: "src/primitives/index.ts",
     forms: "src/forms/index.ts",
     layout: "src/layout/index.ts",
+    feedback: "src/feedback/index.ts",
   },
   format: ["esm", "cjs"],
   dts: true,
