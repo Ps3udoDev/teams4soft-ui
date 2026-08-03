@@ -1,3 +1,4 @@
+import { devWarn } from "../../lib";
 import type {
   ToastEntry,
   ToastOptions,
@@ -39,15 +40,6 @@ let idCounter = 0;
 function nextId(): string {
   idCounter += 1;
   return `ui-toast-${idCounter}`;
-}
-
-function devWarn(message: string): void {
-  if (
-    typeof process !== "undefined" &&
-    process.env.NODE_ENV !== "production"
-  ) {
-    console.warn(`[teams4soft-ui] ${message}`);
-  }
 }
 
 /** Filtra las entradas con valor undefined, preservando el tipo. */

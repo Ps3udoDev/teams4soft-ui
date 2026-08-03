@@ -1,3 +1,4 @@
+import { devWarn } from "../../lib";
 import { createToastStore } from "./toast-store";
 import type { ToastApi, ToastOptions, ToastStore } from "./Toast.types";
 
@@ -12,15 +13,6 @@ import type { ToastApi, ToastOptions, ToastStore } from "./Toast.types";
 export const defaultToastStore: ToastStore = createToastStore();
 
 let claimed = false;
-
-function devWarn(message: string): void {
-  if (
-    typeof process !== "undefined" &&
-    process.env.NODE_ENV !== "production"
-  ) {
-    console.warn(`[teams4soft-ui] ${message}`);
-  }
-}
 
 /** `true` si esta instancia toma el control de la store global. Gana la primera. */
 export function claimGlobalToastStore(): boolean {
