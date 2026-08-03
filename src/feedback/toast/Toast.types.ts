@@ -40,6 +40,11 @@ export interface ToastApi {
   error: (options: Omit<ToastOptions, "tone">) => string;
   warning: (options: Omit<ToastOptions, "tone">) => string;
   info: (options: Omit<ToastOptions, "tone">) => string;
+  /**
+   * Actualiza los campos indicados. `update` solo mezcla los campos proporcionados
+   * y preserva el resto. Pasar `undefined` en un campo NO lo borra; omitir la clave
+   * y pasar `undefined` son equivalentes.
+   */
   update: (id: string, options: Partial<ToastOptions>) => void;
   dismiss: (id: string) => void;
   dismissAll: () => void;

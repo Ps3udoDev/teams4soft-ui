@@ -50,6 +50,13 @@ function devWarn(message: string): void {
   }
 }
 
+/** Filtra las entradas con valor undefined, preservando el tipo. */
+function stripUndefined<T extends object>(source: T): T {
+  return Object.fromEntries(
+    Object.entries(source).filter(([, value]) => value !== undefined),
+  ) as T;
+}
+
 /**
  * Store de toasts independiente de React. La consume `ToastProvider` vía
  * `useSyncExternalStore`, y también el objeto `toast` importable, que es lo
@@ -88,10 +95,8 @@ export function createToastStore(config: ToastStoreConfig = {}): ToastStore {
   ): void {
     const previous = state.toasts[index]!;
 
-    // Strip undefined values to avoid erasing existing fields.
-    const stripped = Object.fromEntries(
-      Object.entries(options).filter(([, value]) => value !== undefined),
-    ) as Partial<ToastOptions>;
+    // Se descartan los valores undefined para evitar borrar campos existentes.
+    const stripped = stripUndefined(options);
 
     const durationChanged =
       stripped.duration !== undefined && stripped.duration !== previous.duration;
@@ -100,8 +105,6 @@ export function createToastStore(config: ToastStoreConfig = {}): ToastStore {
       ...previous,
       ...stripped,
       id: previous.id,
-      tone: stripped.tone ?? previous.tone,
-      dismissible: stripped.dismissible ?? previous.dismissible,
       status: "open",
       restartedAt:
         forceRestart || durationChanged
@@ -126,10 +129,10 @@ export function createToastStore(config: ToastStoreConfig = {}): ToastStore {
     if (options.id !== undefined) {
       const index = indexOf(options.id);
       if (index >= 0) {
-        // Reusing an explicit id DOES revive a closing toast. The caller deliberately
-        // reused the id, so we honor their intent. This is distinct from `update()`,
-        // which must not revive a closing toast: late promises should not bring back
-        // dismissed messages.
+        // show() con un id explícito SÍ revive un toast en estado `closing` y reinicia
+        // el temporizador, porque quien reutiliza ese id lo hace a propósito. update()
+        // en cambio NO lo revive: una promesa tardía no debe traer de vuelta un mensaje
+        // que el usuario ya descartó.
         patch(index, options, true);
         return options.id;
       }
