@@ -23,8 +23,19 @@ describe("Spinner", () => {
   it("avisa en desarrollo si se combinan label y decorative", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     render(<Spinner label="Cargando" decorative />);
-    expect(warn).toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    const warnCall = warn.mock.calls[0]?.[0];
+    expect(warnCall).toBeDefined();
+    expect(String(warnCall)).toMatch(/Spinner/);
+    expect(String(warnCall)).toMatch(/decorative/);
     warn.mockRestore();
+  });
+
+  it("con label y decorative, decorative gana (sin role ni aria-label)", () => {
+    const { container } = render(<Spinner label="Cargando" decorative />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(container.firstElementChild).toHaveAttribute("aria-hidden", "true");
+    expect(container.firstElementChild).not.toHaveAttribute("aria-label");
   });
 
   it("expone el tamaño como data-size", () => {
