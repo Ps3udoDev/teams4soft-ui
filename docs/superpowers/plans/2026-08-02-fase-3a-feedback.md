@@ -1012,6 +1012,7 @@ import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ToastProvider } from "./ToastProvider";
 import { useToast } from "./useToast";
+import type { ToastApi } from "./Toast.types";
 import {
   toast,
   defaultToastStore,
@@ -1030,11 +1031,21 @@ afterEach(() => {
   releaseGlobalToastStore();
 });
 
-function Trigger({ onReady }: { onReady?: (api: ReturnType<typeof useToast>) => void }) {
+/**
+ * Sujeta la API para poder dispararla desde el cuerpo de la prueba.
+ * Es un objeto y no un `let api = null`: TypeScript estrecharía esa variable
+ * a `null` y `holder.api!.show()` fallaría con "Property 'show' does not exist on
+ * type 'never'".
+ */
+function createHolder(): { api: ToastApi | null } {
+  return { api: null };
+}
+
+function Trigger({ holder }: { holder?: { api: ToastApi | null } }) {
   const api = useToast();
   React.useEffect(() => {
-    onReady?.(api);
-  }, [api, onReady]);
+    if (holder) holder.api = api;
+  }, [api, holder]);
   return (
     <button type="button" onClick={() => api.success({ title: "Guardado" })}>
       Disparar
@@ -1062,17 +1073,17 @@ describe("ToastProvider", () => {
   });
 
   it("renderiza como mucho maxVisible a la vez", async () => {
-    let api: ReturnType<typeof useToast> | null = null;
+    const holder = createHolder();
     render(
       <ToastProvider maxVisible={2}>
-        <Trigger onReady={(next) => (api = next)} />
+        <Trigger holder={holder} />
       </ToastProvider>,
     );
 
     act(() => {
-      api!.show({ title: "uno" });
-      api!.show({ title: "dos" });
-      api!.show({ title: "tres" });
+      holder.api!.show({ title: "uno" });
+      holder.api!.show({ title: "dos" });
+      holder.api!.show({ title: "tres" });
     });
 
     expect(await screen.findByText("uno")).toBeInTheDocument();
@@ -1100,15 +1111,15 @@ describe("ToastProvider", () => {
   it("ejecuta la acción y no rompe la cola si lanza", async () => {
     const user = userEvent.setup();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    let api: ReturnType<typeof useToast> | null = null;
+    const holder = createHolder();
     render(
       <ToastProvider>
-        <Trigger onReady={(next) => (api = next)} />
+        <Trigger holder={holder} />
       </ToastProvider>,
     );
 
     act(() => {
-      api!.error({
+      holder.api!.error({
         title: "Falló",
         duration: "persistent",
         action: {
@@ -1124,22 +1135,22 @@ describe("ToastProvider", () => {
     expect(warn).toHaveBeenCalled();
 
     act(() => {
-      api!.show({ title: "sigue viva" });
+      holder.api!.show({ title: "sigue viva" });
     });
     expect(await screen.findByText("sigue viva")).toBeInTheDocument();
     warn.mockRestore();
   });
 
   it("anuncia los errores en región asertiva y el resto en cortés", async () => {
-    let api: ReturnType<typeof useToast> | null = null;
+    const holder = createHolder();
     const { container } = render(
       <ToastProvider>
-        <Trigger onReady={(next) => (api = next)} />
+        <Trigger holder={holder} />
       </ToastProvider>,
     );
 
     act(() => {
-      api!.error({ title: "Falló", duration: "persistent" });
+      holder.api!.error({ title: "Falló", duration: "persistent" });
     });
     await screen.findByText("Falló");
 
@@ -1166,15 +1177,15 @@ describe("ToastProvider", () => {
   it("renderiza la acción con su etiqueta y la invoca al pulsar", async () => {
     const user = userEvent.setup();
     const onClick = vi.fn();
-    let api: ReturnType<typeof useToast> | null = null;
+    const holder = createHolder();
     render(
       <ToastProvider>
-        <Trigger onReady={(next) => (api = next)} />
+        <Trigger holder={holder} />
       </ToastProvider>,
     );
 
     act(() => {
-      api!.error({
+      holder.api!.error({
         title: "Falló",
         duration: "persistent",
         action: { label: "Reintentar", onClick },
@@ -1186,15 +1197,15 @@ describe("ToastProvider", () => {
   });
 
   it("aplica classNames por slot y respeta unstyled", async () => {
-    let api: ReturnType<typeof useToast> | null = null;
+    const holder = createHolder();
     render(
       <ToastProvider classNames={{ title: "mi-titulo" }}>
-        <Trigger onReady={(next) => (api = next)} />
+        <Trigger holder={holder} />
       </ToastProvider>,
     );
 
     act(() => {
-      api!.show({ title: "estilado", duration: "persistent" });
+      holder.api!.show({ title: "estilado", duration: "persistent" });
     });
     expect(await screen.findByText("estilado")).toHaveClass("mi-titulo");
   });
