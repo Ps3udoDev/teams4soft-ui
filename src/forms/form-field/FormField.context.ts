@@ -21,6 +21,9 @@ export interface FormFieldContextValue {
   /** `true` solo si hay contenido de error. */
   hasError: boolean;
   unstyled: boolean;
+  orientation?: "vertical" | "horizontal";
+  requiredIndicator?: "required" | "conditional";
+  messages?: Partial<{ required: string; conditional: string; optional: string }>;
   classNames?: Partial<FormFieldClassNames>;
   styles?: Partial<Record<keyof FormFieldClassNames, React.CSSProperties>>;
 }

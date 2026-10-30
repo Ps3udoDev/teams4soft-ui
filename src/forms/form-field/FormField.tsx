@@ -123,6 +123,7 @@ function composeControlProps(
   }
 
   const controlClassName = cn(
+    !ctx.unstyled && ctx.orientation === "horizontal" && horizontalControlClassName,
     childProps.className as string | undefined,
     ctx.classNames?.control,
   );
@@ -147,6 +148,7 @@ const optionalIndicatorBaseClassName =
 const descriptionBaseClassName = "text-sm text-ui-foreground/60";
 const errorBaseClassName = "text-sm text-ui-danger";
 const reservedSpaceClassName = "min-h-5 text-sm";
+const horizontalControlClassName = "col-start-2 max-md:col-start-1";
 
 /**
  * Raíz de la API compuesta: genera ids estables, calcula el estado
@@ -164,6 +166,10 @@ export const FormFieldRoot = React.forwardRef<HTMLDivElement, FormFieldRootProps
       invalid = false,
       disabled = false,
       reserveMessageSpace = false,
+      orientation = "vertical",
+      labelWidth = "8rem",
+      requiredIndicator = "required",
+      messages,
       className,
       classNames,
       unstyled = false,
@@ -195,6 +201,9 @@ export const FormFieldRoot = React.forwardRef<HTMLDivElement, FormFieldRootProps
         hasDescription: hasDescriptionContent,
         hasError: hasErrorContent,
         unstyled,
+        orientation,
+        requiredIndicator,
+        messages,
         classNames,
         styles,
       }),
@@ -209,6 +218,9 @@ export const FormFieldRoot = React.forwardRef<HTMLDivElement, FormFieldRootProps
         hasDescriptionContent,
         hasErrorContent,
         unstyled,
+        orientation,
+        requiredIndicator,
+        messages,
         classNames,
         styles,
       ],
@@ -221,8 +233,9 @@ export const FormFieldRoot = React.forwardRef<HTMLDivElement, FormFieldRootProps
       <FormFieldContext.Provider value={contextValue}>
         <div
           ref={ref}
-          className={cn(!unstyled && rootBaseClassName, className, classNames?.root)}
-          style={{ ...styles?.root, ...style }}
+          className={cn(!unstyled && rootBaseClassName, !unstyled && orientation === "horizontal" && "max-md:grid-cols-1! gap-x-4", className, classNames?.root)}
+          style={{ ...(!unstyled && orientation === "horizontal" ? { gridTemplateColumns: `${labelWidth} 1fr` } : {}), ...styles?.root, ...style }}
+          data-orientation={orientation}
           data-invalid={effectiveInvalid || undefined}
           data-disabled={disabled || undefined}
           data-required={required || undefined}
@@ -233,7 +246,7 @@ export const FormFieldRoot = React.forwardRef<HTMLDivElement, FormFieldRootProps
           {showReservedPlaceholder ? (
             <p
               aria-hidden="true"
-              className={cn(!unstyled && reservedSpaceClassName)}
+              className={cn(!unstyled && reservedSpaceClassName, !unstyled && orientation === "horizontal" && horizontalControlClassName)}
             />
           ) : null}
         </div>
@@ -252,7 +265,7 @@ export const FormFieldLabel = React.forwardRef<
     <label
       ref={ref}
       htmlFor={ctx.id}
-      className={cn(!ctx.unstyled && labelBaseClassName, className, ctx.classNames?.label)}
+      className={cn(!ctx.unstyled && labelBaseClassName, !ctx.unstyled && ctx.orientation === "horizontal" && "col-start-1 md:row-start-1 md:self-center", className, ctx.classNames?.label)}
       style={{ ...ctx.styles?.label, ...style }}
       data-disabled={ctx.disabled || undefined}
       {...rest}
@@ -266,8 +279,8 @@ export const FormFieldLabel = React.forwardRef<
           )}
           style={ctx.styles?.requiredIndicator}
         >
-          <span aria-hidden="true">*</span>
-          <span className="sr-only"> (requerido)</span>
+          <span aria-hidden="true">{ctx.requiredIndicator === "conditional" ? "**" : "*"}</span>
+          <span className="sr-only"> ({ctx.requiredIndicator === "conditional" ? ctx.messages?.conditional ?? "obligatorio según condición" : ctx.messages?.required ?? "requerido"})</span>
         </span>
       ) : null}
       {ctx.optional && !ctx.required ? (
@@ -278,7 +291,7 @@ export const FormFieldLabel = React.forwardRef<
           )}
           style={ctx.styles?.optionalIndicator}
         >
-          (opcional)
+          ({ctx.messages?.optional ?? "opcional"})
         </span>
       ) : null}
     </label>
@@ -354,6 +367,7 @@ export const FormFieldDescription = React.forwardRef<
       id={ctx.descriptionId}
       className={cn(
         !ctx.unstyled && descriptionBaseClassName,
+        !ctx.unstyled && ctx.orientation === "horizontal" && horizontalControlClassName,
         className,
         ctx.classNames?.description,
       )}
@@ -380,6 +394,7 @@ export const FormFieldError = React.forwardRef<
       id={ctx.errorId}
       className={cn(
         !ctx.unstyled && errorBaseClassName,
+        !ctx.unstyled && ctx.orientation === "horizontal" && horizontalControlClassName,
         className,
         ctx.classNames?.error,
       )}
@@ -407,6 +422,10 @@ export function FormField({
   invalid = false,
   disabled = false,
   reserveMessageSpace = false,
+  orientation = "vertical",
+  labelWidth = "8rem",
+  requiredIndicator = "required",
+  messages,
   children,
   className,
   classNames,
@@ -422,6 +441,10 @@ export function FormField({
       invalid={invalid}
       disabled={disabled}
       reserveMessageSpace={reserveMessageSpace}
+      orientation={orientation}
+      labelWidth={labelWidth}
+      requiredIndicator={requiredIndicator}
+      messages={messages}
       className={className}
       classNames={classNames}
       unstyled={unstyled}

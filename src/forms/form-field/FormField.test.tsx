@@ -8,6 +8,45 @@ afterEach(() => {
   cleanup();
 });
 
+describe("FormField additive layout and indicators", () => {
+  it("preserves the default root classes and required text", () => {
+    const { container } = render(<FormField label="Nombre" required><input /></FormField>);
+    expect(container.firstElementChild).toHaveAttribute("class", "grid gap-1.5");
+    expect(container.firstElementChild).toHaveAttribute("data-orientation", "vertical");
+    expect(screen.getByText("(requerido)")).toBeInTheDocument();
+  });
+
+  it("positions a long error under the control with a custom label column", () => {
+    const error = "Este mensaje de error es largo y permanece en la columna del control.";
+    const { container } = render(<FormField label="Nombre" orientation="horizontal" labelWidth="10rem" errorMessage={error}><input /></FormField>);
+    expect(container.firstElementChild).toHaveAttribute("data-orientation", "horizontal");
+    expect(container.firstElementChild).toHaveStyle({ gridTemplateColumns: "10rem 1fr" });
+    expect(screen.getByLabelText("Nombre")).toHaveClass("col-start-2", "max-md:col-start-1");
+    expect(screen.getByText(error)).toHaveClass("col-start-2", "max-md:col-start-1");
+    expect(container.firstElementChild).toHaveClass("max-md:grid-cols-1!");
+  });
+
+  it("supports conditional marks and translated messages in the compound API", () => {
+    render(<FormField.Root required orientation="horizontal" requiredIndicator="conditional" messages={{ conditional: "obligatorio según condición" }}>
+      <FormField.Label>RFC</FormField.Label>
+      <FormField.Control><input /></FormField.Control>
+      <FormField.Description>Información fiscal</FormField.Description>
+    </FormField.Root>);
+    expect(screen.getByText("**")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByText("(obligatorio según condición)")).toHaveClass("sr-only");
+    expect(screen.getByLabelText(/RFC/)).toHaveAttribute("aria-required", "true");
+    expect(screen.getByText("Información fiscal")).toHaveClass("col-start-2");
+  });
+
+  it("preserves optional presentation and allows translated marker text", () => {
+    const { rerender } = render(<FormField label="Nombre" optional messages={{ optional: "facultativo" }}><input /></FormField>);
+    expect(screen.getByText("(facultativo)")).toBeInTheDocument();
+    rerender(<FormField label="Nombre" required messages={{ required: "obligatorio" }}><input /></FormField>);
+    expect(screen.getByText("(obligatorio)")).toHaveClass("sr-only");
+    expect(screen.getByText("*")).toBeInTheDocument();
+  });
+});
+
 describe("FormField (API de conveniencia)", () => {
   it("el label se asocia al control por htmlFor/id: clic en el label enfoca el input", async () => {
     const user = userEvent.setup();
