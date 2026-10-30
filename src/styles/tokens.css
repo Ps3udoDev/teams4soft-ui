@@ -10,4 +10,7 @@
   --ui-focus: #4f46e5;
   --ui-radius-sm: 0.25rem;
   --ui-radius-md: 0.5rem;
+  --ui-overlay: rgb(0 0 0 / 0.45);
+  --ui-shadow-lg: 0 10px 30px rgb(0 0 0 / 0.18);
+  --ui-radius-lg: 0.75rem;
 }
