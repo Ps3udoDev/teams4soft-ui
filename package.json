@@ -1,6 +1,6 @@
 {
   "name": "@teams4soft/teams4soft-ui",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Librería de componentes UI de Teams4Soft: React + TypeScript, tematizable y accesible.",
   "license": "MIT",
   "repository": {
@@ -77,15 +77,15 @@
   },
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {
-    "@radix-ui/react-checkbox": "^1.1.4",
-    "@radix-ui/react-popover": "^1.1.6",
-    "@radix-ui/react-radio-group": "^1.2.3",
+    "@radix-ui/react-checkbox": "^1.3.11",
+    "@radix-ui/react-popover": "^1.1.23",
+    "@radix-ui/react-radio-group": "^1.4.7",
     "@radix-ui/react-slot": "^1.3.3",
-    "@radix-ui/react-toast": "^1.2.6",
+    "@radix-ui/react-toast": "^1.2.23",
     "@radix-ui/react-tooltip": "^1.2.16",
-    "@storybook/addon-a11y": "^10.5.4",
-    "@storybook/addon-docs": "^10.5.4",
-    "@storybook/react-vite": "^10.5.4",
+    "@storybook/addon-a11y": "^10.6.5",
+    "@storybook/addon-docs": "^10.6.5",
+    "@storybook/react-vite": "^10.6.5",
     "@tailwindcss/cli": "^4.3.3",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.0",
@@ -97,10 +97,11 @@
     "jsdom": "^29.1.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "storybook": "^10.5.4",
+    "storybook": "^10.6.5",
     "tailwindcss": "^4.3.3",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
+    "vite": "^8.3.5",
     "vitest": "^4.1.10"
   },
   "dependencies": {
