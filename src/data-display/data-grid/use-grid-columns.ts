@@ -5,6 +5,8 @@ import { matchesFilter, resolveFilterKind } from "./filters/filter-fns";
 import { buildPersistStorageKey, readPersistedVisibility, writePersistedVisibility } from "./persist";
 import { compareCellValues, toSortValue } from "./sort";
 
+const subscribeNever = () => () => {};
+
 interface UseGridColumnsArgs<T> {
   columns: DataGridColumn<T>[];
   cellTypes?: Record<string, DataGridCellComponent<T>>;
@@ -22,12 +24,14 @@ export function useGridColumns<T>({ columns, columnVisibility, onColumnVisibilit
   const defaults = React.useMemo(() => Object.fromEntries(columns.map((column) => [column.field, !column.hidden])), [columns]);
   const storageKey = React.useMemo(() => persistKey ? buildPersistStorageKey(persistKey, columns.map((column) => column.field)) : null, [persistKey, columns]);
   const controlled = columnVisibility !== undefined;
+  // Al hidratar se pinta lo mismo que en el servidor; lo guardado se aplica justo después.
+  const hydrating = React.useSyncExternalStore(subscribeNever, () => false, () => true);
   // El ámbito depende del esquema, no de la identidad del array de columnas.
   // Ajustar durante este render evita mostrar/grabar el mapa del ámbito anterior.
-  const scope = JSON.stringify([storageKey, defaults, controlled]);
+  const scope = JSON.stringify([storageKey, defaults, controlled, hydrating]);
   const restoreVisibility = (): VisibilityState => ({
     ...defaults,
-    ...(!controlled && storageKey ? readPersistedVisibility(storageKey) : null),
+    ...(!controlled && !hydrating && storageKey ? readPersistedVisibility(storageKey) : null),
   });
   const [storedVisibility, setStoredVisibility] = React.useState(() => ({ scope, value: restoreVisibility() }));
   let localVisibility = storedVisibility.value;

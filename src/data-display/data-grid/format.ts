@@ -24,7 +24,10 @@ export function formatCellText<T, O = unknown>(
       const text = new Intl.NumberFormat(locale, {
         style: "decimal", minimumFractionDigits: digits, maximumFractionDigits: digits,
       }).format(numericValue);
-      if (column.type === "currency") return `${column.currencySymbol ?? "$"}${text}`;
+      if (column.type === "currency") {
+        const symbol = column.currencySymbol ?? "$";
+        return text.startsWith("-") ? `-${symbol}${text.slice(1)}` : `${symbol}${text}`;
+      }
       if (column.type === "percent") return `${text} %`;
       return text;
     }

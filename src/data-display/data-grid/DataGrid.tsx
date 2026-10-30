@@ -194,7 +194,7 @@ function DataGridInner<T>(props: DataGridProps<T>, ref: React.ForwardedRef<DataG
               })}
             </tr>)}
             {hasFilterRow && <tr data-slot="filterRow" className={cn(!unstyled && "bg-(--ui-grid-header-bg)", classNames?.filterRow)} style={styles?.filterRow}>
-              {visibleColumns.map(column => { const col = definition(column); return <td key={column.id} data-slot="filterCell" data-frozen={column.getIsPinned() || undefined} className={cn(!unstyled && "border-b border-ui-border bg-(--ui-grid-header-bg) px-2 py-1", classNames?.filterCell)} style={{ ...cellStyle(column, true), ...styles?.filterCell }}>
+              {visibleColumns.map(column => { const col = definition(column); return <td key={column.id} data-slot="filterCell" data-frozen={column.getIsPinned() || undefined} className={cn(!unstyled && "border-b border-ui-border bg-(--ui-grid-header-bg) px-2 py-1 [--ui-control-height:var(--ui-grid-filter-height)]", classNames?.filterCell)} style={{ ...cellStyle(column, true), ...styles?.filterCell }}>
                 {col && <FilterCell column={col} value={column.getFilterValue()} onChange={next => column.setFilterValue(next)} messages={messages} classNames={classNames} unstyled={unstyled} disabled={loading} />}
               </td>; })}
             </tr>}

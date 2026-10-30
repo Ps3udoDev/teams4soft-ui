@@ -38,6 +38,13 @@ describe("formatCellText", () => {
     expect(formatCellText(col({ type: "checkbox" }), false)).toBe("No");
   });
 
+  it("pone el signo negativo antes del símbolo de moneda", () => {
+    expect(formatCellText(col({ type: "currency" }), -2)).toBe("-$2.00");
+    expect(formatCellText(col({ type: "currency", currencySymbol: "US$" }), -1250.5)).toBe("-US$1,250.50");
+    expect(formatCellText(col({ type: "number" }), -2)).toBe("-2.00");
+    expect(formatCellText(col({ type: "percent" }), -15)).toBe("-15.00 %");
+  });
+
   it("deja vacíos valores ausentes y no finitos para todos los tipos", () => {
     const types: DataGridColumnType[] = ["text", "number", "currency", "percent", "date", "select", "lookup", "checkbox", "radio", "custom"];
     for (const type of types) {

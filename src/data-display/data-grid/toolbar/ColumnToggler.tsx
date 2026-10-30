@@ -21,7 +21,7 @@ export function ColumnToggler<T>({ columns, visibility, onToggle, messages, clas
   const [open, setOpen] = React.useState(false);
   React.useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   return (
-    <div data-slot="columnToggler" className={className} style={style}>
+    <div data-slot="columnToggler" className={cn(!unstyled && "ml-auto", className)} style={style}>
       <Popover.Root open={disabled ? false : open} onOpenChange={setOpen}>
         <Popover.Trigger asChild>
           <Button variant="outline" size="sm" unstyled={unstyled} disabled={disabled}>{messages.columns}</Button>

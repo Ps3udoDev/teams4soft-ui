@@ -1,8 +1,11 @@
 import * as React from "react";
-import { describe, it, expect, vi, beforeAll } from "vitest";
-import { fireEvent, render, screen, within, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeAll, onTestFinished } from "vitest";
+import { act, fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { DataGrid } from "./DataGrid";
+import { buildPersistStorageKey } from "./persist";
 import type { DataGridColumn, DataGridHandle } from "./DataGrid.types";
 
 beforeAll(() => {
@@ -328,6 +331,62 @@ describe("DataGrid: selección y carga", () => {
   });
 });
 
+describe("DataGrid: pulido de controles", () => {
+  it("el filtro numérico conserva lo escrito aunque sea inválido o lleve comas", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={columns} value={rows} getRowId={getRowId} />);
+    const amountFilter = screen.getByRole("textbox", { name: "Filtrar Imp. cobrado" });
+    await user.type(amountFilter, "1,250.50");
+    expect(amountFilter).toHaveValue("1,250.50");
+    expect(bodyRows()).toHaveLength(1);
+    await user.clear(amountFilter);
+    await user.type(amountFilter, "12a");
+    expect(amountFilter).toHaveValue("12a");
+    expect(bodyRows()).toHaveLength(3);
+  });
+
+  it("los filtros comparten la altura de --ui-grid-filter-height", () => {
+    render(<DataGrid columns={columns} value={rows} getRowId={getRowId} />);
+    const textFilter = screen.getByRole("textbox", { name: "Filtrar Póliza" });
+    expect(textFilter).toHaveAttribute("data-size", "md");
+    expect(textFilter.closest("td")).toHaveClass("[--ui-control-height:var(--ui-grid-filter-height)]");
+  });
+
+  it("el paginador usa controles de la librería y unstyled los deja sin estilo", () => {
+    const { unmount } = render(<DataGrid columns={columns} value={rows} getRowId={getRowId} />);
+    expect(screen.getByRole("button", { name: "Página siguiente" })).toHaveClass("h-8", "w-8");
+    expect(screen.getByRole("combobox", { name: "Filas por página" })).toHaveClass("h-8", "border");
+    unmount();
+    render(<DataGrid columns={columns} value={rows} getRowId={getRowId} unstyled />);
+    expect(screen.getByRole("button", { name: "Página siguiente" })).not.toHaveClass("h-8");
+    expect(screen.getByRole("combobox", { name: "Filas por página" })).not.toHaveClass("border");
+  });
+
+  it("restaura persistKey después de hidratar, sin errores de hidratación", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const persisted = <DataGrid columns={columns} value={rows} getRowId={getRowId} persistKey="grid-ssr" />;
+    const html = renderToString(persisted);
+    const key = buildPersistStorageKey("grid-ssr", columns.map(column => column.field));
+    localStorage.setItem(key, JSON.stringify({ policy: false, collectedAmount: true, dueDate: true }));
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    document.body.appendChild(host);
+    const recoverable = vi.fn();
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    onTestFinished(async () => {
+      await act(async () => { root?.unmount(); });
+      host.remove();
+      localStorage.clear();
+      consoleError.mockRestore();
+    });
+    await act(async () => { root = hydrateRoot(host, persisted, { onRecoverableError: recoverable }); });
+    expect(recoverable).not.toHaveBeenCalled();
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(within(host).queryByRole("columnheader", { name: /Póliza/ })).not.toBeInTheDocument();
+    expect(localStorage.getItem(key)).toContain('"policy":false');
+  });
+});
+
 describe("DataGrid: orden por tipo", () => {
   type Item = { id: string; name: string | null; status: number | null; amount: number | null; due: string | null; active: boolean };
   const item = (id: number, patch: Partial<Item>): Item => ({ id: `i-${id}`, name: `n${id}`, status: 1, amount: 1, due: "2026-01-01", active: true, ...patch });
@@ -364,7 +423,7 @@ describe("DataGrid: orden por tipo", () => {
   });
 
   it.each<[string, DataGridColumn<Item>, Partial<Item>[], string[], string[]]>([
-    ["currency", { field: "amount", header: "Campo", type: "currency" }, [{ amount: 5 }, { amount: null }, { amount: -2 }, { amount: Number.NaN }], ["$-2.00", "$5.00", "", ""], ["$5.00", "$-2.00", "", ""]],
+    ["currency", { field: "amount", header: "Campo", type: "currency" }, [{ amount: 5 }, { amount: null }, { amount: -2 }, { amount: Number.NaN }], ["-$2.00", "$5.00", "", ""], ["$5.00", "-$2.00", "", ""]],
     ["date", { field: "due", header: "Campo", type: "date" }, [{ due: "2026-03-01" }, { due: null }, { due: "2025-12-31" }, { due: "no-es-fecha" }], ["31/12/2025", "01/03/2026", "", ""], ["01/03/2026", "31/12/2025", "", ""]],
     ["text", { field: "name", header: "Campo" }, [{ name: "beta" }, { name: null }, { name: "alfa" }, { name: "" }], ["alfa", "beta", "", ""], ["beta", "alfa", "", ""]],
   ])("deja las celdas vacías al final en ambas direcciones (%s)", async (_type, column, patches, ascending, descending) => {

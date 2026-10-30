@@ -16,6 +16,14 @@ beforeAll(() => {
 });
 
 describe("GridToolbar", () => {
+  it("alinea el selector de columnas a la derecha, salvo con unstyled", () => {
+    const toggler = (unstyled: boolean) => <ColumnToggler columns={[]} visibility={{}} onToggle={() => {}} messages={dataGridMessagesEs} unstyled={unstyled} className="propia" />;
+    const { container, rerender } = render(toggler(false));
+    expect(container.querySelector('[data-slot="columnToggler"]')).toHaveClass("ml-auto", "propia");
+    rerender(toggler(true));
+    expect(container.querySelector('[data-slot="columnToggler"]')).not.toHaveClass("ml-auto");
+  });
+
   it("omite el contenedor sin contenido", () => {
     const { container } = render(<GridToolbar />);
     expect(container).toBeEmptyDOMElement();
