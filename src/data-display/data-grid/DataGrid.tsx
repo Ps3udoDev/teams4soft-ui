@@ -124,7 +124,12 @@ function DataGridInner<T>(props: DataGridProps<T>, ref: React.ForwardedRef<DataG
     else contentRef.current?.removeAttribute("inert");
   }, [loading]);
 
-  const visibleColumns = table.getVisibleLeafColumns();
+  // Mantener el orden visual de TanStack en todas las filas (también filtros y skeletons).
+  const visibleColumns = [
+    ...table.getLeftVisibleLeafColumns(),
+    ...table.getCenterVisibleLeafColumns(),
+    ...table.getRightVisibleLeafColumns(),
+  ];
   const displayedRows = table.getRowModel().rows;
   const hasFilters = columnFilters.some(f => f.value !== "" && f.value != null);
   const hasFilterRow = visibleColumns.some(c => { const col = definition(c); return col && resolveFilterKind(col); });
@@ -161,7 +166,7 @@ function DataGridInner<T>(props: DataGridProps<T>, ref: React.ForwardedRef<DataG
   return <ReadCellStyleContext.Provider value={unstyled}><div data-slot="root" data-density={density} data-loading={loading || undefined} aria-busy={loading || undefined}
     className={cn(!unstyled && "relative font-(family-name:--ui-grid-font) text-ui-foreground", className, classNames?.root)} style={{ ...styles?.root, ...style }}>
     <div ref={contentRef}>
-      <GridToolbar className={classNames?.toolbar} style={styles?.toolbar} unstyled={unstyled} toggler={columnToggler ? <ColumnToggler columns={columns} visibility={visibility} onToggle={(field, visible) => setVisibility(previous => ({ ...previous, [field]: visible }))} messages={messages} className={classNames?.columnToggler} style={styles?.columnToggler} unstyled={unstyled} /> : undefined}>{toolbar}</GridToolbar>
+      <GridToolbar className={classNames?.toolbar} style={styles?.toolbar} unstyled={unstyled} toggler={columnToggler ? <ColumnToggler columns={columns} visibility={visibility} onToggle={(field, visible) => setVisibility(previous => ({ ...previous, [field]: visible }))} messages={messages} className={classNames?.columnToggler} style={styles?.columnToggler} unstyled={unstyled} disabled={loading} /> : undefined}>{toolbar}</GridToolbar>
       <div className={cn(!unstyled && "overflow-auto")} style={{ maxHeight, overflow: unstyled ? undefined : "auto" }}>
         <table data-slot="table" className={cn(!unstyled && "w-full border-separate border-spacing-0 text-sm", classNames?.table)} style={styles?.table}>
           <thead className={cn(!unstyled && "sticky top-0 z-10")}>
@@ -172,9 +177,9 @@ function DataGridInner<T>(props: DataGridProps<T>, ref: React.ForwardedRef<DataG
                 const sorted = column.getIsSorted();
                 return <th key={header.id} scope="col" data-column-id={column.id} ref={element => { if (element) headerElements.current.set(column.id, element); else headerElements.current.delete(column.id); }} data-slot="headerCell" data-sorted={sorted || undefined} data-frozen={column.getIsPinned() || undefined} aria-sort={sorted ? sorted === "asc" ? "ascending" : "descending" : undefined}
                   className={cn(!unstyled && "relative border-b border-ui-border bg-(--ui-grid-header-bg) px-3 py-2 font-medium", classNames?.headerCell)} style={{ ...cellStyle(column, true), ...styles?.headerCell }}>
-                  {column.id === "__select" ? selectionMode === "multiple" && <CheckboxField label={messages.selectAll} classNames={{ label: "sr-only" }} disabled={loading} unstyled={unstyled}
+                  {column.id === "__select" ? selectionMode === "multiple" ? <CheckboxField label={messages.selectAll} classNames={{ label: "sr-only" }} disabled={loading} unstyled={unstyled}
                     checked={table.getIsAllPageRowsSelected() && displayedRows.length > 0 ? true : table.getIsSomePageRowsSelected() ? "indeterminate" : false}
-                    onCheckedChange={next => { table.toggleAllPageRowsSelected(next === true); }} /> : col && (column.getCanSort() ? <button type="button" disabled={loading} aria-label={messages.sortLabel(col.header)} className={cn(!unstyled && "flex w-full items-center gap-1 text-inherit")} style={{ justifyContent: cellStyle(column).textAlign === "right" ? "flex-end" : cellStyle(column).textAlign === "center" ? "center" : undefined }} onClick={column.getToggleSortingHandler()}>
+                    onCheckedChange={next => { table.toggleAllPageRowsSelected(next === true); }} /> : <span className="sr-only">{messages.selectRow}</span> : col && (column.getCanSort() ? <button type="button" disabled={loading} aria-label={messages.sortLabel(col.header)} className={cn(!unstyled && "flex w-full items-center gap-1 text-inherit")} style={{ justifyContent: cellStyle(column).textAlign === "right" ? "flex-end" : cellStyle(column).textAlign === "center" ? "center" : undefined }} onClick={column.getToggleSortingHandler()}>
                       {col.headerContent ?? col.header}{sorted && <span aria-hidden="true">{sorted === "asc" ? "↑" : "↓"}</span>}
                     </button> : col.headerContent ?? col.header)}
                   {col?.resizable && <div role="separator" aria-orientation="vertical" aria-label={col.header} onMouseDown={loading ? undefined : header.getResizeHandler()} onTouchStart={loading ? undefined : header.getResizeHandler()} className={cn(!unstyled && "absolute inset-y-0 right-0 w-1 cursor-col-resize touch-none select-none")} />}

@@ -105,6 +105,21 @@ describe("DataGrid: tabla de consulta", () => {
     await user.click(screen.getByRole("button", { name: "Ordenar por Vencimiento" }));
     expect(bodyRows()[0]).toHaveTextContent("Bravo");
   });
+
+  it("alinea filtros y skeletons con el orden visual de columnas fijas reordenadas", () => {
+    const pinnedColumns: DataGridColumn<Premium>[] = [columns[0]!, columns[1]!, { ...columns[2]!, frozen: "left", width: 120 }];
+    const { container, rerender } = render(<DataGrid columns={pinnedColumns} value={rows} getRowId={getRowId} />);
+    expect(screen.getAllByRole("columnheader")[0]).toHaveTextContent("Vencimiento");
+    const filterRow = container.querySelector('[data-slot="filterRow"]')!;
+    const filterInputs = within(filterRow as HTMLElement).getAllByRole("textbox");
+    expect(filterInputs[0]).toHaveAccessibleName("Filtrar Vencimiento");
+    expect(filterInputs[1]).toHaveAccessibleName("Filtrar Póliza");
+    expect(filterInputs[2]).toHaveAccessibleName("Filtrar Imp. cobrado");
+    expect(within(bodyRows()[0]!).getAllByRole("cell")[0]).toHaveTextContent("29/10/2026");
+    rerender(<DataGrid columns={pinnedColumns} value={[]} getRowId={getRowId} loading />);
+    const skeletonRow = container.querySelector('tr[data-slot="skeleton"]')!;
+    expect(within(skeletonRow as HTMLElement).getAllByRole("cell")[0]).toHaveStyle({ width: "120px" });
+  });
 });
 
 describe("DataGrid: filtros y paginación", () => {
@@ -122,6 +137,71 @@ describe("DataGrid: filtros y paginación", () => {
   it("omite filtros deshabilitados y custom", () => {
     render(<DataGrid columns={[{ ...columns[0]!, filter: false }, { ...columns[1]!, type: "custom" }]} value={rows} getRowId={getRowId} />);
     expect(screen.queryByLabelText(/Filtrar/)).not.toBeInTheDocument();
+  });
+
+  it("conecta el filtro numérico con igualdad y limpiar restaura incluso celdas nulas", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={columns} value={rows} getRowId={getRowId} />);
+    const amountFilter = screen.getByRole("textbox", { name: "Filtrar Imp. cobrado" });
+    await user.type(amountFilter, "1,250.50");
+    expect(bodyRows()).toHaveLength(1);
+    expect(bodyRows()[0]).toHaveTextContent("Pérez");
+    await user.clear(amountFilter);
+    expect(bodyRows()).toHaveLength(3);
+    await user.type(amountFilter, "20");
+    expect(bodyRows()).toHaveLength(1);
+    expect(bodyRows()[0]).toHaveTextContent("Bravo");
+    await user.clear(amountFilter);
+    await user.type(amountFilter, "no-numérico");
+    expect(bodyRows()).toHaveLength(3);
+  });
+
+  it("conecta DateField al filtro ISO al confirmar y permite limpiar", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={columns} value={rows} getRowId={getRowId} />);
+    const dateFilter = screen.getByRole("textbox", { name: "Filtrar Vencimiento" });
+    await user.type(dateFilter, "28/10/2026");
+    expect(bodyRows()).toHaveLength(3);
+    await user.keyboard("{Enter}");
+    expect(bodyRows()).toHaveLength(1);
+    expect(bodyRows()[0]).toHaveTextContent("Bravo");
+    await user.click(screen.getByRole("button", { name: "Limpiar fecha" }));
+    expect(bodyRows()).toHaveLength(3);
+    expect(dateFilter).toHaveValue("");
+  });
+
+  it("conecta opciones tipadas de select y clear a las filas", async () => {
+    const user = userEvent.setup();
+    type Payment = { id: string; description: string; method: number };
+    const paymentColumns: DataGridColumn<Payment>[] = [
+      { field: "description", header: "Descripción", filter: false },
+      { field: "method", header: "Forma de pago", type: "select", options: [{ code: 1, name: "Efectivo" }, { code: 2, name: "Transferencia" }], getOptionValue: option => (option as { code: number }).code, getOptionLabel: option => (option as { name: string }).name },
+    ];
+    render(<DataGrid columns={paymentColumns} value={[{ id: "p-1", description: "Pago en caja", method: 1 }, { id: "p-2", description: "Pago bancario", method: 2 }]} getRowId={payment => payment.id} />);
+    await user.type(screen.getByRole("combobox", { name: "Filtrar Forma de pago" }), "Transferencia");
+    await user.click(await screen.findByRole("option", { name: "Transferencia" }));
+    expect(bodyRows()).toHaveLength(1);
+    expect(bodyRows()[0]).toHaveTextContent("Pago bancario");
+    await user.click(screen.getByRole("button", { name: "Limpiar selección" }));
+    expect(bodyRows()).toHaveLength(2);
+  });
+
+  it("el filtro checkbox distingue false de filtro vacío y usa messages", async () => {
+    const user = userEvent.setup();
+    type Entry = { id: string; title: string; active: boolean };
+    const entryColumns: DataGridColumn<Entry>[] = [{ field: "title", header: "Registro", filter: false }, { field: "active", header: "Activo", type: "checkbox" }];
+    render(<DataGrid columns={entryColumns} value={[{ id: "a", title: "Habilitado", active: true }, { id: "b", title: "Deshabilitado", active: false }]} getRowId={entry => entry.id} messages={{ yes: "Verdadero", no: "Falso" }} />);
+    const filter = screen.getByRole("combobox", { name: "Filtrar Activo" });
+    await user.type(filter, "Falso");
+    await user.click(await screen.findByRole("option", { name: "Falso" }));
+    expect(bodyRows()).toHaveLength(1);
+    expect(bodyRows()[0]).toHaveTextContent("Deshabilitado");
+    await user.click(screen.getByRole("button", { name: "Limpiar selección" }));
+    expect(bodyRows()).toHaveLength(2);
+    await user.type(filter, "Verdadero");
+    await user.click(await screen.findByRole("option", { name: "Verdadero" }));
+    expect(bodyRows()).toHaveLength(1);
+    expect(bodyRows()[0]).toHaveTextContent("Habilitado");
   });
 
   const manyRows = Array.from({ length: 25 }, (_, i) => ({ ...rows[0]!, id: `r-${i + 1}`, policy: `Póliza ${i + 1}` }));
@@ -166,6 +246,7 @@ describe("DataGrid: selección y carga", () => {
     const ref = React.createRef<DataGridHandle<Premium>>();
     render(<DataGrid ref={ref} columns={columns} value={rows} getRowId={getRowId} selectionMode="multiple" onSelectionChange={change} />);
     await user.click(screen.getAllByRole("checkbox", { name: "Seleccionar fila" })[0]!);
+    expect(screen.getByRole("checkbox", { name: "Seleccionar todas las filas de la página" })).toBePartiallyChecked();
     await user.click(screen.getAllByRole("checkbox", { name: "Seleccionar fila" })[1]!);
     expect(change).toHaveBeenLastCalledWith(["r-1", "r-2"]);
     expect(ref.current?.getData()).toEqual({ rows, selectedIds: ["r-1", "r-2"] });
@@ -196,6 +277,7 @@ describe("DataGrid: selección y carga", () => {
     expect(change).toHaveBeenCalledWith(["r-1"]);
     expect(screen.getAllByRole("checkbox", { name: "Seleccionar fila" })[0]).not.toBeChecked();
     rerender(<DataGrid columns={columns} value={rows} getRowId={getRowId} selectionMode="single" onSelectionChange={change} />);
+    expect(screen.getByRole("columnheader", { name: "Seleccionar fila" })).toBeInTheDocument();
     await user.click(screen.getAllByRole("radio")[0]!);
     await user.click(screen.getByText("Bravo"));
     expect(change).toHaveBeenLastCalledWith(["r-2"]);
@@ -216,6 +298,33 @@ describe("DataGrid: selección y carga", () => {
     expect(screen.getByText("Agregue una fila")).toBeInTheDocument();
     rerender(<DataGrid columns={columns} value={[]} getRowId={getRowId} emptyState={{ title: "Sin pólizas" }} />);
     expect(screen.getByText("Sin pólizas")).toBeInTheDocument();
+  });
+
+  it.each(["columns", "date", "select"] as const)("cierra el portal %s al cargar y no lo reabre al terminar", async kind => {
+    const user = userEvent.setup();
+    const portalColumns: DataGridColumn<Premium>[] = [...columns, { field: "id", header: "Código", type: "select", options: [{ value: "r-1", label: "Registro uno" }] }];
+    const { rerender } = render(<DataGrid columns={portalColumns} value={rows} getRowId={getRowId} />);
+    if (kind === "columns") {
+      await user.click(screen.getByRole("button", { name: "Columnas" }));
+      expect(screen.getByRole("checkbox", { name: "Póliza" })).toBeInTheDocument();
+    } else if (kind === "date") {
+      await user.click(screen.getByRole("button", { name: "Abrir calendario" }));
+      expect(screen.getByRole("button", { name: "Mes siguiente" })).toBeInTheDocument();
+    } else {
+      await user.type(screen.getByRole("combobox", { name: "Filtrar Código" }), "Registro");
+      expect(await screen.findByRole("listbox")).toBeInTheDocument();
+    }
+    rerender(<DataGrid columns={portalColumns} value={rows} getRowId={getRowId} loading />);
+    expect(screen.queryByRole("checkbox", { name: "Póliza" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mes siguiente" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Columnas" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Abrir calendario" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Filtrar Código" })).toBeDisabled();
+    rerender(<DataGrid columns={portalColumns} value={rows} getRowId={getRowId} />);
+    expect(screen.queryByRole("checkbox", { name: "Póliza" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mes siguiente" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 });
 

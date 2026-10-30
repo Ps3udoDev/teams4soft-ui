@@ -13,15 +13,18 @@ export interface ColumnTogglerProps<T> {
   className?: string;
   style?: React.CSSProperties;
   unstyled?: boolean;
+  disabled?: boolean;
 }
 
 /** Selector controlado: la persistencia pertenece a useGridColumns. */
-export function ColumnToggler<T>({ columns, visibility, onToggle, messages, className, style, unstyled = false }: ColumnTogglerProps<T>) {
+export function ColumnToggler<T>({ columns, visibility, onToggle, messages, className, style, unstyled = false, disabled = false }: ColumnTogglerProps<T>) {
+  const [open, setOpen] = React.useState(false);
+  React.useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   return (
     <div data-slot="columnToggler" className={className} style={style}>
-      <Popover.Root>
+      <Popover.Root open={disabled ? false : open} onOpenChange={setOpen}>
         <Popover.Trigger asChild>
-          <Button variant="outline" size="sm" unstyled={unstyled}>{messages.columns}</Button>
+          <Button variant="outline" size="sm" unstyled={unstyled} disabled={disabled}>{messages.columns}</Button>
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
@@ -37,6 +40,7 @@ export function ColumnToggler<T>({ columns, visibility, onToggle, messages, clas
                 checked={visibility[column.field] !== false}
                 onCheckedChange={(checked) => onToggle(column.field, checked === true)}
                 unstyled={unstyled}
+                disabled={disabled}
               />
             ))}
           </Popover.Content>
