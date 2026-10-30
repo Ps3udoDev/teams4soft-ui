@@ -200,7 +200,9 @@ const columns: DataGridColumn<Premium>[] = [
 
 Ofrece orden, filtros por columna, selección por id, columnas fijas y redimensionables,
 y visibilidad opcionalmente persistida con `persistKey`. Los filtros de texto ignoran
-tildes y esperan 200 ms. `pagination={false}` muestra todas las filas. `selection` y
+tildes y esperan 200 ms; ocultar una columna limpia su filtro. El orden sigue las reglas
+del español, usa la etiqueta en `select`/`radio` y deja las celdas vacías al final.
+`pagination={false}` muestra todas las filas. `selection` y
 `columnVisibility` permiten controlar esos estados desde la página; `ref.getData()`
 devuelve las filas originales y los ids seleccionados, incluso si el filtro los oculta.
 
@@ -330,4 +332,4 @@ Implementados para la siguiente publicación: `Dialog` y `FeedbackDialog` (`./ov
 
 1. Crear `NPM_TOKEN` (token de automatización con 2FA) en la organización `@teams4soft` y guardarlo como secret del repo.
 2. Crear un GitHub Release marcado como pre-release para `v0.5.0-beta.0`: el workflow publica con provenance en `next`. Los releases estables usan `latest`.
-3. Antes de publicar, ejecutar `pnpm publish --dry-run --no-git-checks --tag next` y probar la página piloto del frontend, incluida su convivencia con el preflight de Tailwind/PrimeReact.
+3. Antes de publicar, ejecutar `pnpm publish --dry-run --no-git-checks --tag next`. Tras publicar, instalar `@teams4soft/teams4soft-ui@next` y probar la página piloto del frontend, incluida su convivencia con el preflight de Tailwind/PrimeReact.
