@@ -24,14 +24,15 @@ Algunos componentes usan primitivas de [Radix UI](https://www.radix-ui.com/) com
 - `DateField` y `SearchableSelectField` requieren `@radix-ui/react-popover`.
 - Los componentes con soporte `asChild` (composición vía Slot, p. ej. `Button`) requieren `@radix-ui/react-slot`.
 - `ToastProvider` requiere `@radix-ui/react-toast`.
+- `Dialog` y `FeedbackDialog` requieren `@radix-ui/react-dialog` (`>=1.1.0`).
 
 ```bash
-pnpm add @radix-ui/react-slot @radix-ui/react-tooltip @radix-ui/react-checkbox @radix-ui/react-radio-group @radix-ui/react-popover @radix-ui/react-toast
+pnpm add @radix-ui/react-slot @radix-ui/react-tooltip @radix-ui/react-checkbox @radix-ui/react-radio-group @radix-ui/react-popover @radix-ui/react-toast @radix-ui/react-dialog
 ```
 
 ## Componentes disponibles
 
-Importables desde el paquete raíz (`@teams4soft/teams4soft-ui`) o desde los subpaths `@teams4soft/teams4soft-ui/primitives`, `@teams4soft/teams4soft-ui/forms`, `@teams4soft/teams4soft-ui/layout` y `@teams4soft/teams4soft-ui/feedback`:
+Importables desde el paquete raíz (`@teams4soft/teams4soft-ui`) o desde los subpaths `@teams4soft/teams4soft-ui/primitives`, `@teams4soft/teams4soft-ui/forms`, `@teams4soft/teams4soft-ui/layout`, `@teams4soft/teams4soft-ui/feedback` y `@teams4soft/teams4soft-ui/overlays`:
 
 - **Button** (`primitives`) — botón con variantes, tamaños, estado `loading` y soporte `asChild`.
 - **Tooltip** / **TooltipProvider** (`primitives`) — tooltip accesible sobre `@radix-ui/react-tooltip`.
@@ -45,6 +46,7 @@ Importables desde el paquete raíz (`@teams4soft/teams4soft-ui`) o desde los sub
 - **FormGrid** / **FormGrid.Item** (`layout`) — grid responsivo para formularios, construido sobre CSS Grid + Tailwind.
 - **ToastProvider** / **useToast** / **toast** (`feedback`) — mensajes breves no bloqueantes, con cola, deduplicación y API imperativa llamable desde fuera de React.
 - **Spinner**, **Skeleton**, **Progress**, **LoadingOverlay** (`feedback`) — indicadores de espera y progreso.
+- **Dialog**, **FeedbackDialog**, **FeedbackDialogProvider**, **confirm** / **notify** (`overlays`) — modales accesibles y confirmaciones con cola FIFO.
 
 ### Fase 2a: ejemplos mínimos
 
@@ -172,6 +174,51 @@ toast.error({
 
 El `toast` importable es **API de cliente**: requiere un `<ToastProvider global />` montado.
 
+### Overlays
+
+Importa `Dialog`, `FeedbackDialog`, `FeedbackDialogProvider`, `confirm` y `notify`
+desde el paquete raíz o desde `@teams4soft/teams4soft-ui/overlays`.
+
+```tsx
+import { Dialog, FeedbackDialogProvider, confirm, notify } from "@teams4soft/teams4soft-ui/overlays";
+
+// Monta una sola instancia global en la raíz de la aplicación.
+<FeedbackDialogProvider global>
+  <App />
+</FeedbackDialogProvider>;
+
+<Dialog open={open} onOpenChange={setOpen} title="Buscar clientes" size="lg">
+  <CustomerSearch />
+</Dialog>;
+
+// También desde código de cliente fuera de React.
+const accepted = await confirm({
+  title: "Eliminar registro",
+  message: "¿Desea eliminar el registro seleccionado?",
+  severity: "danger",
+  showReject: true,
+});
+if (accepted) await removeRow();
+await notify.success("Cambios guardados");
+await notify.error("No se pudo guardar", { title: "Error" });
+```
+
+`FeedbackDialog` ofrece la confirmación declarativa con `open`, `onOpenChange`,
+`message`, `onAccept` y `onReject`. Si `onAccept` devuelve una promesa, Aceptar
+muestra carga; si falla, el diálogo permanece abierto para reintentar.
+`showReject` es `false` por defecto. `error` es alias de la severidad `danger`.
+
+`confirm` resuelve `true` al aceptar y `false` al cancelar, cerrar con X o pulsar
+Escape. `notify` resuelve al cerrar. Las solicitudes esperan en una cola FIFO;
+sin un `<FeedbackDialogProvider global />` montado, ambas funciones lanzan un error.
+Esta API es de cliente; no debe invocarse durante renderizado en servidor.
+
+`Dialog` mide 400px por defecto; `width` tiene prioridad sobre `size`. En móvil
+ocupa la ventana o se presenta como panel inferior con `mobileVariant="sheet"`.
+`loading` bloquea el cuerpo. `onHide` es inmediato salvo con
+`hideMode="after-animation"`. Los slots `classNames`/`styles` y `unstyled`
+permiten personalizar la presentación.
+
 ## Utilidades
 
 - `cn(...classes)` — combina clases y resuelve conflictos de Tailwind (las últimas ganan).
@@ -189,7 +236,7 @@ En construcción por fases. Versión actual: **0.4.0**.
 | 0.2.0 | 2a — Controles de formulario | `CheckboxField`, `RadioGroup`, `Fieldset`, `FormGrid`; subpath `./layout`. |
 | 0.1.0 | 0–1 — Infraestructura y primitivas | `Button`, `Tooltip`, `FormField`, `TextField`. |
 
-Siguientes: Fase 3b (`ResponsiveDialog`, `FeedbackDialog`), Fase 4 (`FilePickerField`, `AdaptiveDataTable`, `EntityLookupField`), Fase 5 (`SectionPanel`, `PageShell`) y Fase 6 (estable `1.0.0`).
+Implementados para la siguiente publicación: `Dialog` y `FeedbackDialog` (`./overlays`). Siguientes: Fase 4 (`FilePickerField`, `AdaptiveDataTable`, `EntityLookupField`), Fase 5 (`SectionPanel`, `PageShell`) y Fase 6 (estable `1.0.0`).
 
 ## Publicación (mantenedores)
 
