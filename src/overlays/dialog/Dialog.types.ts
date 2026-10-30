@@ -16,6 +16,7 @@ export interface DialogClassNames {
 export interface DialogProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title" | "children"> {
   open: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Se llama solo cuando el usuario pide cerrar (X, Escape, máscara); nunca al cerrar desde el padre. */
   onHide?: () => void;
   title?: React.ReactNode;
   description?: React.ReactNode;

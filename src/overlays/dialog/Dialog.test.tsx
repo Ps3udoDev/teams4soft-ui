@@ -132,12 +132,15 @@ describe("Dialog", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("after-animation conserva el contenido cuando el consumidor cierra desde el footer", async () => {
+  // Como PrimeReact: onHide/onOpenChange(false) solo cuando el usuario pide cerrar
+  // (X, Escape, máscara), nunca cuando el padre pone open={false}.
+  it("after-animation: cerrar desde el padre conserva el contenido durante la salida y no llama a onHide", async () => {
     const user = userEvent.setup();
     const onHide = vi.fn();
+    const onOpenChange = vi.fn();
     function Example() {
       const [open, setOpen] = React.useState(true);
-      return <Dialog open={open} title="Guardar" onHide={onHide} hideMode="after-animation" footer={<button onClick={() => setOpen(false)}>Guardar cambios</button>}><input defaultValue="Borrador" /></Dialog>;
+      return <Dialog open={open} title="Guardar" onOpenChange={onOpenChange} onHide={onHide} hideMode="after-animation" footer={<button onClick={() => setOpen(false)}>Guardar cambios</button>}><input defaultValue="Borrador" /></Dialog>;
     }
     render(<Example />);
     const dialog = screen.getByRole("dialog");
@@ -146,9 +149,38 @@ describe("Dialog", () => {
     expect(dialog).toBeInTheDocument();
     expect(dialog).toHaveAttribute("data-state", "closed");
     expect(input).toBeInTheDocument();
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(onHide).not.toHaveBeenCalled();
-    await waitFor(() => expect(onHide).toHaveBeenCalledOnce());
-    expect(dialog).not.toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("immediate: cerrar desde el padre no llama a onHide ni a onOpenChange", () => {
+    const onHide = vi.fn();
+    const onOpenChange = vi.fn();
+    const { rerender } = render(<Dialog open title="Guardar" onOpenChange={onOpenChange} onHide={onHide} />);
+    rerender(<Dialog open={false} title="Guardar" onOpenChange={onOpenChange} onHide={onHide} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(onHide).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("after-animation: una petición de cierre rechazada por el padre no dispara onHide en un cierre posterior desde el padre", async () => {
+    const user = userEvent.setup();
+    const onHide = vi.fn();
+    function Example() {
+      const [open, setOpen] = React.useState(true);
+      // El padre ignora la petición de cierre (p. ej. hay cambios sin guardar).
+      return <Dialog open={open} title="Pendiente" onOpenChange={() => {}} onHide={onHide} hideMode="after-animation" footer={<button onClick={() => setOpen(false)}>Guardar cambios</button>} />;
+    }
+    render(<Example />);
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(onHide).not.toHaveBeenCalled();
   });
 
   it("onHide sin onOpenChange cierra visualmente y notifica después de la salida", async () => {

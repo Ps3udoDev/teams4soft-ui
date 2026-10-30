@@ -38,7 +38,10 @@ export const Dialog = React.forwardRef<HTMLDivElement, DialogProps>(function Dia
   const active = open && !locallyClosed;
   const [previousActive, setPreviousActive] = React.useState(active);
   const lastActive = React.useRef(active);
-  const hideNotified = React.useRef(false);
+  // Like PrimeReact, onHide answers a user close request (X, Escape, overlay),
+  // never a parent setting open={false}. Pending only while that request is
+  // being honoured; see requestClose.
+  const userClosePending = React.useRef(false);
   const onHideRef = React.useRef(onHide);
   onHideRef.current = onHide;
 
@@ -53,20 +56,15 @@ export const Dialog = React.forwardRef<HTMLDivElement, DialogProps>(function Dia
   React.useEffect(() => {
     if (active) {
       clearTimeout(timer.current);
-      hideNotified.current = false;
-    } else if (lastActive.current) {
-      if (hideMode === "after-animation") {
-        timer.current = setTimeout(() => {
-          setExiting(false);
-          if (!hideNotified.current) {
-            hideNotified.current = true;
-            onHideRef.current?.();
-          }
-        }, EXIT_MS);
-      } else if (!hideNotified.current) {
-        hideNotified.current = true;
-        onHideRef.current?.();
-      }
+      userClosePending.current = false;
+    } else if (lastActive.current && hideMode === "after-animation") {
+      timer.current = setTimeout(() => {
+        setExiting(false);
+        if (userClosePending.current) {
+          userClosePending.current = false;
+          onHideRef.current?.();
+        }
+      }, EXIT_MS);
     }
     lastActive.current = active;
   }, [active, hideMode]);
@@ -75,12 +73,21 @@ export const Dialog = React.forwardRef<HTMLDivElement, DialogProps>(function Dia
   }, [open]);
 
   function requestClose() {
+    if (userClosePending.current) return;
     if (!onOpenChange && onHide) setLocallyClosed(true);
     onOpenChange?.(false);
-    if (hideMode === "immediate" && !hideNotified.current) {
-      hideNotified.current = true;
+    if (hideMode === "immediate") {
       onHide?.();
+      return;
     }
+    userClosePending.current = true;
+    // Close requests come from discrete events (click, Escape), so a parent
+    // that accepts has already committed open={false} by the next task. If
+    // the dialog is still active, the request was refused: forget it so a
+    // later parent-driven close does not report onHide.
+    setTimeout(() => {
+      if (lastActive.current) userClosePending.current = false;
+    }, 0);
   }
 
   function slot(name: keyof DialogClassNames, base: string) {

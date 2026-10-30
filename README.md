@@ -215,9 +215,15 @@ Esta API es de cliente; no debe invocarse durante renderizado en servidor.
 
 `Dialog` mide 400px por defecto; `width` tiene prioridad sobre `size`. En móvil
 ocupa la ventana o se presenta como panel inferior con `mobileVariant="sheet"`.
-`loading` bloquea el cuerpo. `onHide` es inmediato salvo con
-`hideMode="after-animation"`. Los slots `classNames`/`styles` y `unstyled`
-permiten personalizar la presentación.
+`loading` bloquea el cuerpo. `onHide` y `onOpenChange(false)` se disparan solo
+cuando el usuario pide cerrar (X, Escape o clic en la máscara), igual que en
+PrimeReact; cerrar desde el padre con `open={false}` no los llama. `onHide` es
+inmediato salvo con `hideMode="after-animation"`. Los slots `classNames`/`styles`
+y `unstyled` permiten personalizar la presentación.
+
+Los iconos de severidad de `FeedbackDialog` usan los tokens `--ui-info`,
+`--ui-warning`, `--ui-success` y `--ui-danger`; sus botones siempre usan
+`--ui-primary`.
 
 ## Utilidades
 

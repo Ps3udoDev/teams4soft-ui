@@ -42,6 +42,32 @@ describe("FeedbackDialogProvider", () => {
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
+  it("accepting a confirm resolves true once, never calls onReject and shows the next notice", async () => {
+    const user = userEvent.setup();
+    const onAccept = vi.fn();
+    const onReject = vi.fn();
+    const settled = vi.fn();
+    render(<FeedbackDialogProvider global />);
+    let first!: Promise<boolean>;
+    let second!: Promise<void>;
+    act(() => {
+      first = confirm({ title: "Eliminar", message: "¿Eliminar?", showReject: true, onAccept, onReject });
+      first.then(settled);
+      second = notify.success("Eliminado", { title: "Listo" });
+    });
+    await user.click(screen.getByRole("button", { name: "Aceptar" }));
+    await expect(first).resolves.toBe(true);
+    expect(onAccept).toHaveBeenCalledOnce();
+    expect(onReject).not.toHaveBeenCalled();
+    expect(await screen.findByRole("alertdialog", { name: "Listo" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Aceptar" }));
+    await expect(second).resolves.toBeUndefined();
+    expect(settled).toHaveBeenCalledOnce();
+    expect(settled).toHaveBeenCalledWith(true);
+    expect(onReject).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
   it.each(["close", "escape"])("settles false on %s and invokes onReject once", async (action) => {
     const user = userEvent.setup();
     const onReject = vi.fn();
