@@ -204,3 +204,32 @@ export const Mobile: Story = {
     </div>
   ),
 };
+
+export const EditAndResolve: Story = {
+  render: () => (
+    <div className="space-y-4">
+      <ControlledSelect
+        label="Departamento"
+        openOnType={false}
+        selectOnFocus
+        options={[
+          { code: "ACT", name: "ACTUARIA", aliases: ["34"] },
+          { code: "CON", name: "CONTABILIDAD", aliases: ["12"] },
+          { code: "SIS", name: "SISTEMAS", aliases: ["56"] },
+        ]}
+        description="Escribe «34» y pulsa Tab o Enter: se confirma ACTUARIA. ArrowDown o un clic abren todas las opciones."
+      />
+      <button type="button" className="rounded border border-ui-border px-3 py-2 text-sm">Siguiente campo</button>
+    </div>
+  ),
+};
+
+export const SelectTextOnFocus: Story = {
+  render: () => (
+    <ControlledSelect
+      initialValue="MXN"
+      selectOnFocus
+      description="Al llegar con Tab se selecciona el texto sin abrir opciones. Escribir mantiene el filtro habitual."
+    />
+  ),
+};

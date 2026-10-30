@@ -121,6 +121,8 @@ export function SearchableSelectField<TOption, TValue>({
   invalid = false,
   errorMessage,
   autoSelectFirst = false,
+  openOnType = true,
+  selectOnFocus = false,
   open,
   defaultOpen,
   onOpenChange,
@@ -143,6 +145,7 @@ export function SearchableSelectField<TOption, TValue>({
   const errorId = `${generatedId}-error`;
 
   const localInputRef = React.useRef<HTMLInputElement | null>(null);
+  const skipNextBlur = React.useRef(false);
   const mergedInputRef = React.useMemo(
     () => mergeRefs(inputRef, localInputRef),
     [inputRef],
@@ -229,7 +232,7 @@ export function SearchableSelectField<TOption, TValue>({
 
   const visibleOptions = React.useMemo(() => {
     if (loading) return [];
-    if (filterQuery === null || normalizeText(filterQuery) === "") {
+    if (!openOnType || filterQuery === null || normalizeText(filterQuery) === "") {
       return orderedOptions;
     }
     return orderedOptions.filter((option) =>
@@ -243,6 +246,7 @@ export function SearchableSelectField<TOption, TValue>({
     );
   }, [
     loading,
+    openOnType,
     orderedOptions,
     filterQuery,
     filterOption,
@@ -334,11 +338,21 @@ export function SearchableSelectField<TOption, TValue>({
       return;
     }
 
-    const match = resolveText(trimmed, orderedOptions, {
+    let match = resolveText(trimmed, orderedOptions, {
       strategies: resolutionStrategy,
       getLabel: getOptionLabel,
       getValueString: (option) => String(getOptionValue(option)),
     });
+
+    // Los códigos alternativos se resuelven de forma exacta y única en modo
+    // captura; una estrategia explícita sin value-exact no habilita este alias.
+    if (!match && !openOnType && resolutionStrategy.includes("value-exact")) {
+      const query = normalizeText(trimmed);
+      const keywordMatches = orderedOptions.filter((option) =>
+        getOptionKeywords?.(option).some((keyword) => normalizeText(keyword) === query),
+      );
+      if (keywordMatches.length === 1) match = keywordMatches[0] ?? null;
+    }
 
     if (match && !isDisabledOption(match)) {
       setUnresolved(false);
@@ -417,6 +431,14 @@ export function SearchableSelectField<TOption, TValue>({
     }
   };
 
+  const activateCurrentOption = (fallbackToFirst = false) => {
+    setFilterQuery(null);
+    const selectedIndex = visibleOptions.findIndex((option) =>
+      value !== null && getOptionValue(option) === value && !isDisabledOption(option),
+    );
+    setActiveIndex(selectedIndex >= 0 ? selectedIndex : fallbackToFirst ? firstEnabledIndex(visibleOptions) : -1);
+  };
+
   const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (disabled || readOnly) return;
 
@@ -429,12 +451,14 @@ export function SearchableSelectField<TOption, TValue>({
         event.preventDefault();
         if (!openNow) {
           setOpen(true);
-          if (!event.altKey) moveToEdge("first");
+          if (!openOnType) activateCurrentOption(true);
+          else if (!event.altKey) moveToEdge("first");
           return;
         }
         moveActive(1);
         return;
       case "ArrowUp":
+        if (!openNow && !openOnType) return;
         event.preventDefault();
         if (!openNow) {
           setOpen(true);
@@ -472,6 +496,14 @@ export function SearchableSelectField<TOption, TValue>({
         setOpen(false);
         return;
       case "Tab": {
+        if (!openOnType) {
+          skipNextBlur.current = true;
+          const active = openNow && activeIndex >= 0 ? visibleOptions[activeIndex] : undefined;
+          if (active) selectOption(active, false);
+          else confirmText();
+          setOpen(false);
+          return;
+        }
         const active =
           openNow && activeIndex >= 0 ? visibleOptions[activeIndex] : undefined;
         if (active) selectOption(active, false);
@@ -487,6 +519,11 @@ export function SearchableSelectField<TOption, TValue>({
     const next = event.target.value;
     setUnresolved(false);
     setText(next);
+    if (!openOnType) {
+      setFilterQuery(null);
+      setActiveIndex(-1);
+      return;
+    }
     setFilterQuery(next);
     if (!isOpenRef.current) setOpen(true);
     if (autoSelectFirst) {
@@ -559,7 +596,8 @@ export function SearchableSelectField<TOption, TValue>({
       <PopoverPrimitive.Root
         open={isOpen}
         onOpenChange={(next) => {
-          if (!next) restoreConfirmedText();
+          if (!next && openOnType) restoreConfirmedText();
+          if (next && !openOnType) activateCurrentOption();
           setOpen(next);
         }}
       >
@@ -604,8 +642,21 @@ export function SearchableSelectField<TOption, TValue>({
               required={required}
               onChange={handleInputChange}
               onKeyDown={handleInputKeyDown}
+              onFocus={(event) => {
+                skipNextBlur.current = false;
+                if (selectOnFocus) event.currentTarget.select();
+              }}
+              onBlur={() => {
+                if (openOnType || disabled || readOnly) return;
+                if (skipNextBlur.current) skipNextBlur.current = false;
+                else confirmText();
+                setOpen(false);
+              }}
               onClick={() => {
-                if (!isOpenRef.current) setOpen(true);
+                if (!isOpenRef.current) {
+                  if (!openOnType) activateCurrentOption();
+                  setOpen(true);
+                }
               }}
               className={cn(!unstyled && inputBaseClassName, classNames?.input)}
               style={styles?.input}

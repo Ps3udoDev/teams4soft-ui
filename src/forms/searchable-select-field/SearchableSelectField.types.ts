@@ -69,6 +69,10 @@ export interface SearchableSelectFieldProps<TOption, TValue> {
 
   /** Default `false`: no se selecciona nada sin una acción explícita. */
   autoSelectFirst?: boolean;
+  /** Default `true`. Con `false`, edita y resuelve al salir sin filtrar ni abrir por tecleo. */
+  openOnType?: boolean;
+  /** Selecciona el texto al recibir foco sin abrir el panel. Default `false`. */
+  selectOnFocus?: boolean;
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;

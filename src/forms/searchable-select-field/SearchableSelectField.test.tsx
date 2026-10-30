@@ -66,6 +66,134 @@ async function openListbox(user: ReturnType<typeof userEvent.setup>) {
   return screen.findByRole("listbox");
 }
 
+describe("SearchableSelectField — edición sin apertura por tecleo", () => {
+  it("por defecto Tab enfoca un valor existente sin abrir el panel", async () => {
+    const user = userEvent.setup();
+    render(<Controlled initial="MX" />);
+    await user.tab();
+    expect(screen.getByRole("combobox")).toHaveFocus();
+    expect(screen.getByRole("combobox")).toHaveValue("México");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("selectOnFocus selecciona el texto al llegar con Tab sin abrir", async () => {
+    const user = userEvent.setup();
+    render(<Controlled initial="MX" selectOnFocus />);
+    await user.tab();
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe("México".length);
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("openOnType false no abre por tecleo y resuelve código keyword con Tab", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<><Controlled openOnType={false} onChange={onChange} options={[{ code: "ACT", name: "ACTUARIA", aliases: ["34"] }]} /><button>Siguiente</button></>);
+    await user.tab();
+    await user.keyboard("34");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    await user.tab();
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("ACT", expect.objectContaining({ name: "ACTUARIA" }));
+    expect(screen.getByRole("combobox")).toHaveValue("ACTUARIA");
+    expect(screen.getByRole("button", { name: "Siguiente" })).toHaveFocus();
+  });
+
+  it.each(["ArrowDown", "Alt+ArrowDown", "click", "chevron"])("%s abre todas las opciones y resalta el valor actual", async (action) => {
+    const user = userEvent.setup();
+    render(<Controlled initial="MX" openOnType={false} selectOnFocus />);
+    await user.tab();
+    await user.keyboard("zzz");
+    const input = screen.getByRole("combobox");
+    if (action === "click") await user.click(input);
+    else if (action === "chevron") await user.click(screen.getByRole("button", { name: "Abrir opciones" }));
+    else await user.keyboard(action === "Alt+ArrowDown" ? "{Alt>}{ArrowDown}{/Alt}" : "{ArrowDown}");
+    await screen.findByRole("listbox");
+    expect(screen.getAllByRole("option")).toHaveLength(countries.length);
+    expect(document.getElementById(input.getAttribute("aria-activedescendant")!)).toHaveTextContent("México");
+  });
+
+  it("escribir con el panel abierto no filtra en modo openOnType false", async () => {
+    const user = userEvent.setup();
+    const filterOption = vi.fn(() => false);
+    render(<Controlled openOnType={false} filterOption={filterOption} />);
+    await user.click(screen.getByRole("combobox"));
+    await user.keyboard("zzz");
+    expect(screen.getAllByRole("option")).toHaveLength(countries.length);
+    expect(filterOption).not.toHaveBeenCalled();
+  });
+
+  it("blur con texto no resuelto conserva texto y muestra error", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<><Controlled openOnType={false} onChange={onChange} /><button>Fuera</button></>);
+    await user.tab();
+    await user.keyboard("zzz");
+    await user.click(screen.getByRole("button", { name: "Fuera" }));
+    expect(screen.getByRole("combobox")).toHaveValue("zzz");
+    expect(screen.getByRole("combobox")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("No hay ninguna opción que coincida con el texto.")).toBeVisible();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("cerrar por clic exterior con panel abierto conserva el error y el texto", async () => {
+    const user = userEvent.setup();
+    render(<><Controlled openOnType={false} /><button>Fuera</button></>);
+    await user.click(screen.getByRole("combobox"));
+    await user.keyboard("zzz");
+    await user.click(screen.getByRole("button", { name: "Fuera" }));
+    expect(screen.getByRole("combobox")).toHaveValue("zzz");
+    expect(screen.getByRole("combobox")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it.each(["revert", "clear"] as const)("conserva unmatchedBehavior %s", async (unmatchedBehavior) => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Controlled initial="MX" openOnType={false} selectOnFocus unmatchedBehavior={unmatchedBehavior} onChange={onChange} />);
+    await user.tab();
+    await user.keyboard("zzz{Enter}");
+    expect(screen.getByRole("combobox")).toHaveValue(unmatchedBehavior === "revert" ? "México" : "");
+    if (unmatchedBehavior === "clear") expect(onChange).toHaveBeenCalledWith(null, null);
+    else expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("Enter resuelve el texto sin abrir", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Controlled openOnType={false} onChange={onChange} />);
+    await user.tab();
+    await user.keyboard("ecu{Enter}");
+    expect(onChange).toHaveBeenCalledWith("EC", expect.objectContaining({ name: "Ecuador" }));
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("blur confirma una etiqueta válida sin repetir onValueChange", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<><Controlled openOnType={false} onChange={onChange} /><button>Fuera</button></>);
+    await user.tab();
+    await user.keyboard("ecuador");
+    await user.click(screen.getByRole("button", { name: "Fuera" }));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("EC", expect.objectContaining({ name: "Ecuador" }));
+    expect(screen.getByRole("combobox")).toHaveValue("Ecuador");
+  });
+
+  it("respeta resolutionStrategy explícita y no resuelve keywords ambiguas", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const { rerender } = render(<Controlled openOnType={false} resolutionStrategy={["label-exact"]} options={[{ code: "ACT", name: "ACTUARIA", aliases: ["34"] }]} onChange={onChange} />);
+    await user.tab();
+    await user.keyboard("34{Enter}");
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("combobox")).toHaveAttribute("aria-invalid", "true");
+    rerender(<Controlled openOnType={false} options={[{ code: "ACT", name: "ACTUARIA", aliases: ["34"] }, { code: "CON", name: "CONTABILIDAD", aliases: ["34"] }]} onChange={onChange} />);
+    await user.keyboard("{Enter}");
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("combobox")).toHaveValue("34");
+  });
+});
+
 describe("SearchableSelectField — filtrado", () => {
   it("filtra por subcadena sin distinguir diacríticos ni mayúsculas", async () => {
     const user = userEvent.setup();
