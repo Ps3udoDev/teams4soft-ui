@@ -9,6 +9,9 @@
   --color-ui-muted: var(--ui-muted);
   --color-ui-border: var(--ui-border);
   --color-ui-danger: var(--ui-danger);
+  --color-ui-info: var(--ui-info);
+  --color-ui-warning: var(--ui-warning);
+  --color-ui-success: var(--ui-success);
   --color-ui-focus: var(--ui-focus);
   --radius-ui-sm: var(--ui-radius-sm);
   --radius-ui-md: var(--ui-radius-md);
