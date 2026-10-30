@@ -16,4 +16,5 @@
   --ui-overlay: rgb(0 0 0 / 0.45);
   --ui-shadow-lg: 0 10px 30px rgb(0 0 0 / 0.18);
   --ui-radius-lg: 0.75rem;
+  --ui-control-height: 2.5rem;
 }

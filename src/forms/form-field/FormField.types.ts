@@ -23,6 +23,11 @@ export interface FormFieldSharedProps {
   disabled?: boolean;
   /** Reserva la altura del área de mensaje para evitar saltos de layout. */
   reserveMessageSpace?: boolean;
+  orientation?: "vertical" | "horizontal";
+  /** Label column in horizontal layouts; stacks vertically below md. */
+  labelWidth?: string;
+  requiredIndicator?: "required" | "conditional";
+  messages?: Partial<{ required: string; conditional: string; optional: string }>;
   className?: string;
   classNames?: Partial<FormFieldClassNames>;
   /** Conserva estructura, ids y atributos ARIA; omite clases visuales. */

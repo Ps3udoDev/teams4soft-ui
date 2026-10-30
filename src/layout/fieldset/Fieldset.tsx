@@ -29,7 +29,7 @@ const contentOrientationClassName: Record<"vertical" | "horizontal", string> = {
  * `disabled` es el `disabled` nativo del elemento `<fieldset>`: deshabilita
  * automáticamente todos los controles descendientes, sin lógica manual.
  */
-export const Fieldset = React.forwardRef<HTMLFieldSetElement, FieldsetProps>(
+const FieldsetImpl = React.forwardRef<HTMLElement, FieldsetProps>(
   (
     {
       legend,
@@ -38,6 +38,11 @@ export const Fieldset = React.forwardRef<HTMLFieldSetElement, FieldsetProps>(
       invalid = false,
       required = false,
       orientation = "vertical",
+      variant = "outlined",
+      as = "fieldset",
+      disabled,
+      form,
+      name,
       className,
       classNames,
       unstyled = false,
@@ -45,6 +50,7 @@ export const Fieldset = React.forwardRef<HTMLFieldSetElement, FieldsetProps>(
       styles,
       children,
       "aria-describedby": ariaDescribedByProp,
+      "aria-labelledby": ariaLabelledByProp,
       ...rest
     },
     ref,
@@ -52,6 +58,9 @@ export const Fieldset = React.forwardRef<HTMLFieldSetElement, FieldsetProps>(
     const generatedId = React.useId();
     const descriptionId = `${generatedId}-description`;
     const errorId = `${generatedId}-error`;
+    const legendId = `${generatedId}-legend`;
+    const Root = as;
+    const Legend = as === "section" ? "h3" : "legend";
 
     const hasErrorContent = !isEmptyMessage(errorMessage);
     const hasDescriptionContent = !isEmptyMessage(description) && !hasErrorContent;
@@ -70,17 +79,23 @@ export const Fieldset = React.forwardRef<HTMLFieldSetElement, FieldsetProps>(
         .join(" ") || undefined;
 
     return (
-      <fieldset
-        ref={ref}
-        className={cn(!unstyled && rootBaseClassName, className, classNames?.root)}
+      <Root
+        ref={ref as React.Ref<HTMLFieldSetElement>}
+        className={cn(!unstyled && variant === "outlined" && rootBaseClassName, className, classNames?.root)}
         style={{ ...styles?.root, ...style }}
         aria-describedby={describedBy}
+        aria-labelledby={as === "section" ? [legendId, ariaLabelledByProp].filter(Boolean).join(" ") : ariaLabelledByProp}
+        disabled={as === "fieldset" ? disabled : undefined}
+        form={as === "fieldset" ? form : undefined}
+        name={as === "fieldset" ? name : undefined}
+        data-variant={variant}
         data-invalid={effectiveInvalid || undefined}
         data-required={required || undefined}
         data-orientation={orientation || undefined}
         {...rest}
       >
-        <legend
+        <Legend
+          id={as === "section" ? legendId : undefined}
           className={cn(!unstyled && legendBaseClassName, classNames?.legend)}
           style={styles?.legend}
         >
@@ -91,7 +106,7 @@ export const Fieldset = React.forwardRef<HTMLFieldSetElement, FieldsetProps>(
               <span className="sr-only"> (requerido)</span>
             </span>
           ) : null}
-        </legend>
+        </Legend>
         {hasDescriptionContent ? (
           <p
             id={descriptionId}
@@ -119,9 +134,15 @@ export const Fieldset = React.forwardRef<HTMLFieldSetElement, FieldsetProps>(
         >
           {children}
         </div>
-      </fieldset>
+      </Root>
     );
   },
 );
 
+/** Keep the native fieldset ref precise while exposing section's HTMLElement ref. */
+export const Fieldset = FieldsetImpl as {
+  (props: FieldsetProps & { as: "section" } & React.RefAttributes<HTMLElement>): React.ReactElement | null;
+  (props: FieldsetProps & React.RefAttributes<HTMLFieldSetElement>): React.ReactElement | null;
+  displayName?: string;
+};
 Fieldset.displayName = "Fieldset";

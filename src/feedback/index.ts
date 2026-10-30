@@ -1,6 +1,15 @@
 // Los componentes de feedback se exportan aquí a medida que se implementan.
 // Ver docs/superpowers/specs/2026-08-02-fase-3a-feedback-design.md.
 export { LoadingOverlay } from "./loading-overlay/LoadingOverlay";
+export { LoadingProvider } from "./loading/LoadingProvider";
+export { loading } from "./loading/loading-global";
+export type {
+  LoadingApi,
+  LoadingOptions,
+  LoadingProviderProps,
+  LoadingStore,
+  LoadingStoreState,
+} from "./loading/Loading.types";
 export { Progress } from "./progress/Progress";
 export { Skeleton } from "./skeleton/Skeleton";
 export { Spinner } from "./spinner/Spinner";

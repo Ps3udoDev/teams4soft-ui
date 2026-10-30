@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { vi } from "vitest";
 import {
   isValidIsoDate,
   parseIsoParts,
@@ -144,5 +145,49 @@ describe("formatDateFieldValue", () => {
     expect(label).toContain("27");
     expect(label).toContain("2026");
     expect(formatDateFieldValue(null, "es-EC")).toBe("");
+  });
+});
+
+describe("parseDateInput — captura parcial opt-in", () => {
+  const options = { displayFormat: "dd/MM/yyyy", completePartialInput: true, referenceDate: "2026-10-30" } as const;
+
+  it.each(["4", "4/10", "4.10", "4-10"])("completa %s usando la referencia", (text) => {
+    expect(parseDateInput(text, options)).toEqual({ status: "valid", value: "2026-10-04" });
+  });
+
+  it.each(["31/2", "31/11", "0", "32", "4/13", "hola"])("rechaza %s sin corregir fechas imposibles", (text) => {
+    expect(parseDateInput(text, { ...options, referenceDate: "2026-10-31" })).toEqual({ status: "invalid" });
+  });
+
+  it("no ajusta el 29 de febrero en años no bisiestos", () => {
+    expect(parseDateInput("29/2", { ...options, referenceDate: "2027-01-15" })).toEqual({ status: "invalid" });
+    expect(parseDateInput("29/2", { ...options, referenceDate: "2028-01-15" })).toEqual({ status: "valid", value: "2028-02-29" });
+  });
+
+  it.each(["MM/dd/yyyy", "yyyy-MM-dd"] as const)("dos partes respetan orden sin año de %s", (displayFormat) => {
+    expect(parseDateInput("10/4", { ...options, displayFormat })).toEqual({ status: "valid", value: "2026-10-04" });
+    expect(parseDateInput("4", { ...options, displayFormat })).toEqual({ status: "valid", value: "2026-10-04" });
+  });
+
+  it.each(["4", "4/10"])("sin opt-in %s conserva el comportamiento de 0.4.0", (text) => {
+    expect(parseDateInput(text, { displayFormat: "dd/MM/yyyy" })).toEqual({ status: "invalid" });
+    expect(parseDateInput(text, { ...options, completePartialInput: false })).toEqual({ status: "invalid" });
+  });
+
+  it("lee hoy en cada parseo, incluso al cambiar de mes", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 9, 31, 23, 59));
+      expect(parseDateInput("4", { displayFormat: "dd/MM/yyyy", completePartialInput: true })).toEqual({ status: "valid", value: "2026-10-04" });
+      vi.setSystemTime(new Date(2026, 10, 1, 0, 1));
+      expect(parseDateInput("4", { displayFormat: "dd/MM/yyyy", completePartialInput: true })).toEqual({ status: "valid", value: "2026-11-04" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("una referencia inválida no inventa una fecha ni afecta entradas completas", () => {
+    expect(parseDateInput("4", { ...options, referenceDate: "2026-02-31" })).toEqual({ status: "invalid" });
+    expect(parseDateInput("4/10/26", { ...options, referenceDate: "2026-02-31" })).toEqual({ status: "valid", value: "2026-10-04" });
   });
 });

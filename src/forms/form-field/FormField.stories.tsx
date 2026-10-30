@@ -1,6 +1,7 @@
 import * as React from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { FormField } from "./FormField";
+import { cn } from "../../lib";
 
 /**
  * Historias que no dependen de `TextField` (Task 5): usan un `<input>`
@@ -9,8 +10,8 @@ import { FormField } from "./FormField";
 const inputClassName =
   "h-10 w-full rounded-(--radius-ui-md) border border-ui-border bg-ui-background px-3 text-sm text-ui-foreground placeholder:text-ui-foreground/40 outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:cursor-not-allowed disabled:opacity-50";
 
-function DemoInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={inputClassName} {...props} />;
+function DemoInput({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+  return <input className={cn(inputClassName, className)} {...props} />;
 }
 
 const meta: Meta<typeof FormField> = {
@@ -33,6 +34,20 @@ export default meta;
 type Story = StoryObj<typeof FormField>;
 
 export const Default: Story = {};
+
+export const EtiquetaALaIzquierda: Story = {
+  render: () => <div className="w-full max-w-2xl space-y-4">
+    <FormField label="Nombre" orientation="horizontal" labelWidth="10rem" required>
+      <DemoInput placeholder="Nombre completo" />
+    </FormField>
+    <FormField label="RFC" orientation="horizontal" labelWidth="10rem" required requiredIndicator="conditional" description="Obligatorio según el tipo de persona.">
+      <DemoInput placeholder="Registro fiscal" />
+    </FormField>
+    <FormField label="Correo" orientation="horizontal" labelWidth="10rem" errorMessage="Ingresa un correo válido para recibir la confirmación de tus operaciones.">
+      <DemoInput type="email" placeholder="nombre@empresa.com" />
+    </FormField>
+  </div>,
+};
 
 export const Required: Story = {
   args: {

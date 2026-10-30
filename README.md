@@ -225,6 +225,51 @@ Los iconos de severidad de `FeedbackDialog` usan los tokens `--ui-info`,
 `--ui-warning`, `--ui-success` y `--ui-danger`; sus botones siempre usan
 `--ui-primary`.
 
+### Ajustes 0.5.0
+
+Cambios aditivos preparados para la siguiente publicación; la versión del paquete
+permanece en 0.4.0 y los defaults existentes se conservan.
+
+- `--ui-control-height` define la altura de `TextField` mediano, `DateField` y
+  `SearchableSelectField` (2.5rem por defecto). Puede sobrescribirse en un módulo;
+  los tamaños pequeño y grande de `TextField` conservan sus alturas.
+- `FormField` admite `orientation="horizontal"` y `labelWidth="10rem"`: etiqueta
+  a la izquierda y mensajes debajo del control; bajo `md` vuelve a vertical.
+  `requiredIndicator="conditional"` muestra `**` en campos requeridos. `messages`
+  permite personalizar los textos `required`, `conditional` y `optional`.
+- `DateField` admite `completePartialInput` y `referenceDate="2026-10-30"`:
+  `4` y `4/10` se completan como `2026-10-04` con formato `dd/MM/yyyy`.
+  Sin referencia explícita usa la fecha local al confirmar. Las fechas imposibles
+  siguen siendo inválidas. El comportamiento se activa explícitamente.
+- `SearchableSelectField openOnType={false}` permite escribir sin abrir ni filtrar
+  el panel y resuelve al salir o pulsar Enter. `selectOnFocus` selecciona el texto
+  al recibir foco, sin abrir. Sus defaults siguen siendo `true` y `false`.
+- `Fieldset variant="plain"` elimina borde y padding; `as="section"` usa una
+  región nombrada por un encabezado. El default sigue siendo un fieldset outlined.
+  La deshabilitación nativa de los descendientes pertenece a `as="fieldset"`.
+- `LoadingOverlay indicator` sustituye el spinner. `LoadingProvider global` habilita
+  `loading.show`, `loading.hide` y `loading.wrap` desde código de cliente.
+
+```tsx
+import { LoadingProvider, loading } from "@teams4soft/teams4soft-ui/feedback";
+
+<LoadingProvider global><App /></LoadingProvider>;
+
+// hide se ejecuta también si la promesa falla; se conserva su resultado/error.
+const report = await loading.wrap(generateReport(), "Generando reporte…");
+
+loading.show({ message: "Exportando…", indicator: <ExcelIndicator /> });
+try {
+  await exportReport(report);
+} finally {
+  loading.hide();
+}
+```
+
+La carga global usa un contador: dos `show` requieren dos `hide`. La última llamada
+`show` establece el mensaje y el indicador; al llegar a cero se limpian ambos.
+Si falta un provider global se emite un aviso de desarrollo, como con `toast`.
+
 ## Utilidades
 
 - `cn(...classes)` — combina clases y resuelve conflictos de Tailwind (las últimas ganan).

@@ -82,7 +82,7 @@ const labelBaseClassName = "text-sm font-medium text-ui-foreground";
 const requiredIndicatorBaseClassName = "ml-1 text-ui-danger";
 
 const controlBaseClassName =
-  "inline-flex h-10 w-full items-center gap-1 rounded-(--radius-ui-md) border border-ui-border bg-ui-background px-3 text-sm text-ui-foreground transition-colors focus-within:ring-2 focus-within:ring-ui-focus focus-within:ring-offset-2 focus-within:ring-offset-ui-background data-[invalid=true]:border-ui-danger data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50";
+  "inline-flex h-(--ui-control-height) w-full items-center gap-1 rounded-(--radius-ui-md) border border-ui-border bg-ui-background px-3 text-sm text-ui-foreground transition-colors focus-within:ring-2 focus-within:ring-ui-focus focus-within:ring-offset-2 focus-within:ring-offset-ui-background data-[invalid=true]:border-ui-danger data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50";
 
 const inputBaseClassName =
   "w-full min-w-0 bg-transparent text-inherit outline-none placeholder:text-ui-foreground/40 disabled:cursor-not-allowed";
@@ -141,6 +141,8 @@ export const DateField = React.forwardRef<HTMLInputElement, DateFieldProps>(
       acceptedFormats,
       placeholder,
       twoDigitYearPivot,
+      completePartialInput = false,
+      referenceDate,
       min,
       max,
       isDateUnavailable,
@@ -308,7 +310,12 @@ export const DateField = React.forwardRef<HTMLInputElement, DateFieldProps>(
 
     /** Resuelve `text`; devuelve el valor resultante (el vigente si no resuelve). */
     const confirmText = (text: string): DateFieldValue => {
-      const result = parseDateInput(text, { displayFormat, twoDigitYearPivot });
+      const result = parseDateInput(text, {
+        displayFormat,
+        twoDigitYearPivot,
+        completePartialInput,
+        referenceDate,
+      });
 
       if (result.status === "empty") {
         if (value === null) {

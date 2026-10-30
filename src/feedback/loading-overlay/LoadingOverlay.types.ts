@@ -11,6 +11,8 @@ export interface LoadingOverlayClassNames {
 export interface LoadingOverlayProps {
   open: boolean;
   message?: React.ReactNode;
+  /** Sustituye al Spinner predeterminado; el consumidor aporta su animación. */
+  indicator?: React.ReactNode;
   /**
    * Captura el puntero sobre el área cubierta y marca `aria-busy`.
    *

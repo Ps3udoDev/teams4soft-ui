@@ -19,6 +19,4 @@ skills-lock.json
 .claude/skills/
 
 # Docs locales no commiteables (plan 2b y presentación)
-docs/superpowers/plans/2026-07-27-fase-2b-campos-avanzados.md
-docs/superpowers/plans/2026-07-28-presentacion-flujo-libreria.md
-docs/superpowers/specs/2026-07-28-presentacion-flujo-libreria-design.md
+docs/superpowers/

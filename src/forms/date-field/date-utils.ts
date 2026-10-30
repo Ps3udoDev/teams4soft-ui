@@ -123,21 +123,42 @@ function expandYear(raw: string, pivot: number): number {
  *
  * Acepta `/`, `.` y `-` como separadores en cualquier formato; mapea las
  * posiciones según `displayFormat`; expande años de dos dígitos con
- * `twoDigitYearPivot`. NUNCA "corrige" una fecha imposible: devuelve
+ * `twoDigitYearPivot`. Con `completePartialInput`, completa día o día/mes
+ * (en el orden del formato sin año) con la referencia, leída al parsear.
+ * NUNCA "corrige" una fecha imposible: devuelve
  * `{ status: "invalid" }` para que el componente conserve el texto escrito.
  */
 export function parseDateInput(
   text: string,
-  opts: { displayFormat: DisplayFormat; twoDigitYearPivot?: number },
+  opts: {
+    displayFormat: DisplayFormat;
+    twoDigitYearPivot?: number;
+    completePartialInput?: boolean;
+    referenceDate?: DateFieldValue;
+  },
 ): ParseResult {
   const trimmed = text.trim();
   if (trimmed.length === 0) return { status: "empty" };
 
   const parts = trimmed.split(/[/.\-\s]+/).filter((part) => part.length > 0);
-  if (parts.length !== 3) return { status: "invalid" };
   if (parts.some((part) => !/^\d+$/.test(part))) return { status: "invalid" };
 
   const order = FORMAT_ORDER[opts.displayFormat];
+  if (opts.completePartialInput && (parts.length === 1 || parts.length === 2)) {
+    const referenceValue = opts.referenceDate ?? toDateFieldValue(new Date());
+    const reference = referenceValue ? parseIsoParts(referenceValue) : null;
+    if (!reference) return { status: "invalid" };
+
+    // One part is always the day. With two, remove the year from the
+    // display order: yyyy-MM-dd therefore accepts month-day.
+    const monthFirst = order.month < order.day;
+    const day = Number(parts[parts.length === 1 || !monthFirst ? 0 : 1]);
+    const month = parts.length === 1 ? reference.month : Number(parts[monthFirst ? 0 : 1]);
+    if (!isRealDate(reference.year, month, day)) return { status: "invalid" };
+    return { status: "valid", value: toIso(reference.year, month, day) };
+  }
+  if (parts.length !== 3) return { status: "invalid" };
+
   const pivot = opts.twoDigitYearPivot ?? DEFAULT_TWO_DIGIT_YEAR_PIVOT;
 
   const rawYear = parts[order.year];

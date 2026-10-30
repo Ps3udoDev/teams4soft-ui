@@ -60,6 +60,18 @@ export const TypedDate: Story = {
   ),
 };
 
+export const PartialInput: Story = {
+  name: "Captura parcial",
+  render: (args) => (
+    <ControlledDateField
+      {...args}
+      completePartialInput
+      referenceDate="2026-10-30"
+      description="Escribe 4 o 4/10 y confirma: 04/10/2026. Las fechas imposibles conservan el texto y muestran un error."
+    />
+  ),
+};
+
 export const InvalidInput: Story = {
   render: (args) => (
     <ControlledDateField
