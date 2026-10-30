@@ -89,7 +89,7 @@ const rootBaseClassName =
 
 const rootSizeClassName: Record<TextFieldSize, string> = {
   sm: "h-8 text-sm",
-  md: "h-10 text-sm",
+  md: "h-(--ui-control-height) text-sm",
   lg: "h-12 text-base",
 };
 
