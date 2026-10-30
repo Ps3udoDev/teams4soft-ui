@@ -177,9 +177,9 @@ El `toast` importable es **API de cliente**: requiere un `<ToastProvider global 
 
 ### Fase 4: DataGrid (consulta)
 
-La beta preparada `0.5.0-beta.0` incluye `DataGrid` en el subpath
+La beta `0.5.0-beta.1` incluye `DataGrid` en el subpath
 `./data-display`. Tras publicarse se instalará con `@teams4soft/teams4soft-ui@next`.
-Instala también `@tanstack/react-table@^8.21.3` y los peers
+Instala también `@tanstack/react-table@8` (la v9 no es compatible) y los peers
 Radix de Popover, Checkbox, Slot y Tooltip.
 
 ```tsx
@@ -266,7 +266,7 @@ Los iconos de severidad de `FeedbackDialog` usan los tokens `--ui-info`,
 ### Ajustes 0.5.0
 
 Cambios aditivos preparados para la siguiente publicación; la versión del paquete
-es 0.5.0-beta.0 y los defaults existentes se conservan.
+es 0.5.0-beta.1 y los defaults existentes se conservan.
 
 - `--ui-control-height` define la altura de `TextField` mediano, `DateField` y
   `SearchableSelectField` (2.5rem por defecto). Puede sobrescribirse en un módulo;
@@ -316,10 +316,11 @@ Si falta un provider global se emite un aviso de desarrollo, como con `toast`.
 
 ## Estado
 
-En construcción por fases. Versión preparada: **0.5.0-beta.0** (canal `next`).
+En construcción por fases. Versión preparada: **0.5.0-beta.1** (canal `next`).
 
 | Versión | Fase | Contenido |
 | --- | --- | --- |
+| 0.5.0-beta.1 | G1 — Corrección | Limita el peer a `@tanstack/react-table@^8.20.0`: con `0.5.0-beta.0`, una instalación limpia resolvía la v9 y el paquete no cargaba. |
 | 0.5.0-beta.0 | G1 — Consulta | `DataGrid`, factorías, filtros, selección, paginación y tokens; subpath `./data-display`. |
 | 0.4.0 | 3a — Feedback | `ToastProvider`/`useToast`/`toast`, `Spinner`, `Skeleton`, `Progress`, `LoadingOverlay`; subpath `./feedback`. Corrige la navegación por teclado de `SearchableSelectField` (pasos perdidos y estado `open` obsoleto). |
 | 0.3.0 | 2b — Campos avanzados | `DateField`, `SearchableSelectField`. Incluida en 0.4.0 (no se publicó por separado). |
@@ -331,5 +332,5 @@ Implementados para la siguiente publicación: `Dialog` y `FeedbackDialog` (`./ov
 ## Publicación (mantenedores)
 
 1. Crear `NPM_TOKEN` (token de automatización con 2FA) en la organización `@teams4soft` y guardarlo como secret del repo.
-2. Crear un GitHub Release marcado como pre-release para `v0.5.0-beta.0`: el workflow publica con provenance en `next`. Los releases estables usan `latest`.
-3. Antes de publicar, ejecutar `pnpm publish --dry-run --no-git-checks --tag next`. Tras publicar, instalar `@teams4soft/teams4soft-ui@next` y probar la página piloto del frontend, incluida su convivencia con el preflight de Tailwind/PrimeReact.
+2. Crear un GitHub Release marcado como pre-release para la versión de `package.json` (p. ej. `v0.5.0-beta.1`): el workflow publica con provenance en `next`. Los releases estables usan `latest`.
+3. Antes de publicar, ejecutar `pnpm publish --dry-run --no-git-checks --tag next` e instalar el resultado de `pnpm pack` en un proyecto limpio, sin fijar peers, para comprobar que el paquete carga. Tras publicar, instalar `@teams4soft/teams4soft-ui@next` y probar la página piloto del frontend, incluida su convivencia con el preflight de Tailwind/PrimeReact.
