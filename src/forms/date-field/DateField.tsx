@@ -141,6 +141,8 @@ export const DateField = React.forwardRef<HTMLInputElement, DateFieldProps>(
       acceptedFormats,
       placeholder,
       twoDigitYearPivot,
+      completePartialInput = false,
+      referenceDate,
       min,
       max,
       isDateUnavailable,
@@ -308,7 +310,12 @@ export const DateField = React.forwardRef<HTMLInputElement, DateFieldProps>(
 
     /** Resuelve `text`; devuelve el valor resultante (el vigente si no resuelve). */
     const confirmText = (text: string): DateFieldValue => {
-      const result = parseDateInput(text, { displayFormat, twoDigitYearPivot });
+      const result = parseDateInput(text, {
+        displayFormat,
+        twoDigitYearPivot,
+        completePartialInput,
+        referenceDate,
+      });
 
       if (result.status === "empty") {
         if (value === null) {

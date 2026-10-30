@@ -44,6 +44,53 @@ function Controlled({
   );
 }
 
+describe("DateField — captura parcial opt-in", () => {
+  it("completa día al perder foco y muestra la fecha normalizada", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Controlled completePartialInput referenceDate="2026-10-30" onChange={onChange} />);
+    const input = screen.getByLabelText("Fecha");
+    await user.type(input, "4");
+    await user.tab();
+    expect(onChange).toHaveBeenCalledWith("2026-10-04");
+    expect(input).toHaveValue("04/10/2026");
+  });
+
+  it("completa mes-día con Enter en formato ISO", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Controlled completePartialInput referenceDate="2026-10-30" displayFormat="yyyy-MM-dd" onChange={onChange} />);
+    await user.type(screen.getByLabelText("Fecha"), "10-4{Enter}");
+    expect(onChange).toHaveBeenCalledWith("2026-10-04");
+    expect(screen.getByLabelText("Fecha")).toHaveValue("2026-10-04");
+  });
+
+  it.each([false, true])("mantiene inválidos visibles con opt-in %s sin emitir", async (completePartialInput) => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Controlled completePartialInput={completePartialInput} referenceDate="2026-10-31" onChange={onChange} />);
+    const input = screen.getByLabelText("Fecha");
+    await user.type(input, completePartialInput ? "31/11" : "4");
+    await user.tab();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input).toHaveValue(completePartialInput ? "31/11" : "4");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("las fechas completadas respetan min/max y días no disponibles", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Controlled completePartialInput referenceDate="2026-10-30" min="2026-10-05" max="2026-10-20" isDateUnavailable={(iso) => iso === "2026-10-10"} onChange={onChange} />);
+    const input = screen.getByLabelText("Fecha");
+    for (const text of ["4", "21", "10"]) {
+      await user.clear(input);
+      await user.type(input, `${text}{Enter}`);
+      expect(input).toHaveAttribute("aria-invalid", "true");
+    }
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
 describe("DateField — escritura y confirmación", () => {
   it("confirma con Enter y emite el valor ISO", async () => {
     const user = userEvent.setup();

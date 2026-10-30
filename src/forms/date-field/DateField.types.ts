@@ -50,6 +50,10 @@ export interface DateFieldProps {
   placeholder?: string;
   /** Pivote para años de dos dígitos: `<= pivote` → 2000s, resto → 1900s. */
   twoDigitYearPivot?: number;
+  /** Completa día o día/mes con la referencia al confirmar. Por defecto false. */
+  completePartialInput?: boolean;
+  /** Referencia para captura parcial. Si falta o es null, usa hoy al confirmar. */
+  referenceDate?: DateFieldValue;
 
   min?: DateFieldValue;
   max?: DateFieldValue;
