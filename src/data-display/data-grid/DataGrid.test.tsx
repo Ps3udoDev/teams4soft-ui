@@ -328,7 +328,89 @@ describe("DataGrid: selección y carga", () => {
   });
 });
 
+describe("DataGrid: orden por tipo", () => {
+  type Item = { id: string; name: string | null; status: number | null; amount: number | null; due: string | null; active: boolean };
+  const item = (id: number, patch: Partial<Item>): Item => ({ id: `i-${id}`, name: `n${id}`, status: 1, amount: 1, due: "2026-01-01", active: true, ...patch });
+  const firstColumn = () => bodyRows().map(row => within(row).getAllByRole("cell")[0]!.textContent);
+  const nameColumn: DataGridColumn<Item>[] = [{ field: "name", header: "Nombre" }];
+
+  it.each([6, 12])("ordena texto con reglas del español y sin distinguir mayúsculas (%i filas)", async (count) => {
+    const user = userEvent.setup();
+    const names = ["Zeta", "Álvarez", "beto", "Ñandú", "Oscar", "Nube"];
+    const items = Array.from({ length: count }, (_, index) => item(index, { name: names[index % names.length]! }));
+    render(<DataGrid columns={nameColumn} value={items} getRowId={row => row.id} pagination={false} />);
+    const sort = screen.getByRole("button", { name: "Ordenar por Nombre" });
+    await user.click(sort);
+    expect([...new Set(firstColumn())]).toEqual(["Álvarez", "beto", "Nube", "Ñandú", "Oscar", "Zeta"]);
+    await user.click(sort);
+    expect([...new Set(firstColumn())]).toEqual(["Zeta", "Oscar", "Ñandú", "Nube", "beto", "Álvarez"]);
+  });
+
+  it("ordena los números dentro del texto por su valor", async () => {
+    const user = userEvent.setup();
+    const items = ["Póliza 10", "Póliza 2", "Póliza 1"].map((name, index) => item(index, { name }));
+    render(<DataGrid columns={nameColumn} value={items} getRowId={row => row.id} />);
+    await user.click(screen.getByRole("button", { name: "Ordenar por Nombre" }));
+    expect(firstColumn()).toEqual(["Póliza 1", "Póliza 2", "Póliza 10"]);
+  });
+
+  it("ordena select y radio por la etiqueta visible", async () => {
+    const user = userEvent.setup();
+    const options = [{ value: 1, label: "Zeta" }, { value: 2, label: "Alfa" }, { value: 3, label: "Medio" }];
+    const items = [1, 2, 3].map(status => item(status, { status }));
+    render(<DataGrid columns={[{ field: "status", header: "Estado", type: "select", options }]} value={items} getRowId={row => row.id} />);
+    await user.click(screen.getByRole("button", { name: "Ordenar por Estado" }));
+    expect(firstColumn()).toEqual(["Alfa", "Medio", "Zeta"]);
+  });
+
+  it.each<[string, DataGridColumn<Item>, Partial<Item>[], string[], string[]]>([
+    ["currency", { field: "amount", header: "Campo", type: "currency" }, [{ amount: 5 }, { amount: null }, { amount: -2 }, { amount: Number.NaN }], ["$-2.00", "$5.00", "", ""], ["$5.00", "$-2.00", "", ""]],
+    ["date", { field: "due", header: "Campo", type: "date" }, [{ due: "2026-03-01" }, { due: null }, { due: "2025-12-31" }, { due: "no-es-fecha" }], ["31/12/2025", "01/03/2026", "", ""], ["01/03/2026", "31/12/2025", "", ""]],
+    ["text", { field: "name", header: "Campo" }, [{ name: "beta" }, { name: null }, { name: "alfa" }, { name: "" }], ["alfa", "beta", "", ""], ["beta", "alfa", "", ""]],
+  ])("deja las celdas vacías al final en ambas direcciones (%s)", async (_type, column, patches, ascending, descending) => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={[column]} value={patches.map((patch, index) => item(index, patch))} getRowId={row => row.id} />);
+    const sort = screen.getByRole("button", { name: "Ordenar por Campo" });
+    await user.click(sort);
+    expect(firstColumn()).toEqual(ascending);
+    await user.click(sort);
+    expect(firstColumn()).toEqual(descending);
+  });
+
+  it("conserva 0 y false como valores, y entrega a la celda el valor original", async () => {
+    const user = userEvent.setup();
+    const render_ = vi.fn(({ value }: { value: unknown }) => String(value));
+    const items = [item(1, { amount: 3, active: true }), item(2, { amount: 0, active: false }), item(3, { amount: null, active: true })];
+    render(<DataGrid columns={[{ field: "amount", header: "Monto", type: "custom", render: render_ }, { field: "active", header: "Activo", type: "checkbox" }]} value={items} getRowId={row => row.id} />);
+    expect(firstColumn()).toEqual(["3", "0", "null"]);
+    await user.click(screen.getByRole("button", { name: "Ordenar por Activo" }));
+    expect(firstColumn()).toEqual(["0", "3", "null"]);
+  });
+});
+
 describe("DataGrid: toolbar y columnas", () => {
+  it("limpia el filtro de una columna al ocultarla desde el toggler", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={columns} value={rows} getRowId={getRowId} />);
+    await user.type(screen.getByRole("textbox", { name: "Filtrar Póliza" }), "perez");
+    await waitFor(() => expect(bodyRows()).toHaveLength(1));
+    await user.click(screen.getByRole("button", { name: "Columnas" }));
+    await user.click(screen.getByRole("checkbox", { name: "Póliza" }));
+    expect(bodyRows()).toHaveLength(3);
+    await user.click(screen.getByRole("checkbox", { name: "Póliza" }));
+    expect(screen.getByRole("textbox", { name: "Filtrar Póliza" })).toHaveValue("");
+    expect(bodyRows()).toHaveLength(3);
+  });
+
+  it("limpia el filtro cuando la página oculta la columna con columnVisibility", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<DataGrid columns={columns} value={rows} getRowId={getRowId} columnVisibility={{ policy: true, collectedAmount: true, dueDate: true }} />);
+    await user.type(screen.getByRole("textbox", { name: "Filtrar Póliza" }), "perez");
+    await waitFor(() => expect(bodyRows()).toHaveLength(1));
+    rerender(<DataGrid columns={columns} value={rows} getRowId={getRowId} columnVisibility={{ policy: false, collectedAmount: true, dueDate: true }} />);
+    expect(bodyRows()).toHaveLength(3);
+  });
+
   it("oculta columnas y omite no ocultables del menú", async () => {
     const user = userEvent.setup();
     render(<DataGrid columns={[{ ...columns[0]!, hideable: false }, ...columns.slice(1)]} value={rows} getRowId={getRowId} toolbar={<button>Exportar</button>} />);

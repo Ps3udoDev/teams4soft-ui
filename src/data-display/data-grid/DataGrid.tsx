@@ -60,7 +60,14 @@ function DataGridInner<T>(props: DataGridProps<T>, ref: React.ForwardedRef<DataG
     right: columns.filter(c => c.frozen === "right").map(c => c.field),
   }), [columns, selectionMode]);
   const [sorting, setSorting] = React.useState<SortingState>(() => initialSort ? [{ id: initialSort.field, desc: initialSort.direction === "desc" }] : []);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [storedFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  // Sin su columna, un filtro ocultaría filas y no habría campo para limpiarlo.
+  let columnFilters = storedFilters;
+  const visibleFilters = storedFilters.filter(filter => visibility[filter.id] !== false);
+  if (visibleFilters.length !== storedFilters.length) {
+    columnFilters = visibleFilters;
+    setColumnFilters(visibleFilters);
+  }
   const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>({});
   const [paginationState, setPagination] = React.useState(() => ({
     pageIndex: 0,
@@ -208,7 +215,7 @@ function DataGridInner<T>(props: DataGridProps<T>, ref: React.ForwardedRef<DataG
                 const align = col?.align ?? (["number", "currency", "percent"].includes(type) ? "right" : "left");
                 return <td key={cell.id} data-slot="cell" data-align={align} data-frozen={cell.column.getIsPinned() || undefined}
                   className={cn(!unstyled && "border-b border-ui-border px-3 py-2", !unstyled && cell.column.getIsPinned() && "bg-ui-background", classNames?.cell)} style={{ ...cellStyle(cell.column), ...(!unstyled && cell.column.getIsPinned() ? { backgroundImage: "linear-gradient(var(--ui-grid-current-row-bg), var(--ui-grid-current-row-bg))" } : {}), ...styles?.cell }}>
-                  {cell.column.id === "__select" ? rowSelectionControl(row.id) : col && <Cell column={col} row={row.original} value={cell.getValue()} rowId={row.id} grid={grid} />}
+                  {cell.column.id === "__select" ? rowSelectionControl(row.id) : col && <Cell column={col} row={row.original} value={row.original[col.field]} rowId={row.id} grid={grid} />}
                 </td>;
               })}
             </tr>)}

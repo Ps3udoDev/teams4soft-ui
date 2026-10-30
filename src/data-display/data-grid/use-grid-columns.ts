@@ -3,6 +3,7 @@ import type { ColumnDef, Updater, VisibilityState } from "@tanstack/react-table"
 import type { DataGridCellComponent, DataGridColumn, DataGridMessages } from "./DataGrid.types";
 import { matchesFilter, resolveFilterKind } from "./filters/filter-fns";
 import { buildPersistStorageKey, readPersistedVisibility, writePersistedVisibility } from "./persist";
+import { compareCellValues, toSortValue } from "./sort";
 
 interface UseGridColumnsArgs<T> {
   columns: DataGridColumn<T>[];
@@ -51,12 +52,15 @@ export function useGridColumns<T>({ columns, columnVisibility, onColumnVisibilit
   const columnDefs = React.useMemo<ColumnDef<T, unknown>[]>(() => columns.map((column) => ({
     id: column.field,
     header: column.header,
-    accessorFn: (row) => row[column.field],
+    // El accessor alimenta solo el orden; celdas y filtros leen el valor original de la fila.
+    accessorFn: (row) => toSortValue(column, row[column.field]),
+    sortUndefined: "last",
+    sortingFn: (rowA, rowB, columnId) => compareCellValues(column, rowA.getValue(columnId), rowB.getValue(columnId)),
     enableSorting: column.sortable ?? true,
     enableHiding: column.hideable ?? true,
     enableResizing: column.resizable ?? false,
     enableColumnFilter: resolveFilterKind(column) !== null,
-    filterFn: (row, columnId, filterValue) => matchesFilter(column, row.getValue(columnId), filterValue),
+    filterFn: (row, _columnId, filterValue) => matchesFilter(column, row.original[column.field], filterValue),
     size: typeof column.width === "number" ? column.width : undefined,
     minSize: column.minWidth,
     meta: { column },
