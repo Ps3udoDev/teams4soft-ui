@@ -1,0 +1,66 @@
+import * as React from "react";
+import type { ColumnDef, Updater, VisibilityState } from "@tanstack/react-table";
+import type { DataGridCellComponent, DataGridColumn, DataGridMessages } from "./DataGrid.types";
+import { matchesFilter, resolveFilterKind } from "./filters/filter-fns";
+import { buildPersistStorageKey, readPersistedVisibility, writePersistedVisibility } from "./persist";
+
+interface UseGridColumnsArgs<T> {
+  columns: DataGridColumn<T>[];
+  cellTypes?: Record<string, DataGridCellComponent<T>>;
+  columnVisibility?: Record<string, boolean>;
+  onColumnVisibilityChange?: (visibility: Record<string, boolean>) => void;
+  persistKey?: string;
+  messages: DataGridMessages;
+}
+
+export function useGridColumns<T>({ columns, columnVisibility, onColumnVisibilityChange, persistKey }: UseGridColumnsArgs<T>): {
+  columnDefs: ColumnDef<T, unknown>[];
+  visibility: VisibilityState;
+  setVisibility: (updater: Updater<VisibilityState>) => void;
+} {
+  const defaults = React.useMemo(() => Object.fromEntries(columns.map((column) => [column.field, !column.hidden])), [columns]);
+  const storageKey = React.useMemo(() => persistKey ? buildPersistStorageKey(persistKey, columns.map((column) => column.field)) : null, [persistKey, columns]);
+  const controlled = columnVisibility !== undefined;
+  // El ámbito depende del esquema, no de la identidad del array de columnas.
+  // Ajustar durante este render evita mostrar/grabar el mapa del ámbito anterior.
+  const scope = JSON.stringify([storageKey, defaults, controlled]);
+  const restoreVisibility = (): VisibilityState => ({
+    ...defaults,
+    ...(!controlled && storageKey ? readPersistedVisibility(storageKey) : null),
+  });
+  const [storedVisibility, setStoredVisibility] = React.useState(() => ({ scope, value: restoreVisibility() }));
+  let localVisibility = storedVisibility.value;
+  if (storedVisibility.scope !== scope) {
+    localVisibility = restoreVisibility();
+    setStoredVisibility({ scope, value: localVisibility });
+  }
+  const visibility = columnVisibility ?? localVisibility;
+  const latestVisibility = React.useRef(visibility);
+  latestVisibility.current = visibility;
+
+  const setVisibility = React.useCallback((updater: Updater<VisibilityState>) => {
+    const next = typeof updater === "function" ? updater(latestVisibility.current) : updater;
+    if (!controlled) {
+      latestVisibility.current = next;
+      setStoredVisibility({ scope, value: next });
+      if (storageKey) writePersistedVisibility(storageKey, next);
+    }
+    onColumnVisibilityChange?.(next);
+  }, [controlled, scope, storageKey, onColumnVisibilityChange]);
+
+  const columnDefs = React.useMemo<ColumnDef<T, unknown>[]>(() => columns.map((column) => ({
+    id: column.field,
+    header: column.header,
+    accessorFn: (row) => row[column.field],
+    enableSorting: column.sortable ?? true,
+    enableHiding: column.hideable ?? true,
+    enableResizing: column.resizable ?? false,
+    enableColumnFilter: resolveFilterKind(column) !== null,
+    filterFn: (row, columnId, filterValue) => matchesFilter(column, row.getValue(columnId), filterValue),
+    size: typeof column.width === "number" ? column.width : undefined,
+    minSize: column.minWidth,
+    meta: { column },
+  })), [columns]);
+
+  return { columnDefs, visibility, setVisibility };
+}
