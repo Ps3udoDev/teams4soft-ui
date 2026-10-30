@@ -180,7 +180,16 @@ El `toast` importable es **API de cliente**: requiere un `<ToastProvider global 
 
 ## Estado
 
-En construcción por fases.
+En construcción por fases. Versión actual: **0.4.0**.
+
+| Versión | Fase | Contenido |
+| --- | --- | --- |
+| 0.4.0 | 3a — Feedback | `ToastProvider`/`useToast`/`toast`, `Spinner`, `Skeleton`, `Progress`, `LoadingOverlay`; subpath `./feedback`. Corrige la navegación por teclado de `SearchableSelectField` (pasos perdidos y estado `open` obsoleto). |
+| 0.3.0 | 2b — Campos avanzados | `DateField`, `SearchableSelectField`. Incluida en 0.4.0 (no se publicó por separado). |
+| 0.2.0 | 2a — Controles de formulario | `CheckboxField`, `RadioGroup`, `Fieldset`, `FormGrid`; subpath `./layout`. |
+| 0.1.0 | 0–1 — Infraestructura y primitivas | `Button`, `Tooltip`, `FormField`, `TextField`. |
+
+Siguientes: Fase 3b (`ResponsiveDialog`, `FeedbackDialog`), Fase 4 (`FilePickerField`, `AdaptiveDataTable`, `EntityLookupField`), Fase 5 (`SectionPanel`, `PageShell`) y Fase 6 (estable `1.0.0`).
 
 ## Publicación (mantenedores)
 
