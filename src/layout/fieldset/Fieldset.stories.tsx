@@ -25,6 +25,16 @@ const meta: Meta<typeof Fieldset> = {
 };
 export default meta;
 
+export const Plain: Story = {
+  args: { legend: "Datos sin recuadro", variant: "plain", children: <p>Contenido del grupo.</p> },
+  render: (args) => <div className="w-full max-w-96"><Fieldset {...args} /></div>,
+};
+
+export const Section: Story = {
+  args: { legend: "Resultados", as: "section", children: <p>Se encontraron tres registros.</p> },
+  render: (args) => <div className="w-full max-w-96"><Fieldset {...args} /></div>,
+};
+
 type Story = StoryObj<typeof Fieldset>;
 
 export const Default: Story = {

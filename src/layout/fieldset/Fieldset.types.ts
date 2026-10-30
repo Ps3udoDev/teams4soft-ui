@@ -22,6 +22,9 @@ export interface FieldsetProps
   required?: boolean;
   /** Controla el layout del slot `content`. */
   orientation?: "vertical" | "horizontal";
+  variant?: "outlined" | "plain";
+  /** section supplies region/heading semantics instead of native form grouping. */
+  as?: "fieldset" | "section";
   className?: string;
   classNames?: Partial<FieldsetClassNames>;
   /** Conserva estructura, comportamiento y accesibilidad; omite clases visuales. */
