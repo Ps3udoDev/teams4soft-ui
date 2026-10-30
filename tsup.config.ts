@@ -7,6 +7,7 @@ export default defineConfig({
     forms: "src/forms/index.ts",
     layout: "src/layout/index.ts",
     feedback: "src/feedback/index.ts",
+    "data-display": "src/data-display/index.ts",
     overlays: "src/overlays/index.ts",
   },
   format: ["esm", "cjs"],

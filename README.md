@@ -32,8 +32,9 @@ pnpm add @radix-ui/react-slot @radix-ui/react-tooltip @radix-ui/react-checkbox @
 
 ## Componentes disponibles
 
-Importables desde el paquete raíz (`@teams4soft/teams4soft-ui`) o desde los subpaths `@teams4soft/teams4soft-ui/primitives`, `@teams4soft/teams4soft-ui/forms`, `@teams4soft/teams4soft-ui/layout`, `@teams4soft/teams4soft-ui/feedback` y `@teams4soft/teams4soft-ui/overlays`:
+Importables desde el paquete raíz (`@teams4soft/teams4soft-ui`) o desde los subpaths `@teams4soft/teams4soft-ui/primitives`, `@teams4soft/teams4soft-ui/forms`, `@teams4soft/teams4soft-ui/layout`, `@teams4soft/teams4soft-ui/feedback`, `@teams4soft/teams4soft-ui/data-display` y `@teams4soft/teams4soft-ui/overlays`:
 
+- **DataGrid** (`data-display`) — tabla de consulta con filtros, orden, paginación, selección y columnas configurables.
 - **Button** (`primitives`) — botón con variantes, tamaños, estado `loading` y soporte `asChild`.
 - **Tooltip** / **TooltipProvider** (`primitives`) — tooltip accesible sobre `@radix-ui/react-tooltip`.
 - **FormField** (`forms`) — wiring de accesibilidad (label, descripción, error) para controles de formulario.
@@ -174,6 +175,43 @@ toast.error({
 
 El `toast` importable es **API de cliente**: requiere un `<ToastProvider global />` montado.
 
+### Fase 4: DataGrid (consulta)
+
+La beta preparada `0.5.0-beta.0` incluye `DataGrid` en el subpath
+`./data-display`. Tras publicarse se instalará con `@teams4soft/teams4soft-ui@next`.
+Instala también `@tanstack/react-table@^8.21.3` y los peers
+Radix de Popover, Checkbox, Slot y Tooltip.
+
+```tsx
+import { DataGrid, textColumn, amountColumn, dateColumn } from "@teams4soft/teams4soft-ui/data-display";
+import type { DataGridColumn } from "@teams4soft/teams4soft-ui/data-display";
+
+type Premium = { id: string; policy: string; amount: number; dueDate: string };
+// Define las columnas fuera del render o con useMemo.
+const columns: DataGridColumn<Premium>[] = [
+  textColumn<Premium>("policy", "Póliza"),
+  amountColumn<Premium>("amount", "Imp. cobrado"),
+  dateColumn<Premium>("dueDate", "Vencimiento"),
+];
+
+<DataGrid columns={columns} value={rows} getRowId={(row) => row.id}
+  selectionMode="multiple" pagination={{ pageSize: 10, pageSizeOptions: [10, 25, 50] }} />;
+```
+
+Ofrece orden, filtros por columna, selección por id, columnas fijas y redimensionables,
+y visibilidad opcionalmente persistida con `persistKey`. Los filtros de texto ignoran
+tildes y esperan 200 ms; ocultar una columna limpia su filtro. El orden sigue las reglas
+del español, usa la etiqueta en `select`/`radio` y deja las celdas vacías al final.
+`pagination={false}` muestra todas las filas. `selection` y
+`columnVisibility` permiten controlar esos estados desde la página; `ref.getData()`
+devuelve las filas originales y los ids seleccionados, incluso si el filtro los oculta.
+
+`loading` muestra cinco filas skeleton en la primera carga y una capa que bloquea
+la interacción cuando ya hay datos. `density="compact"`, `maxHeight`, los tokens
+`--ui-grid-*` y los slots de `classNames`/`styles` permiten adaptar la presentación.
+`messages` sobrescribe los textos en español y `cellTypes` registra celdas propias.
+Esta fase es de consulta; la edición y las consultas al servidor llegan en G2/G3.
+
 ### Overlays
 
 Importa `Dialog`, `FeedbackDialog`, `FeedbackDialogProvider`, `confirm` y `notify`
@@ -228,7 +266,7 @@ Los iconos de severidad de `FeedbackDialog` usan los tokens `--ui-info`,
 ### Ajustes 0.5.0
 
 Cambios aditivos preparados para la siguiente publicación; la versión del paquete
-permanece en 0.4.0 y los defaults existentes se conservan.
+es 0.5.0-beta.0 y los defaults existentes se conservan.
 
 - `--ui-control-height` define la altura de `TextField` mediano, `DateField` y
   `SearchableSelectField` (2.5rem por defecto). Puede sobrescribirse en un módulo;
@@ -278,18 +316,20 @@ Si falta un provider global se emite un aviso de desarrollo, como con `toast`.
 
 ## Estado
 
-En construcción por fases. Versión actual: **0.4.0**.
+En construcción por fases. Versión preparada: **0.5.0-beta.0** (canal `next`).
 
 | Versión | Fase | Contenido |
 | --- | --- | --- |
+| 0.5.0-beta.0 | G1 — Consulta | `DataGrid`, factorías, filtros, selección, paginación y tokens; subpath `./data-display`. |
 | 0.4.0 | 3a — Feedback | `ToastProvider`/`useToast`/`toast`, `Spinner`, `Skeleton`, `Progress`, `LoadingOverlay`; subpath `./feedback`. Corrige la navegación por teclado de `SearchableSelectField` (pasos perdidos y estado `open` obsoleto). |
 | 0.3.0 | 2b — Campos avanzados | `DateField`, `SearchableSelectField`. Incluida en 0.4.0 (no se publicó por separado). |
 | 0.2.0 | 2a — Controles de formulario | `CheckboxField`, `RadioGroup`, `Fieldset`, `FormGrid`; subpath `./layout`. |
 | 0.1.0 | 0–1 — Infraestructura y primitivas | `Button`, `Tooltip`, `FormField`, `TextField`. |
 
-Implementados para la siguiente publicación: `Dialog` y `FeedbackDialog` (`./overlays`). Siguientes: Fase 4 (`FilePickerField`, `AdaptiveDataTable`, `EntityLookupField`), Fase 5 (`SectionPanel`, `PageShell`) y Fase 6 (estable `1.0.0`).
+Implementados para la siguiente publicación: `Dialog` y `FeedbackDialog` (`./overlays`). Siguientes: Fase 4 (`FilePickerField`, DataGrid G2/G3/G4, `EntityLookupField`), Fase 5 (`SectionPanel`, `PageShell`) y Fase 6 (estable `1.0.0`).
 
 ## Publicación (mantenedores)
 
 1. Crear `NPM_TOKEN` (token de automatización con 2FA) en la organización `@teams4soft` y guardarlo como secret del repo.
-2. Subir un tag y crear un GitHub Release → el workflow `release.yml` publica con provenance.
+2. Crear un GitHub Release marcado como pre-release para `v0.5.0-beta.0`: el workflow publica con provenance en `next`. Los releases estables usan `latest`.
+3. Antes de publicar, ejecutar `pnpm publish --dry-run --no-git-checks --tag next`. Tras publicar, instalar `@teams4soft/teams4soft-ui@next` y probar la página piloto del frontend, incluida su convivencia con el preflight de Tailwind/PrimeReact.
