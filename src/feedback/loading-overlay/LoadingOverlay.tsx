@@ -24,6 +24,7 @@ export const LoadingOverlay = React.forwardRef<
   {
     open,
     message,
+    indicator,
     blocking = false,
     target = "container",
     className,
@@ -90,13 +91,15 @@ export const LoadingOverlay = React.forwardRef<
         className={cn(!unstyled && panelBaseClassName, classNames?.panel)}
         style={styles?.panel}
       >
-        <Spinner
-          decorative
-          size="lg"
-          unstyled={unstyled}
-          className={classNames?.spinner}
-          style={styles?.spinner}
-        />
+        {indicator !== undefined ? indicator : (
+          <Spinner
+            decorative
+            size="lg"
+            unstyled={unstyled}
+            className={classNames?.spinner}
+            style={styles?.spinner}
+          />
+        )}
         {hasMessage ? (
           <span
             className={cn(!unstyled && messageBaseClassName, classNames?.message)}

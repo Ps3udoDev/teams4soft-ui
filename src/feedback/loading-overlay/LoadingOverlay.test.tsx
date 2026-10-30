@@ -4,6 +4,15 @@ import { render, screen } from "@testing-library/react";
 import { LoadingOverlay } from "./LoadingOverlay";
 
 describe("LoadingOverlay", () => {
+  it("sustituye el spinner con indicator y conserva el default sin la prop", () => {
+    const { container, rerender } = render(<LoadingOverlay open target="viewport" indicator={<span data-testid="excel" />} />);
+    expect(screen.getByTestId("excel")).toBeInTheDocument();
+    expect(container.querySelector("[data-size='lg']")).toBeNull();
+    rerender(<LoadingOverlay open target="viewport" />);
+    expect(screen.queryByTestId("excel")).not.toBeInTheDocument();
+    expect(container.querySelector("[data-size='lg']")).toBeInTheDocument();
+  });
+
   it("no renderiza nada cuando open es false", () => {
     const { container } = render(<LoadingOverlay open={false} />);
     expect(container.firstElementChild).toBeNull();
