@@ -47,6 +47,11 @@
       "import": "./dist/feedback.js",
       "require": "./dist/feedback.cjs"
     },
+    "./data-display": {
+      "types": "./dist/data-display.d.ts",
+      "import": "./dist/data-display.js",
+      "require": "./dist/data-display.cjs"
+    },
     "./overlays": {
       "types": "./dist/overlays.d.ts",
       "import": "./dist/overlays.js",
@@ -74,6 +79,7 @@
     "@radix-ui/react-slot": ">=1.1.0",
     "@radix-ui/react-toast": ">=1.2.0",
     "@radix-ui/react-tooltip": ">=1.1.0",
+    "@tanstack/react-table": ">=8.20.0",
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0"
   },
@@ -95,6 +101,7 @@
     "@storybook/react-vite": "^10.6.5",
     "@tailwindcss/cli": "^4.3.3",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-table": "^8.21.3",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

@@ -17,4 +17,13 @@
   --ui-shadow-lg: 0 10px 30px rgb(0 0 0 / 0.18);
   --ui-radius-lg: 0.75rem;
   --ui-control-height: 2.5rem;
+  --ui-grid-header-bg: var(--ui-muted);
+  --ui-grid-header-fg: var(--ui-foreground);
+  --ui-grid-row-alt: color-mix(in srgb, var(--ui-muted) 50%, transparent);
+  --ui-grid-row-hover: var(--ui-muted);
+  --ui-grid-row-selected: color-mix(in srgb, var(--ui-primary) 12%, transparent);
+  --ui-grid-cell-invalid: var(--ui-danger);
+  --ui-grid-font: inherit;
+  --ui-grid-row-height: 2.5rem;
+  --ui-grid-row-height-compact: 2rem;
 }
