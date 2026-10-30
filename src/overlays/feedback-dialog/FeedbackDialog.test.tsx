@@ -20,6 +20,41 @@ describe("FeedbackDialog", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Aceptar" })).toHaveFocus());
   });
 
+  it.each([
+    ["info", "text-ui-info"],
+    ["warn", "text-ui-warning"],
+    ["success", "text-ui-success"],
+    ["danger", "text-ui-danger"],
+  ] as const)("el icono de severidad %s usa su token y los botones siguen en primary", (severity, iconClass) => {
+    render(<FeedbackDialog open message="Mensaje" severity={severity} showReject classNames={{ icon: "test-icon" }} />);
+    const icon = document.querySelector(".test-icon")!;
+    expect(icon).toHaveClass(iconClass);
+    expect(icon.className).not.toMatch(/\b(blue|amber|emerald)-\d/);
+    for (const name of ["Aceptar", "Cancelar"]) {
+      expect(screen.getByRole("button", { name }).className).not.toMatch(/ui-(info|warning|success)/);
+    }
+  });
+
+  it("aceptar llama una sola vez a onOpenChange(false) y nunca a onReject", async () => {
+    const onOpenChange = vi.fn();
+    const onReject = vi.fn();
+    render(<FeedbackDialog open message="Continuar" showReject onOpenChange={onOpenChange} onReject={onReject} />);
+    await userEvent.click(screen.getByRole("button", { name: "Aceptar" }));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledOnce());
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onReject).not.toHaveBeenCalled();
+  });
+
+  it("cerrar desde el padre no llama a onReject ni a onOpenChange", () => {
+    const onOpenChange = vi.fn();
+    const onReject = vi.fn();
+    const { rerender } = render(<FeedbackDialog open message="Continuar" showReject onOpenChange={onOpenChange} onReject={onReject} />);
+    rerender(<FeedbackDialog open={false} message="Continuar" showReject onOpenChange={onOpenChange} onReject={onReject} />);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(onReject).not.toHaveBeenCalled();
+  });
+
   it("oculta Rechazar por defecto", () => {
     render(<FeedbackDialog open message="Listo" />);
     expect(screen.queryByRole("button", { name: "Cancelar" })).not.toBeInTheDocument();

@@ -7,6 +7,9 @@
   --ui-muted: #f4f4f5;
   --ui-border: #e4e4e7;
   --ui-danger: #dc2626;
+  --ui-info: #2563eb;
+  --ui-warning: #d97706;
+  --ui-success: #059669;
   --ui-focus: #4f46e5;
   --ui-radius-sm: 0.25rem;
   --ui-radius-md: 0.5rem;

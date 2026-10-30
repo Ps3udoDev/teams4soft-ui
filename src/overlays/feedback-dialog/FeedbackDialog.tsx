@@ -5,10 +5,10 @@ import { Dialog } from "../dialog/Dialog";
 import type { FeedbackDialogProps, FeedbackSeverity } from "./FeedbackDialog.types";
 
 const severityClasses: Record<Exclude<FeedbackSeverity, "error">, string> = {
-  info: "bg-blue-500/10 text-blue-600",
-  warn: "bg-amber-500/10 text-amber-600",
+  info: "bg-ui-info/10 text-ui-info",
+  warn: "bg-ui-warning/10 text-ui-warning",
   danger: "bg-ui-danger/10 text-ui-danger",
-  success: "bg-emerald-500/10 text-emerald-600",
+  success: "bg-ui-success/10 text-ui-success",
 };
 
 function SeverityIcon({ severity }: { severity: Exclude<FeedbackSeverity, "error"> }) {
