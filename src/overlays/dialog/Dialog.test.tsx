@@ -210,7 +210,7 @@ describe("Dialog", () => {
     render(<Dialog open title="Foco seguro">
       <div hidden><input aria-label="Oculto por atributo" /></div>
       <div style={{ display: "none" }}><input aria-label="Oculto por CSS" /></div>
-      <div inert><input aria-label="Inerte" /></div>
+      <div ref={element => { element?.setAttribute("inert", ""); }}><input aria-label="Inerte" /></div>
       <input aria-label="Visible" />
     </Dialog>);
     expect(screen.getByRole("textbox", { name: "Visible" })).toHaveFocus();

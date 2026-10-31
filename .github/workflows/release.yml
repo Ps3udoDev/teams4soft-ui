@@ -21,6 +21,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - name: Verify clean install (React 19)
+        run: node scripts/verify-clean-install.mjs
+      - name: Verify clean install (React 18)
+        run: node scripts/verify-clean-install.mjs
+        env:
+          REACT_VERSION: "18"
       - name: Publish to npm
         run: pnpm publish --access public --provenance --no-git-checks --tag ${{ github.event.release.prerelease && 'next' || 'latest' }}
         env:

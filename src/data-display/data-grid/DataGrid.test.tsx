@@ -366,6 +366,8 @@ describe("DataGrid: pulido de controles", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const persisted = <DataGrid columns={columns} value={rows} getRowId={getRowId} persistKey="grid-ssr" />;
     const html = renderToString(persisted);
+    // React 18 avisa de useLayoutEffect aquí porque jsdom define document durante el render de servidor.
+    consoleError.mockClear();
     const key = buildPersistStorageKey("grid-ssr", columns.map(column => column.field));
     localStorage.setItem(key, JSON.stringify({ policy: false, collectedAmount: true, dueDate: true }));
     const host = document.createElement("div");
