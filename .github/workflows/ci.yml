@@ -29,3 +29,29 @@ jobs:
         run: pnpm build
       - name: Verify package contents
         run: pnpm publish --dry-run --no-git-checks
+      - name: Verify clean install
+        run: node scripts/verify-clean-install.mjs
+
+  react-18:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: Verify clean install
+        run: node scripts/verify-clean-install.mjs
+        env:
+          REACT_VERSION: "18"
+      - name: Use React 18
+        run: pnpm add -D react@18.3.1 react-dom@18.3.1 @types/react@^18.3.0 @types/react-dom@^18.3.0
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test

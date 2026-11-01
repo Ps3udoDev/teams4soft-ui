@@ -14,9 +14,11 @@ Importa los estilos una vez en el punto de entrada de tu app:
 import "@teams4soft/teams4soft-ui/styles.css";
 ```
 
-## Peer dependencies (Radix)
+## Peer dependencies
 
-Algunos componentes usan primitivas de [Radix UI](https://www.radix-ui.com/) como peer dependencies — no se instalan automáticamente, tu proyecto debe declararlas:
+La librería se apoya en [Radix UI](https://www.radix-ui.com/) para overlays y controles, en TanStack Table para `DataGrid` y en componentes propios. Los rangos usan `^` sobre la mayor probada: React `^18.3.0 || ^19.0.0` y `@tanstack/react-table` `^8.21.3`; los mínimos de Radix están en `peerDependencies` de `package.json`. Una nueva mayor se admite solo después de probarla en CI.
+
+Algunos componentes usan primitivas de Radix como peer dependencies — tu proyecto debe declararlas:
 
 - `Tooltip` requiere `@radix-ui/react-tooltip`.
 - `CheckboxField` requiere `@radix-ui/react-checkbox`.
@@ -24,7 +26,7 @@ Algunos componentes usan primitivas de [Radix UI](https://www.radix-ui.com/) com
 - `DateField` y `SearchableSelectField` requieren `@radix-ui/react-popover`.
 - Los componentes con soporte `asChild` (composición vía Slot, p. ej. `Button`) requieren `@radix-ui/react-slot`.
 - `ToastProvider` requiere `@radix-ui/react-toast`.
-- `Dialog` y `FeedbackDialog` requieren `@radix-ui/react-dialog` (`>=1.1.0`).
+- `Dialog` y `FeedbackDialog` requieren `@radix-ui/react-dialog`.
 
 ```bash
 pnpm add @radix-ui/react-slot @radix-ui/react-tooltip @radix-ui/react-checkbox @radix-ui/react-radio-group @radix-ui/react-popover @radix-ui/react-toast @radix-ui/react-dialog
@@ -177,9 +179,9 @@ El `toast` importable es **API de cliente**: requiere un `<ToastProvider global 
 
 ### Fase 4: DataGrid (consulta)
 
-La beta preparada `0.5.0-beta.0` incluye `DataGrid` en el subpath
+La beta `0.5.0-beta.1` incluye `DataGrid` en el subpath
 `./data-display`. Tras publicarse se instalará con `@teams4soft/teams4soft-ui@next`.
-Instala también `@tanstack/react-table@^8.21.3` y los peers
+Instala también `@tanstack/react-table@8` (la v9 no es compatible) y los peers
 Radix de Popover, Checkbox, Slot y Tooltip.
 
 ```tsx
@@ -266,7 +268,7 @@ Los iconos de severidad de `FeedbackDialog` usan los tokens `--ui-info`,
 ### Ajustes 0.5.0
 
 Cambios aditivos preparados para la siguiente publicación; la versión del paquete
-es 0.5.0-beta.0 y los defaults existentes se conservan.
+es 0.5.0-beta.1 y los defaults existentes se conservan.
 
 - `--ui-control-height` define la altura de `TextField` mediano, `DateField` y
   `SearchableSelectField` (2.5rem por defecto). Puede sobrescribirse en un módulo;
@@ -316,10 +318,11 @@ Si falta un provider global se emite un aviso de desarrollo, como con `toast`.
 
 ## Estado
 
-En construcción por fases. Versión preparada: **0.5.0-beta.0** (canal `next`).
+En construcción por fases. Versión preparada: **0.5.0-beta.1** (canal `next`).
 
 | Versión | Fase | Contenido |
 | --- | --- | --- |
+| 0.5.0-beta.1 | G1 — Corrección | Limita el peer a `@tanstack/react-table@^8.21.3`: con `0.5.0-beta.0`, una instalación limpia resolvía la v9 y el paquete no cargaba. Todos los peers pasan de `>=` a `^`, con Radix y React actualizados; sube los mínimos de Radix. |
 | 0.5.0-beta.0 | G1 — Consulta | `DataGrid`, factorías, filtros, selección, paginación y tokens; subpath `./data-display`. |
 | 0.4.0 | 3a — Feedback | `ToastProvider`/`useToast`/`toast`, `Spinner`, `Skeleton`, `Progress`, `LoadingOverlay`; subpath `./feedback`. Corrige la navegación por teclado de `SearchableSelectField` (pasos perdidos y estado `open` obsoleto). |
 | 0.3.0 | 2b — Campos avanzados | `DateField`, `SearchableSelectField`. Incluida en 0.4.0 (no se publicó por separado). |
@@ -331,5 +334,5 @@ Implementados para la siguiente publicación: `Dialog` y `FeedbackDialog` (`./ov
 ## Publicación (mantenedores)
 
 1. Crear `NPM_TOKEN` (token de automatización con 2FA) en la organización `@teams4soft` y guardarlo como secret del repo.
-2. Crear un GitHub Release marcado como pre-release para `v0.5.0-beta.0`: el workflow publica con provenance en `next`. Los releases estables usan `latest`.
-3. Antes de publicar, ejecutar `pnpm publish --dry-run --no-git-checks --tag next`. Tras publicar, instalar `@teams4soft/teams4soft-ui@next` y probar la página piloto del frontend, incluida su convivencia con el preflight de Tailwind/PrimeReact.
+2. Crear un GitHub Release marcado como pre-release para la versión de `package.json` (p. ej. `v0.5.0-beta.1`): el workflow publica con provenance en `next`. Los releases estables usan `latest`.
+3. El workflow de release ejecuta `node scripts/verify-clean-install.mjs` con React 18 y 19 y no publica si falla: instala el resultado de `pnpm pack` en un proyecto vacío, sin fijar peers, y comprueba que carga y renderiza en ESM y CJS. Tras publicar, instalar `@teams4soft/teams4soft-ui@next` y probar la página piloto del frontend, incluida su convivencia con el preflight de Tailwind/PrimeReact.
