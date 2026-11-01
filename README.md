@@ -16,7 +16,7 @@ import "@teams4soft/teams4soft-ui/styles.css";
 
 ## Peer dependencies
 
-La librería se apoya en [Radix UI](https://www.radix-ui.com/) para overlays y controles, en TanStack Table para `DataGrid` y en componentes propios. Los rangos usan `^` sobre la mayor probada: React `^18.3.0 || ^19.0.0` y `@tanstack/react-table` `^8.21.3`; los mínimos de Radix están en `peerDependencies` de `package.json`. Una nueva mayor se admite solo después de probarla en CI.
+La librería se apoya en [Radix UI](https://www.radix-ui.com/) para overlays y controles, en TanStack Table para `DataGrid` y en componentes propios. Los rangos usan `^` sobre la mayor probada: React `^18.3.0 || ^19.0.0` y `@tanstack/react-table` `^9.3.1`; los mínimos de Radix están en `peerDependencies` de `package.json`. Una nueva mayor se admite solo después de probarla en CI.
 
 Algunos componentes usan primitivas de Radix como peer dependencies — tu proyecto debe declararlas:
 
@@ -179,9 +179,9 @@ El `toast` importable es **API de cliente**: requiere un `<ToastProvider global 
 
 ### Fase 4: DataGrid (consulta)
 
-La beta `0.5.0-beta.1` incluye `DataGrid` en el subpath
+La beta `0.5.0-beta.2` incluye `DataGrid` en el subpath
 `./data-display`. Tras publicarse se instalará con `@teams4soft/teams4soft-ui@next`.
-Instala también `@tanstack/react-table@8` (la v9 no es compatible) y los peers
+Instala también `@tanstack/react-table@9` (la v8 no es compatible) y los peers
 Radix de Popover, Checkbox, Slot y Tooltip.
 
 ```tsx
@@ -318,10 +318,11 @@ Si falta un provider global se emite un aviso de desarrollo, como con `toast`.
 
 ## Estado
 
-En construcción por fases. Versión preparada: **0.5.0-beta.1** (canal `next`).
+En construcción por fases. Versión preparada: **0.5.0-beta.2** (canal `next`).
 
 | Versión | Fase | Contenido |
 | --- | --- | --- |
+| 0.5.0-beta.2 | G1 — TanStack v9 | Migra `DataGrid` a `@tanstack/react-table@^9.3.1`, con la API nativa de esa mayor. La API pública de `DataGrid` no cambia; el peer pasa de la v8 a la v9. |
 | 0.5.0-beta.1 | G1 — Corrección | Limita el peer a `@tanstack/react-table@^8.21.3`: con `0.5.0-beta.0`, una instalación limpia resolvía la v9 y el paquete no cargaba. Todos los peers pasan de `>=` a `^`, con Radix y React actualizados; sube los mínimos de Radix. |
 | 0.5.0-beta.0 | G1 — Consulta | `DataGrid`, factorías, filtros, selección, paginación y tokens; subpath `./data-display`. |
 | 0.4.0 | 3a — Feedback | `ToastProvider`/`useToast`/`toast`, `Spinner`, `Skeleton`, `Progress`, `LoadingOverlay`; subpath `./feedback`. Corrige la navegación por teclado de `SearchableSelectField` (pasos perdidos y estado `open` obsoleto). |

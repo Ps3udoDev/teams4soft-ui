@@ -109,6 +109,14 @@ describe("DataGrid: tabla de consulta", () => {
     expect(bodyRows()[0]).toHaveTextContent("Bravo");
   });
 
+  it("fija columnas a la derecha conservando data-frozen y offset físicos", () => {
+    render(<DataGrid columns={[columns[0]!, { ...columns[1]!, frozen: "right", width: 100 }, { ...columns[2]!, frozen: "right", width: 120 }]} value={rows.slice(0, 1)} getRowId={getRowId} />);
+    const amount = screen.getByText("$1,250.50").closest("td")!;
+    expect(amount).toHaveAttribute("data-frozen", "right");
+    expect(amount).toHaveStyle({ position: "sticky", right: "120px" });
+    expect(screen.getByText("Vencimiento").closest("th")).toHaveStyle({ right: "0px" });
+  });
+
   it("alinea filtros y skeletons con el orden visual de columnas fijas reordenadas", () => {
     const pinnedColumns: DataGridColumn<Premium>[] = [columns[0]!, columns[1]!, { ...columns[2]!, frozen: "left", width: 120 }];
     const { container, rerender } = render(<DataGrid columns={pinnedColumns} value={rows} getRowId={getRowId} />);
@@ -386,6 +394,21 @@ describe("DataGrid: pulido de controles", () => {
     expect(consoleError).not.toHaveBeenCalled();
     expect(within(host).queryByRole("columnheader", { name: /Póliza/ })).not.toBeInTheDocument();
     expect(localStorage.getItem(key)).toContain('"policy":false');
+  });
+});
+
+describe("DataGrid: casilla de seleccionar todo", () => {
+  it("queda marcada, no indeterminada, con todo seleccionado y vuelve a indeterminada al desmarcar una fila", async () => {
+    const user = userEvent.setup();
+    const change = vi.fn();
+    render(<DataGrid columns={columns} value={rows} getRowId={getRowId} selectionMode="multiple" onSelectionChange={change} />);
+    const all = screen.getByRole("checkbox", { name: "Seleccionar todas las filas de la página" });
+    await user.click(all);
+    expect(all).toBeChecked();
+    expect(all).not.toBePartiallyChecked();
+    await user.click(screen.getAllByRole("checkbox", { name: "Seleccionar fila" })[0]!);
+    expect(all).toBePartiallyChecked();
+    expect(change).toHaveBeenLastCalledWith(rows.slice(1).map(getRowId));
   });
 });
 

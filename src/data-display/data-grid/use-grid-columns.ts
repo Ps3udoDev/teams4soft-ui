@@ -1,6 +1,7 @@
 import * as React from "react";
-import type { ColumnDef, Updater, VisibilityState } from "@tanstack/react-table";
+import type { ColumnDef, ColumnVisibilityState, RowData, Updater } from "@tanstack/react-table";
 import type { DataGridCellComponent, DataGridColumn, DataGridMessages } from "./DataGrid.types";
+import type { GridFeatures } from "./table-features";
 import { matchesFilter, resolveFilterKind } from "./filters/filter-fns";
 import { buildPersistStorageKey, readPersistedVisibility, writePersistedVisibility } from "./persist";
 import { compareCellValues, toSortValue } from "./sort";
@@ -16,10 +17,10 @@ interface UseGridColumnsArgs<T> {
   messages: DataGridMessages;
 }
 
-export function useGridColumns<T>({ columns, columnVisibility, onColumnVisibilityChange, persistKey }: UseGridColumnsArgs<T>): {
-  columnDefs: ColumnDef<T, unknown>[];
-  visibility: VisibilityState;
-  setVisibility: (updater: Updater<VisibilityState>) => void;
+export function useGridColumns<T extends RowData>({ columns, columnVisibility, onColumnVisibilityChange, persistKey }: UseGridColumnsArgs<T>): {
+  columnDefs: ColumnDef<GridFeatures, T, unknown>[];
+  visibility: ColumnVisibilityState;
+  setVisibility: (updater: Updater<ColumnVisibilityState>) => void;
 } {
   const defaults = React.useMemo(() => Object.fromEntries(columns.map((column) => [column.field, !column.hidden])), [columns]);
   const storageKey = React.useMemo(() => persistKey ? buildPersistStorageKey(persistKey, columns.map((column) => column.field)) : null, [persistKey, columns]);
@@ -29,7 +30,7 @@ export function useGridColumns<T>({ columns, columnVisibility, onColumnVisibilit
   // El ámbito depende del esquema, no de la identidad del array de columnas.
   // Ajustar durante este render evita mostrar/grabar el mapa del ámbito anterior.
   const scope = JSON.stringify([storageKey, defaults, controlled, hydrating]);
-  const restoreVisibility = (): VisibilityState => ({
+  const restoreVisibility = (): ColumnVisibilityState => ({
     ...defaults,
     ...(!controlled && !hydrating && storageKey ? readPersistedVisibility(storageKey) : null),
   });
@@ -43,7 +44,7 @@ export function useGridColumns<T>({ columns, columnVisibility, onColumnVisibilit
   const latestVisibility = React.useRef(visibility);
   latestVisibility.current = visibility;
 
-  const setVisibility = React.useCallback((updater: Updater<VisibilityState>) => {
+  const setVisibility = React.useCallback((updater: Updater<ColumnVisibilityState>) => {
     const next = typeof updater === "function" ? updater(latestVisibility.current) : updater;
     if (!controlled) {
       latestVisibility.current = next;
@@ -53,13 +54,13 @@ export function useGridColumns<T>({ columns, columnVisibility, onColumnVisibilit
     onColumnVisibilityChange?.(next);
   }, [controlled, scope, storageKey, onColumnVisibilityChange]);
 
-  const columnDefs = React.useMemo<ColumnDef<T, unknown>[]>(() => columns.map((column) => ({
+  const columnDefs = React.useMemo<ColumnDef<GridFeatures, T, unknown>[]>(() => columns.map((column) => ({
     id: column.field,
     header: column.header,
     // El accessor alimenta solo el orden; celdas y filtros leen el valor original de la fila.
     accessorFn: (row) => toSortValue(column, row[column.field]),
     sortUndefined: "last",
-    sortingFn: (rowA, rowB, columnId) => compareCellValues(column, rowA.getValue(columnId), rowB.getValue(columnId)),
+    sortFn: (rowA, rowB, columnId) => compareCellValues(column, rowA.getValue(columnId), rowB.getValue(columnId)),
     enableSorting: column.sortable ?? true,
     enableHiding: column.hideable ?? true,
     enableResizing: column.resizable ?? false,

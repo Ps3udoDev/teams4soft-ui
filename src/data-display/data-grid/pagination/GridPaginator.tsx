@@ -1,11 +1,12 @@
 import type * as React from "react";
-import type { Table } from "@tanstack/react-table";
+import type { RowData, Table } from "@tanstack/react-table";
 import { cn } from "../../../lib";
 import { Button } from "../../../primitives";
 import type { DataGridMessages } from "../DataGrid.types";
+import type { GridFeatures } from "../table-features";
 
-export interface GridPaginatorProps<T> {
-  table: Table<T>;
+export interface GridPaginatorProps<T extends RowData> {
+  table: Table<GridFeatures, T>;
   totalRows: number;
   pageSizeOptions: number[];
   messages: DataGridMessages;
@@ -15,8 +16,8 @@ export interface GridPaginatorProps<T> {
   disabled?: boolean;
 }
 
-export function GridPaginator<T>({ table, totalRows, pageSizeOptions, messages, className, style, unstyled, disabled }: GridPaginatorProps<T>) {
-  const { pageIndex, pageSize } = table.getState().pagination;
+export function GridPaginator<T extends RowData>({ table, totalRows, pageSizeOptions, messages, className, style, unstyled, disabled }: GridPaginatorProps<T>) {
+  const { pageIndex, pageSize } = table.store.state.pagination;
   const pages = Math.max(1, table.getPageCount());
   const page = Math.min(pageIndex + 1, pages);
   const first = totalRows ? (page - 1) * pageSize + 1 : 0;
