@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, within, waitFor } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
+import { Dialog } from "../../overlays/dialog/Dialog";
 import { DataGrid } from "./DataGrid";
 import { buildPersistStorageKey } from "./persist";
 import type { DataGridColumn, DataGridHandle } from "./DataGrid.types";
@@ -29,6 +30,24 @@ const columns: DataGridColumn<Premium>[] = [
 ];
 const getRowId = (row: Premium) => row.id;
 const bodyRows = () => within(screen.getAllByRole("rowgroup")[1]!).getAllByRole("row");
+type User = ReturnType<typeof userEvent.setup>;
+const filterButton = (header: string) => screen.getByRole("button", { name: new RegExp(`^(Filtrar|Filtro activo en) ${header}$`) });
+const openFilter = async (user: User, header: string) => {
+  await user.click(filterButton(header));
+  return screen.findByRole("dialog", { name: `Filtrar ${header}` });
+};
+const applyFilter = async (user: User, header: string, value: string, operator?: string) => {
+  const menu = await openFilter(user, header);
+  if (operator) await user.selectOptions(within(menu).getByRole("combobox", { name: "Condición" }), operator);
+  const input = within(menu).getByRole("textbox", { name: `Filtrar ${header}` });
+  await user.clear(input);
+  await user.type(input, value);
+  await user.click(within(menu).getByRole("button", { name: "Aplicar" }));
+};
+const clearFilter = async (user: User, header: string) => {
+  const menu = await openFilter(user, header);
+  await user.click(within(menu).getByRole("button", { name: "Limpiar" }));
+};
 
 describe("DataGrid: tabla de consulta", () => {
   it("renderiza tabla semántica, formato y orden", async () => {
@@ -117,15 +136,14 @@ describe("DataGrid: tabla de consulta", () => {
     expect(screen.getByText("Vencimiento").closest("th")).toHaveStyle({ right: "0px" });
   });
 
-  it("alinea filtros y skeletons con el orden visual de columnas fijas reordenadas", () => {
+  it("alinea encabezados y skeletons con el orden visual de columnas fijas reordenadas", () => {
     const pinnedColumns: DataGridColumn<Premium>[] = [columns[0]!, columns[1]!, { ...columns[2]!, frozen: "left", width: 120 }];
     const { container, rerender } = render(<DataGrid columns={pinnedColumns} value={rows} getRowId={getRowId} />);
     expect(screen.getAllByRole("columnheader")[0]).toHaveTextContent("Vencimiento");
-    const filterRow = container.querySelector('[data-slot="filterRow"]')!;
-    const filterInputs = within(filterRow as HTMLElement).getAllByRole("textbox");
-    expect(filterInputs[0]).toHaveAccessibleName("Filtrar Vencimiento");
-    expect(filterInputs[1]).toHaveAccessibleName("Filtrar Póliza");
-    expect(filterInputs[2]).toHaveAccessibleName("Filtrar Imp. cobrado");
+    const headers = screen.getAllByRole("columnheader");
+    expect(within(headers[0]!).getByRole("button", { name: "Filtrar Vencimiento" })).toBeInTheDocument();
+    expect(within(headers[1]!).getByRole("button", { name: "Filtrar Póliza" })).toBeInTheDocument();
+    expect(within(headers[2]!).getByRole("button", { name: "Filtrar Imp. cobrado" })).toBeInTheDocument();
     expect(within(bodyRows()[0]!).getAllByRole("cell")[0]).toHaveTextContent("29/10/2026");
     rerender(<DataGrid columns={pinnedColumns} value={[]} getRowId={getRowId} loading />);
     const skeletonRow = container.querySelector('tr[data-slot="skeleton"]')!;
@@ -134,14 +152,14 @@ describe("DataGrid: tabla de consulta", () => {
 });
 
 describe("DataGrid: filtros y paginación", () => {
-  it("filtra sin diacríticos con debounce, conserva orden y muestra noResults", async () => {
+  it("filtra sin diacríticos, conserva orden y muestra noResults", async () => {
     const user = userEvent.setup();
     render(<DataGrid columns={columns} value={rows} getRowId={getRowId} initialSort={{ field: "policy", direction: "asc" }} />);
-    await user.type(screen.getByRole("textbox", { name: "Filtrar Póliza" }), "perez");
-    await waitFor(() => expect(bodyRows()).toHaveLength(1));
+    await applyFilter(user, "Póliza", "perez");
+    expect(bodyRows()).toHaveLength(1);
     expect(screen.getByText("Pérez")).toBeInTheDocument();
     expect(screen.getByText("Póliza").closest("th")).toHaveAttribute("aria-sort", "ascending");
-    await user.type(screen.getByRole("textbox", { name: "Filtrar Póliza" }), "zz");
+    await applyFilter(user, "Póliza", "zz");
     expect(await screen.findByText("Sin resultados para los filtros aplicados")).toBeInTheDocument();
   });
 
@@ -153,32 +171,31 @@ describe("DataGrid: filtros y paginación", () => {
   it("conecta el filtro numérico con igualdad y limpiar restaura incluso celdas nulas", async () => {
     const user = userEvent.setup();
     render(<DataGrid columns={columns} value={rows} getRowId={getRowId} />);
-    const amountFilter = screen.getByRole("textbox", { name: "Filtrar Imp. cobrado" });
-    await user.type(amountFilter, "1,250.50");
+    await applyFilter(user, "Imp. cobrado", "1,250.50");
     expect(bodyRows()).toHaveLength(1);
     expect(bodyRows()[0]).toHaveTextContent("Pérez");
-    await user.clear(amountFilter);
+    await clearFilter(user, "Imp. cobrado");
     expect(bodyRows()).toHaveLength(3);
-    await user.type(amountFilter, "20");
+    await applyFilter(user, "Imp. cobrado", "20");
     expect(bodyRows()).toHaveLength(1);
     expect(bodyRows()[0]).toHaveTextContent("Bravo");
-    await user.clear(amountFilter);
-    await user.type(amountFilter, "no-numérico");
+    await applyFilter(user, "Imp. cobrado", "no-numérico");
     expect(bodyRows()).toHaveLength(3);
   });
 
-  it("conecta DateField al filtro ISO al confirmar y permite limpiar", async () => {
+  it("conecta DateField al filtro ISO, aplica con Enter y permite limpiar", async () => {
     const user = userEvent.setup();
     render(<DataGrid columns={columns} value={rows} getRowId={getRowId} />);
-    const dateFilter = screen.getByRole("textbox", { name: "Filtrar Vencimiento" });
-    await user.type(dateFilter, "28/10/2026");
+    const menu = await openFilter(user, "Vencimiento");
+    await user.type(within(menu).getByRole("textbox", { name: "Filtrar Vencimiento" }), "28/10/2026");
     expect(bodyRows()).toHaveLength(3);
     await user.keyboard("{Enter}");
     expect(bodyRows()).toHaveLength(1);
     expect(bodyRows()[0]).toHaveTextContent("Bravo");
-    await user.click(screen.getByRole("button", { name: "Limpiar fecha" }));
+    await clearFilter(user, "Vencimiento");
     expect(bodyRows()).toHaveLength(3);
-    expect(dateFilter).toHaveValue("");
+    const reopened = await openFilter(user, "Vencimiento");
+    expect(within(reopened).getByRole("textbox", { name: "Filtrar Vencimiento" })).toHaveValue("");
   });
 
   it("conecta opciones tipadas de select y clear a las filas", async () => {
@@ -189,11 +206,13 @@ describe("DataGrid: filtros y paginación", () => {
       { field: "method", header: "Forma de pago", type: "select", options: [{ code: 1, name: "Efectivo" }, { code: 2, name: "Transferencia" }], getOptionValue: option => (option as { code: number }).code, getOptionLabel: option => (option as { name: string }).name },
     ];
     render(<DataGrid columns={paymentColumns} value={[{ id: "p-1", description: "Pago en caja", method: 1 }, { id: "p-2", description: "Pago bancario", method: 2 }]} getRowId={payment => payment.id} />);
-    await user.type(screen.getByRole("combobox", { name: "Filtrar Forma de pago" }), "Transferencia");
+    const menu = await openFilter(user, "Forma de pago");
+    await user.type(within(menu).getByRole("combobox", { name: "Filtrar Forma de pago" }), "Transferencia");
     await user.click(await screen.findByRole("option", { name: "Transferencia" }));
+    await user.click(within(menu).getByRole("button", { name: "Aplicar" }));
     expect(bodyRows()).toHaveLength(1);
     expect(bodyRows()[0]).toHaveTextContent("Pago bancario");
-    await user.click(screen.getByRole("button", { name: "Limpiar selección" }));
+    await clearFilter(user, "Forma de pago");
     expect(bodyRows()).toHaveLength(2);
   });
 
@@ -202,15 +221,18 @@ describe("DataGrid: filtros y paginación", () => {
     type Entry = { id: string; title: string; active: boolean };
     const entryColumns: DataGridColumn<Entry>[] = [{ field: "title", header: "Registro", filter: false }, { field: "active", header: "Activo", type: "checkbox" }];
     render(<DataGrid columns={entryColumns} value={[{ id: "a", title: "Habilitado", active: true }, { id: "b", title: "Deshabilitado", active: false }]} getRowId={entry => entry.id} messages={{ yes: "Verdadero", no: "Falso" }} />);
-    const filter = screen.getByRole("combobox", { name: "Filtrar Activo" });
-    await user.type(filter, "Falso");
+    let menu = await openFilter(user, "Activo");
+    await user.type(within(menu).getByRole("combobox", { name: "Filtrar Activo" }), "Falso");
     await user.click(await screen.findByRole("option", { name: "Falso" }));
+    await user.click(within(menu).getByRole("button", { name: "Aplicar" }));
     expect(bodyRows()).toHaveLength(1);
     expect(bodyRows()[0]).toHaveTextContent("Deshabilitado");
-    await user.click(screen.getByRole("button", { name: "Limpiar selección" }));
+    await clearFilter(user, "Activo");
     expect(bodyRows()).toHaveLength(2);
-    await user.type(filter, "Verdadero");
+    menu = await openFilter(user, "Activo");
+    await user.type(within(menu).getByRole("combobox", { name: "Filtrar Activo" }), "Verdadero");
     await user.click(await screen.findByRole("option", { name: "Verdadero" }));
+    await user.click(within(menu).getByRole("button", { name: "Aplicar" }));
     expect(bodyRows()).toHaveLength(1);
     expect(bodyRows()[0]).toHaveTextContent("Habilitado");
   });
@@ -226,9 +248,9 @@ describe("DataGrid: filtros y paginación", () => {
     expect(screen.getByText("Póliza 11")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Última página" }));
     expect(screen.getByText("Mostrando 21 al 25 de 25 registros")).toBeInTheDocument();
-    await user.type(screen.getByRole("textbox", { name: "Filtrar Póliza" }), "Póliza 25");
+    await applyFilter(user, "Póliza", "Póliza 25");
     await waitFor(() => expect(screen.getByText("Página 1 de 1")).toBeInTheDocument());
-    await user.clear(screen.getByRole("textbox", { name: "Filtrar Póliza" }));
+    await clearFilter(user, "Póliza");
     await waitFor(() => expect(screen.getByText("Página 1 de 3")).toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: "Última página" }));
     rerender(<DataGrid columns={columns} value={manyRows.slice(0, 5)} getRowId={getRowId} />);
@@ -261,11 +283,11 @@ describe("DataGrid: selección y carga", () => {
     await user.click(screen.getAllByRole("checkbox", { name: "Seleccionar fila" })[1]!);
     expect(change).toHaveBeenLastCalledWith(["r-1", "r-2"]);
     expect(ref.current?.getData()).toEqual({ rows, selectedIds: ["r-1", "r-2"] });
-    await user.type(screen.getByRole("textbox", { name: "Filtrar Póliza" }), "Bravo");
+    await applyFilter(user, "Póliza", "Bravo");
     await waitFor(() => expect(bodyRows()).toHaveLength(1));
     await user.click(screen.getByRole("checkbox", { name: "Seleccionar todas las filas de la página" }));
     expect(ref.current?.getData().selectedIds).toEqual(["r-1"]);
-    await user.clear(screen.getByRole("textbox", { name: "Filtrar Póliza" }));
+    await clearFilter(user, "Póliza");
     await waitFor(() => expect(bodyRows()).toHaveLength(3));
     expect(screen.getAllByRole("checkbox", { name: "Seleccionar fila" })[0]).toBeChecked();
   });
@@ -319,9 +341,11 @@ describe("DataGrid: selección y carga", () => {
       await user.click(screen.getByRole("button", { name: "Columnas" }));
       expect(screen.getByRole("checkbox", { name: "Póliza" })).toBeInTheDocument();
     } else if (kind === "date") {
+      await openFilter(user, "Vencimiento");
       await user.click(screen.getByRole("button", { name: "Abrir calendario" }));
       expect(screen.getByRole("button", { name: "Mes siguiente" })).toBeInTheDocument();
     } else {
+      await openFilter(user, "Código");
       await user.type(screen.getByRole("combobox", { name: "Filtrar Código" }), "Registro");
       expect(await screen.findByRole("listbox")).toBeInTheDocument();
     }
@@ -330,34 +354,27 @@ describe("DataGrid: selección y carga", () => {
     expect(screen.queryByRole("button", { name: "Mes siguiente" })).not.toBeInTheDocument();
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Columnas" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Abrir calendario" })).toBeDisabled();
-    expect(screen.getByRole("combobox", { name: "Filtrar Código" })).toBeDisabled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(filterButton("Vencimiento")).toBeDisabled();
+    expect(filterButton("Código")).toBeDisabled();
     rerender(<DataGrid columns={portalColumns} value={rows} getRowId={getRowId} />);
     expect(screen.queryByRole("checkbox", { name: "Póliza" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Mes siguiente" })).not.toBeInTheDocument();
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
 
 describe("DataGrid: pulido de controles", () => {
-  it("el filtro numérico conserva lo escrito aunque sea inválido o lleve comas", async () => {
+  it("el filtro numérico interpreta comas e ignora texto inválido", async () => {
     const user = userEvent.setup();
     render(<DataGrid columns={columns} value={rows} getRowId={getRowId} />);
-    const amountFilter = screen.getByRole("textbox", { name: "Filtrar Imp. cobrado" });
-    await user.type(amountFilter, "1,250.50");
-    expect(amountFilter).toHaveValue("1,250.50");
+    await applyFilter(user, "Imp. cobrado", "1,250.50");
     expect(bodyRows()).toHaveLength(1);
-    await user.clear(amountFilter);
-    await user.type(amountFilter, "12a");
-    expect(amountFilter).toHaveValue("12a");
+    expect(filterButton("Imp. cobrado")).toHaveAttribute("data-active");
+    await applyFilter(user, "Imp. cobrado", "12a");
     expect(bodyRows()).toHaveLength(3);
-  });
-
-  it("los filtros comparten la altura de --ui-grid-filter-height", () => {
-    render(<DataGrid columns={columns} value={rows} getRowId={getRowId} />);
-    const textFilter = screen.getByRole("textbox", { name: "Filtrar Póliza" });
-    expect(textFilter).toHaveAttribute("data-size", "md");
-    expect(textFilter.closest("td")).toHaveClass("[--ui-control-height:var(--ui-grid-filter-height)]");
+    expect(filterButton("Imp. cobrado")).not.toHaveAttribute("data-active");
   });
 
   it("el paginador usa controles de la librería y unstyled los deja sin estilo", () => {
@@ -394,6 +411,171 @@ describe("DataGrid: pulido de controles", () => {
     expect(consoleError).not.toHaveBeenCalled();
     expect(within(host).queryByRole("columnheader", { name: /Póliza/ })).not.toBeInTheDocument();
     expect(localStorage.getItem(key)).toContain('"policy":false');
+  });
+});
+
+describe("DataGrid: menú de filtros", () => {
+  const people: Premium[] = [
+    { id: "a", policy: "Ana García", collectedAmount: 100, dueDate: "2026-10-01" },
+    { id: "b", policy: "Luis Pérez", collectedAmount: 200, dueDate: "2026-10-15" },
+    { id: "c", policy: "Ana Torres", collectedAmount: 300, dueDate: "2026-10-30" },
+  ];
+  const texts = () => bodyRows().map(row => within(row).getAllByRole("cell")[0]!.textContent);
+
+  it("pone un icono en cada encabezado filtrable y ya no dibuja fila de filtros", () => {
+    const { container } = render(<DataGrid columns={columns} value={rows} getRowId={getRowId} />);
+    expect(container.querySelector('[data-slot="filterRow"]')).not.toBeInTheDocument();
+    const button = within(screen.getAllByRole("columnheader")[0]!).getByRole("button", { name: "Filtrar Póliza" });
+    expect(button).toHaveAttribute("data-slot", "filterButton");
+    expect(button.querySelector("svg")).toBeInTheDocument();
+  });
+
+  it("abre el menú al pulsar y enfoca el valor", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={columns} value={rows} getRowId={getRowId} />);
+    const menu = await openFilter(user, "Póliza");
+    expect(within(menu).getByRole("textbox", { name: "Filtrar Póliza" })).toHaveFocus();
+  });
+
+  it("ofrece condiciones de texto, con contiene por defecto", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={columns} value={people} getRowId={getRowId} />);
+    const menu = await openFilter(user, "Póliza");
+    const select = within(menu).getByRole("combobox", { name: "Condición" });
+    expect(select).toHaveValue("contains");
+    expect(within(select).getAllByRole("option").map(option => option.textContent)).toEqual(["Contiene", "No contiene", "Empieza con", "Termina en", "Igual a", "Distinto de"]);
+  });
+
+  it.each([
+    ["Empieza con", "ana", ["Ana García", "Ana Torres"]],
+    ["Termina en", "perez", ["Luis Pérez"]],
+    ["Igual a", "ana garcia", ["Ana García"]],
+    ["Distinto de", "ana garcia", ["Luis Pérez", "Ana Torres"]],
+    ["No contiene", "ana", ["Luis Pérez"]],
+  ])("aplica %s en texto", async (operator, value, expected) => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={columns} value={people} getRowId={getRowId} />);
+    await applyFilter(user, "Póliza", value, operator);
+    expect(texts()).toEqual(expected);
+  });
+
+  it("compara números con mayor, menor y distinto", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={columns} value={people} getRowId={getRowId} />);
+    const menu = await openFilter(user, "Imp. cobrado");
+    expect(within(within(menu).getByRole("combobox", { name: "Condición" })).getAllByRole("option").map(option => option.textContent)).toEqual(["Igual a", "Distinto de", "Mayor que", "Mayor o igual que", "Menor que", "Menor o igual que"]);
+    await user.keyboard("{Escape}");
+    await applyFilter(user, "Imp. cobrado", "200", "Mayor que");
+    expect(texts()).toEqual(["Ana Torres"]);
+    await applyFilter(user, "Imp. cobrado", "200", "Menor o igual que");
+    expect(texts()).toEqual(["Ana García", "Luis Pérez"]);
+  });
+
+  it("compara fechas con antes y después de", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={columns} value={people} getRowId={getRowId} />);
+    const menu = await openFilter(user, "Vencimiento");
+    await user.selectOptions(within(menu).getByRole("combobox", { name: "Condición" }), "Después de");
+    await user.type(within(menu).getByRole("textbox", { name: "Filtrar Vencimiento" }), "15/10/2026");
+    await user.keyboard("{Enter}");
+    expect(texts()).toEqual(["Ana Torres"]);
+  });
+
+  it("elegir un día en el calendario no aplica hasta pulsar Aplicar", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={columns} value={people} getRowId={getRowId} />);
+    const menu = await openFilter(user, "Vencimiento");
+    await user.click(within(menu).getByRole("button", { name: "Abrir calendario" }));
+    const days = screen.getAllByRole("gridcell").filter(cell => !cell.querySelector("[disabled]") && cell.textContent === "15");
+    await user.click(within(days[0]!).queryByRole("button") ?? days[0]!);
+    expect(screen.getByRole("dialog", { name: "Filtrar Vencimiento" })).toBeInTheDocument();
+    expect(bodyRows()).toHaveLength(3);
+    await user.click(within(screen.getByRole("dialog", { name: "Filtrar Vencimiento" })).getByRole("button", { name: "Aplicar" }));
+    expect(bodyRows()).toHaveLength(1);
+  });
+
+  it("una fecha inválida con Enter deja el menú abierto y no filtra", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={columns} value={people} getRowId={getRowId} />);
+    const menu = await openFilter(user, "Vencimiento");
+    await user.type(within(menu).getByRole("textbox", { name: "Filtrar Vencimiento" }), "99/99/2026{Enter}");
+    expect(screen.getByRole("dialog", { name: "Filtrar Vencimiento" })).toBeInTheDocument();
+    expect(bodyRows()).toHaveLength(3);
+  });
+
+  it("dentro de un Dialog, Escape cierra el menú y deja abierto el diálogo", async () => {
+    const user = userEvent.setup();
+    render(<Dialog open title="Buscar" onOpenChange={() => {}}><DataGrid columns={columns} value={people} getRowId={getRowId} /></Dialog>);
+    await openFilter(user, "Póliza");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Filtrar Póliza" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Buscar" })).toBeInTheDocument();
+    await applyFilter(user, "Póliza", "luis");
+    expect(texts()).toEqual(["Luis Pérez"]);
+  });
+
+  it("su submit no envía un formulario de la página", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    render(<form onSubmit={onSubmit}><DataGrid columns={columns} value={people} getRowId={getRowId} /></form>);
+    await applyFilter(user, "Póliza", "ana");
+    expect(bodyRows()).toHaveLength(2);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("no aplica lo escrito si se cierra con Escape y devuelve el foco al icono", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={columns} value={people} getRowId={getRowId} />);
+    const menu = await openFilter(user, "Póliza");
+    await user.type(within(menu).getByRole("textbox", { name: "Filtrar Póliza" }), "zzz");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(bodyRows()).toHaveLength(3);
+    expect(filterButton("Póliza")).toHaveFocus();
+    const reopened = await openFilter(user, "Póliza");
+    expect(within(reopened).getByRole("textbox", { name: "Filtrar Póliza" })).toHaveValue("");
+  });
+
+  it("aplica con Enter, marca el icono y recuerda la condición al reabrir", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={columns} value={people} getRowId={getRowId} />);
+    const menu = await openFilter(user, "Póliza");
+    await user.selectOptions(within(menu).getByRole("combobox", { name: "Condición" }), "Empieza con");
+    await user.type(within(menu).getByRole("textbox", { name: "Filtrar Póliza" }), "luis{Enter}");
+    expect(texts()).toEqual(["Luis Pérez"]);
+    const active = screen.getByRole("button", { name: "Filtro activo en Póliza" });
+    expect(active).toHaveAttribute("data-active");
+    const reopened = await openFilter(user, "Póliza");
+    expect(within(reopened).getByRole("combobox", { name: "Condición" })).toHaveValue("startsWith");
+    expect(within(reopened).getByRole("textbox", { name: "Filtrar Póliza" })).toHaveValue("luis");
+  });
+
+  it("filterOperators limita las condiciones, la primera es la inicial y una sola oculta el selector", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<DataGrid columns={[{ ...columns[0]!, filterOperators: ["startsWith", "equals"] }]} value={people} getRowId={getRowId} />);
+    const menu = await openFilter(user, "Póliza");
+    const select = within(menu).getByRole("combobox", { name: "Condición" });
+    expect(select).toHaveValue("startsWith");
+    expect(within(select).getAllByRole("option")).toHaveLength(2);
+    unmount();
+    render(<DataGrid columns={[{ ...columns[0]!, filterOperators: ["equals"] }]} value={people} getRowId={getRowId} />);
+    const single = await openFilter(user, "Póliza");
+    expect(within(single).queryByRole("combobox", { name: "Condición" })).not.toBeInTheDocument();
+  });
+
+  it("select no muestra condiciones y messages y classNames personalizan el menú", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={[{ ...columns[0]!, type: "select", options: [] }, columns[1]!]} value={people} getRowId={getRowId} classNames={{ filterButton: "mi-icono", filterMenu: "mi-menu" }} messages={{ filterApply: "Filtrar ya" }} />);
+    expect(filterButton("Póliza")).toHaveClass("mi-icono");
+    const menu = await openFilter(user, "Póliza");
+    expect(menu).toHaveClass("mi-menu");
+    expect(within(menu).queryByRole("combobox", { name: "Condición" })).not.toBeInTheDocument();
+    expect(within(menu).getByRole("button", { name: "Filtrar ya" })).toBeInTheDocument();
+  });
+
+  it("unstyled deja el icono sin estilos base", () => {
+    render(<DataGrid columns={columns} value={rows} getRowId={getRowId} unstyled />);
+    expect(filterButton("Póliza")).not.toHaveClass("rounded-(--radius-ui-sm)");
   });
 });
 
@@ -476,20 +658,20 @@ describe("DataGrid: toolbar y columnas", () => {
   it("limpia el filtro de una columna al ocultarla desde el toggler", async () => {
     const user = userEvent.setup();
     render(<DataGrid columns={columns} value={rows} getRowId={getRowId} />);
-    await user.type(screen.getByRole("textbox", { name: "Filtrar Póliza" }), "perez");
+    await applyFilter(user, "Póliza", "perez");
     await waitFor(() => expect(bodyRows()).toHaveLength(1));
     await user.click(screen.getByRole("button", { name: "Columnas" }));
     await user.click(screen.getByRole("checkbox", { name: "Póliza" }));
     expect(bodyRows()).toHaveLength(3);
     await user.click(screen.getByRole("checkbox", { name: "Póliza" }));
-    expect(screen.getByRole("textbox", { name: "Filtrar Póliza" })).toHaveValue("");
+    expect(filterButton("Póliza")).not.toHaveAttribute("data-active");
     expect(bodyRows()).toHaveLength(3);
   });
 
   it("limpia el filtro cuando la página oculta la columna con columnVisibility", async () => {
     const user = userEvent.setup();
     const { rerender } = render(<DataGrid columns={columns} value={rows} getRowId={getRowId} columnVisibility={{ policy: true, collectedAmount: true, dueDate: true }} />);
-    await user.type(screen.getByRole("textbox", { name: "Filtrar Póliza" }), "perez");
+    await applyFilter(user, "Póliza", "perez");
     await waitFor(() => expect(bodyRows()).toHaveLength(1));
     rerender(<DataGrid columns={columns} value={rows} getRowId={getRowId} columnVisibility={{ policy: false, collectedAmount: true, dueDate: true }} />);
     expect(bodyRows()).toHaveLength(3);

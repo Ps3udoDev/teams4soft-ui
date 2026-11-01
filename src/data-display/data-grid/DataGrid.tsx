@@ -10,12 +10,12 @@ import { gridFeatures, type GridFeatures } from "./table-features";
 import { useGridColumns } from "./use-grid-columns";
 import { readCellRegistry, ReadCellStyleContext } from "./cells/read-cells";
 import { resolveFilterKind } from "./filters/filter-fns";
-import { FilterCell } from "./filters/FilterCell";
+import { FilterMenu } from "./filters/FilterMenu";
 import { GridPaginator } from "./pagination/GridPaginator";
 import { ColumnToggler } from "./toolbar/ColumnToggler";
 import { GridToolbar } from "./toolbar/GridToolbar";
 import { dataGridMessagesEs } from "./messages";
-import type { DataGridColumn, DataGridHandle, DataGridProps } from "./DataGrid.types";
+import type { DataGridColumn, DataGridFilterValue, DataGridHandle, DataGridProps } from "./DataGrid.types";
 
 const interactiveSelector = "button, input, select, textarea, a, [role=checkbox], [role=radio]";
 function isInteractive(event: React.MouseEvent<HTMLTableRowElement>) {
@@ -137,7 +137,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
     else contentRef.current?.removeAttribute("inert");
   }, [loading]);
 
-  // Mantener el orden visual de TanStack en todas las filas (también filtros y skeletons).
+  // Mantener el orden visual de TanStack en todas las filas (también skeletons).
   const visibleColumns = [
     ...table.getStartVisibleLeafColumns(),
     ...table.getCenterVisibleLeafColumns(),
@@ -145,7 +145,6 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   ];
   const displayedRows = table.getRowModel().rows;
   const hasFilters = columnFilters.some(f => f.value !== "" && f.value != null);
-  const hasFilterRow = visibleColumns.some(c => { const col = definition(c); return col && resolveFilterKind(col); });
   const totalRows = table.getFilteredRowModel().rows.length;
   const rowHeight = density === "compact" ? "h-(--ui-grid-row-height-compact)" : "h-(--ui-grid-row-height)";
   function columnWidth(column: Column<GridFeatures, T, unknown>): number | string {
@@ -193,20 +192,16 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
                 const sorted = column.getIsSorted();
                 return <th key={header.id} scope="col" data-column-id={column.id} ref={element => { if (element) headerElements.current.set(column.id, element); else headerElements.current.delete(column.id); }} data-slot="headerCell" data-sorted={sorted || undefined} data-frozen={frozenSide(column.getIsPinned())} aria-sort={sorted ? sorted === "asc" ? "ascending" : "descending" : undefined}
                   className={cn(!unstyled && "relative border-b border-ui-border bg-(--ui-grid-header-bg) px-3 py-2 font-medium", classNames?.headerCell)} style={{ ...cellStyle(column, true), ...styles?.headerCell }}>
-                  {column.id === "__select" ? selectionMode === "multiple" ? <CheckboxField label={messages.selectAll} classNames={{ label: "sr-only" }} disabled={loading} unstyled={unstyled}
+                  <div className={cn(!unstyled && "flex items-center gap-1")}><div className={cn(!unstyled && "min-w-0 flex-1")}>{column.id === "__select" ? selectionMode === "multiple" ? <CheckboxField label={messages.selectAll} classNames={{ label: "sr-only" }} disabled={loading} unstyled={unstyled}
                     checked={table.getIsAllPageRowsSelected() && displayedRows.length > 0 ? true : table.getIsSomePageRowsSelected() ? "indeterminate" : false}
                     onCheckedChange={next => { table.toggleAllPageRowsSelected(next === true); }} /> : <span className="sr-only">{messages.selectRow}</span> : col && (column.getCanSort() ? <button type="button" disabled={loading} aria-label={messages.sortLabel(col.header)} className={cn(!unstyled && "flex w-full items-center gap-1 text-inherit")} style={{ justifyContent: cellStyle(column).textAlign === "right" ? "flex-end" : cellStyle(column).textAlign === "center" ? "center" : undefined }} onClick={column.getToggleSortingHandler()}>
                       {col.headerContent ?? col.header}{sorted && <span aria-hidden="true">{sorted === "asc" ? "↑" : "↓"}</span>}
-                    </button> : col.headerContent ?? col.header)}
+                    </button> : col.headerContent ?? col.header)}</div>
+                  {col && resolveFilterKind(col) && <FilterMenu column={col} value={column.getFilterValue() as DataGridFilterValue | undefined} onChange={next => column.setFilterValue(next)} messages={messages} className={classNames?.filterButton} style={styles?.filterButton} menuClassName={classNames?.filterMenu} menuStyle={styles?.filterMenu} unstyled={unstyled} disabled={loading} />}</div>
                   {col?.resizable && <div role="separator" aria-orientation="vertical" aria-label={col.header} onMouseDown={loading ? undefined : header.getResizeHandler()} onTouchStart={loading ? undefined : header.getResizeHandler()} className={cn(!unstyled && "absolute inset-y-0 right-0 w-1 cursor-col-resize touch-none select-none")} />}
                 </th>;
               })}
             </tr>)}
-            {hasFilterRow && <tr data-slot="filterRow" className={cn(!unstyled && "bg-(--ui-grid-header-bg)", classNames?.filterRow)} style={styles?.filterRow}>
-              {visibleColumns.map(column => { const col = definition(column); return <td key={column.id} data-slot="filterCell" data-frozen={frozenSide(column.getIsPinned())} className={cn(!unstyled && "border-b border-ui-border bg-(--ui-grid-header-bg) px-2 py-1 [--ui-control-height:var(--ui-grid-filter-height)]", classNames?.filterCell)} style={{ ...cellStyle(column, true), ...styles?.filterCell }}>
-                {col && <FilterCell column={col} value={column.getFilterValue()} onChange={next => column.setFilterValue(next)} messages={messages} classNames={classNames} unstyled={unstyled} disabled={loading} />}
-              </td>; })}
-            </tr>}
           </thead>
           <tbody data-slot="body" className={classNames?.body} style={styles?.body}>
             {loading && rows.length === 0 ? Array.from({ length: 5 }, (_, i) => <tr key={i} data-slot="skeleton" className={cn(!unstyled && rowHeight, classNames?.skeleton)} style={styles?.skeleton}>

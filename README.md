@@ -179,7 +179,7 @@ El `toast` importable es **API de cliente**: requiere un `<ToastProvider global 
 
 ### Fase 4: DataGrid (consulta)
 
-La beta `0.5.0-beta.3` incluye `DataGrid` en el subpath
+La beta `0.5.0-beta.4` incluye `DataGrid` en el subpath
 `./data-display`. Tras publicarse se instalará con `@teams4soft/teams4soft-ui@next`.
 Instala también `@tanstack/react-table@9` (la v8 no es compatible) y los peers
 Radix de Popover, Checkbox, Slot y Tooltip.
@@ -201,8 +201,22 @@ const columns: DataGridColumn<Premium>[] = [
 ```
 
 Ofrece orden, filtros por columna, selección por id, columnas fijas y redimensionables,
-y visibilidad opcionalmente persistida con `persistKey`. Los filtros de texto ignoran
-tildes y esperan 200 ms; ocultar una columna limpia su filtro. El orden sigue las reglas
+y visibilidad opcionalmente persistida con `persistKey`.
+
+Cada encabezado filtrable lleva un icono que abre un menú con condición y valor. El filtro
+se aplica con "Aplicar" o Enter; Escape o un clic fuera descartan lo escrito. Los textos
+ignoran tildes y ocultar una columna limpia su filtro.
+
+| Tipo de filtro | Condiciones |
+| --- | --- |
+| Texto | Contiene, no contiene, empieza con, termina en, igual a, distinto de |
+| Número | Igual a, distinto de, mayor que, mayor o igual que, menor que, menor o igual que |
+| Fecha | Igual a, distinto de, antes de, después de |
+| Select | Igual a |
+
+`filterOperators` limita las condiciones de una columna: la primera es la inicial y, con
+una sola, se oculta el selector. Cada columna admite un filtro a la vez, sin reglas AND/OR.
+ El orden sigue las reglas
 del español, usa la etiqueta en `select`/`radio` y deja las celdas vacías al final.
 `pagination={false}` muestra todas las filas. `selection` y
 `columnVisibility` permiten controlar esos estados desde la página; `ref.getData()`
@@ -320,10 +334,11 @@ Si falta un provider global se emite un aviso de desarrollo, como con `toast`.
 
 ## Estado
 
-En construcción por fases. Versión preparada: **0.5.0-beta.3** (canal `next`).
+En construcción por fases. Versión preparada: **0.5.0-beta.4** (canal `next`).
 
 | Versión | Fase | Contenido |
 | --- | --- | --- |
+| 0.5.0-beta.4 | G1 — Menú de filtros | Cada encabezado filtrable lleva un icono que abre un menú con condición y valor; reemplaza la fila de filtros. Nuevas `filterOperators`, `messages.filter*` y slots `filterButton` y `filterMenu`. Se eliminan los slots `filterRow` y `filterCell` y el token `--ui-grid-filter-height`. |
 | 0.5.0-beta.3 | Correcciones | El cuerpo de `Dialog` trae padding por defecto (`classNames={{ body: "p-0" }}` lo quita) y su pie alinea a la derecha. `RadioGroup` alinea sus opciones al inicio. `FeedbackDialog` avisa en desarrollo si `rejectLabel` llega sin `showReject`. |
 | 0.5.0-beta.2 | G1 — TanStack v9 | Migra `DataGrid` a `@tanstack/react-table@^9.3.1`, con la API nativa de esa mayor. La API pública de `DataGrid` no cambia; el peer pasa de la v8 a la v9. |
 | 0.5.0-beta.1 | G1 — Corrección | Limita el peer a `@tanstack/react-table@^8.21.3`: con `0.5.0-beta.0`, una instalación limpia resolvía la v9 y el paquete no cargaba. Todos los peers pasan de `>=` a `^`, con Radix y React actualizados; sube los mínimos de Radix. |
