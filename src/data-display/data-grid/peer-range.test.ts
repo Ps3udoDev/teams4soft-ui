@@ -8,8 +8,9 @@ const { peerDependencies, devDependencies } = JSON.parse(readFileSync("package.j
 const radixPeers = Object.keys(peerDependencies).filter(name => name.startsWith("@radix-ui/"));
 
 describe("rangos de peers", () => {
-  it("TanStack no admite la v9, que elimina los row models usados por DataGrid", () => {
-    expect(peerDependencies["@tanstack/react-table"]).toBe("^8.21.3");
+  it("TanStack se limita a la v9: DataGrid registra sus features con la API de esa mayor", () => {
+    expect(peerDependencies["@tanstack/react-table"]).toBe("^9.3.1");
+    expect(devDependencies["@tanstack/react-table"]).toBe("^9.3.1");
   });
 
   it("React declara solo las mayores probadas en CI", () => {
