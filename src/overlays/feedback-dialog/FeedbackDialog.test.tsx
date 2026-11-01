@@ -152,3 +152,20 @@ describe("FeedbackDialog", () => {
     expect(screen.getByText("Contenido")).toHaveStyle({ color: "rgb(255, 0, 0)" });
   });
 });
+
+describe("FeedbackDialog: integración con Dialog", () => {
+  it("no duplica el padding del cuerpo", () => {
+    render(<FeedbackDialog open message="Mensaje" />);
+    expect(screen.getByText("Mensaje").parentElement?.parentElement).toHaveClass("p-0");
+  });
+
+  it("avisa en desarrollo si rejectLabel llega sin showReject", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { rerender } = render(<FeedbackDialog open message="Mensaje" rejectLabel="Cancelar" />);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("showReject"));
+    warn.mockClear();
+    rerender(<FeedbackDialog open message="Mensaje" rejectLabel="Cancelar" showReject />);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});

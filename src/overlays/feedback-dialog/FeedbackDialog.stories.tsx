@@ -10,15 +10,16 @@ function Example(args: FeedbackDialogProps) {
   return <><Button onClick={() => setOpen(true)}>Abrir aviso</Button><FeedbackDialog {...args} open={open} onOpenChange={setOpen} /></>;
 }
 
-const meta = {
+const meta: Meta<typeof FeedbackDialog> = {
   title: "Overlays/FeedbackDialog",
   component: FeedbackDialog,
-  render: (args) => <Example {...args} />,
+  // Docs monta todas las stories en la misma página: ahí arrancan cerradas para no apilarse.
+  render: (args, { viewMode }) => <Example {...args} open={args.open && viewMode === "story"} />,
   args: { open: true, message: "¿Desea continuar con la operación?", showReject: true },
   tags: ["autodocs"],
-} satisfies Meta<typeof FeedbackDialog>;
+};
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof FeedbackDialog>;
 
 export const Confirmacion: Story = {};
 export const Peligro: Story = { args: { severity: "danger", title: "Eliminar registro", message: "Esta acción elimina el registro seleccionado.", acceptLabel: "Eliminar" } };

@@ -22,7 +22,7 @@ const optionsOrientationClassName: Record<"horizontal" | "vertical", string> = {
   horizontal: "flex flex-row flex-wrap gap-4",
 };
 
-const optionBaseClassName = "flex items-start gap-2";
+const optionBaseClassName = "flex items-start gap-2 text-start";
 
 // El estado real (`data-state`, `data-disabled`) y el foco viven en el
 // `RadioGroupPrimitive.Item` (el botón `role="radio"`), no en este `<span>`
