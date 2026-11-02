@@ -18,6 +18,14 @@ describe("parseNumber", () => {
     expect(parseNumber("abc")).toEqual({ ok: false });
     expect(parseNumber("1.2.3")).toEqual({ ok: false });
   });
+  it("conserva el lenguaje aceptado sin backtracking", () => {
+    expect(parseNumber("12.", { locale: "en-US" })).toEqual({ ok: true, value: 12 });
+    expect(parseNumber(".5", { locale: "en-US" })).toEqual({ ok: true, value: 0.5 });
+    expect(parseNumber("12.5", { locale: "en-US" })).toEqual({ ok: true, value: 12.5 });
+    expect(parseNumber(".", { locale: "en-US" })).toEqual({ ok: false });
+    expect(parseNumber("1.2.3", { locale: "en-US" })).toEqual({ ok: false });
+    expect(parseNumber("9".repeat(50000) + "x", { locale: "en-US" })).toEqual({ ok: false });
+  });
   it("ignora el negativo sin allowNegative", () => {
     expect(parseNumber("-3.5")).toEqual({ ok: true, value: 3.5 });
   });

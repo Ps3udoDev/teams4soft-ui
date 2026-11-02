@@ -49,7 +49,7 @@ export function parseNumber(text: string, opts: NumberFormatOptions = {}): Parse
   const { decimal } = resolveSeparators(opts.locale ?? DEFAULT_LOCALE);
   const normalized = sanitizePaste(text, opts).split(decimal).join(".");
   if (normalized === "") return { ok: true, value: null };
-  if (!/^-?(\d+\.?\d*|\.\d+)$/.test(normalized)) return { ok: false };
+  if (!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized)) return { ok: false };
   const value = Number(normalized);
   return Number.isFinite(value) ? { ok: true, value } : { ok: false };
 }
