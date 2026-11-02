@@ -17,7 +17,7 @@ El diseño de componentes, contratos, tokens, orden de extracción y "definició
 | Gestor de paquetes | **pnpm**, con `pnpm-lock.yaml` commiteado e instalación `--frozen-lockfile` en CI |
 | Nombre del paquete | `@teams4soft/teams4soft-ui` |
 | Distribución | **npm público**, con 2FA + `--provenance`; Storybook estático desplegado a Vercel como demo |
-| React (peer) | `>=18.0.0` (soporta React 18 y 19) |
+| React (peer) | `^18.3.0 \|\| ^19.0.0` (actualizado en la `0.5.0`: los peers usan `^`, no `>=`) |
 | Testing en Fase 0 | **Lean**: Vitest + Testing Library + Storybook a11y (axe). Playwright y regresión visual se difieren a una fase posterior |
 | Ubicación del proyecto | Subcarpeta `teams4soft-ui/` (este repo git, remote `origin` = `https://github.com/Ps3udoDev/teams4soft-ui.git`). La documentación de origen queda en el directorio padre, fuera del repo |
 
@@ -113,7 +113,7 @@ Principios transversales: acciones **pinneadas por SHA** (no por tag flotante), 
 ## 8. Seguridad del paquete (checklist del proyecto)
 
 - `"files": ["dist"]` como allowlist estricta — nunca publicar `src/` ni config de Storybook.
-- Peer deps de comportamiento (Radix, TanStack) como `peerDependencies`, no `dependencies` (evita duplicados y conflictos de versión).
+- Peer deps de comportamiento (Radix) como `peerDependencies`, no `dependencies` (evita duplicados y conflictos de versión). TanStack es la excepción desde la `0.5.0`: es un detalle interno de `DataGrid` y va en `dependencies`, fijado (decisión 2026-11-01).
 - Versiones fijadas + lockfile exigido en CI (mitigación supply chain, según `dependencias_terceros.md`).
 - `pnpm pack --dry-run` verificado en CI antes de cualquier publish.
 - 2FA obligatorio en la cuenta npm; publish con provenance.
@@ -126,7 +126,7 @@ Mapea el orden del plan maestro §7. Cada fase es incremental y deja el repo en 
 - **Fase 1 — Primitivas P0.** Button → Tooltip → FormField → TextField.
 - **Fase 2 — Controles de formulario.** CheckboxField, RadioGroup, Fieldset, FormGrid, DateField, SearchableSelectField.
 - **Fase 3 — Feedback y overlays.** ToastProvider, LoadingFeedback, ResponsiveDialog, FeedbackDialog.
-- **Fase 4 — Componentes complejos.** FilePickerField, AdaptiveDataTable, EntityLookupField.
+- **Fase 4 — Componentes complejos.** FilePickerField, DataGrid (reemplaza a AdaptiveDataTable; ver `2026-10-29-data-grid-design.md`), EntityLookupField.
 - **Fase 5 — Layout.** SectionPanel, PageShell.
 - **Fase 6 — Deploy y adopción.** Guía de deploy (release npm + Storybook), publicación estable `1.0.0`, adaptadores de compatibilidad y migración incremental.
 
@@ -144,7 +144,8 @@ Ciclo por componente (todas las fases 1–5): contrato TS → implementación �
 | Riesgo | Mitigación |
 |---|---|
 | CSS de Tailwind v4 no llega al consumidor | Precompilar y enviar `dist/styles.css`; documentar el import obligatorio |
-| Duplicación de Radix/TanStack en el bundle del consumidor | peerDependencies + `external` en tsup |
+| Duplicación de Radix en el bundle del consumidor | peerDependencies + `external` en tsup |
+| Duplicación de TanStack si el consumidor usa otra versión | Se acepta: es un motor sin contexto compartido, y el gestor deduplica si coincide la versión |
 | Publicar código fuente o secretos por error | `files: [dist]` + `pack --dry-run` en CI que falla el pipeline |
 | Vulnerabilidad en dependencia de terceros | `pnpm audit` + dependency-review + CodeQL en CI; versiones fijadas |
 | Nombre `@teams4soft/teams4soft-ui` ocupado en npm | Resuelto: nombre disponible y organización `@teams4soft` creada en npm (2026-07-27) |

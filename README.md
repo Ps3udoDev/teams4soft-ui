@@ -179,10 +179,10 @@ El `toast` importable es **API de cliente**: requiere un `<ToastProvider global 
 
 ### Fase 4: DataGrid (consulta)
 
-La beta `0.5.0-beta.4` incluye `DataGrid` en el subpath
-`./data-display`. Tras publicarse se instalará con `@teams4soft/teams4soft-ui@next`.
-Instala también `@tanstack/react-table@9` (la v8 no es compatible) y los peers
-Radix de Popover, Checkbox, Slot y Tooltip.
+`DataGrid` vive en el subpath `./data-display`. En npm, `next` apunta a
+`0.5.0-beta.2`, que todavía usa la fila de filtros; el menú de filtros descrito aquí
+llega con la próxima beta. Instala también `@tanstack/react-table@9` (la v8 no es
+compatible) y los peers Radix de Popover, Checkbox, Slot y Tooltip.
 
 ```tsx
 import { DataGrid, textColumn, amountColumn, dateColumn } from "@teams4soft/teams4soft-ui/data-display";
@@ -216,8 +216,9 @@ ignoran tildes y ocultar una columna limpia su filtro.
 
 `filterOperators` limita las condiciones de una columna: la primera es la inicial y, con
 una sola, se oculta el selector. Cada columna admite un filtro a la vez, sin reglas AND/OR.
- El orden sigue las reglas
-del español, usa la etiqueta en `select`/`radio` y deja las celdas vacías al final.
+
+El orden sigue las reglas del español, usa la etiqueta en `select`/`radio` y deja las
+celdas vacías al final.
 `pagination={false}` muestra todas las filas. `selection` y
 `columnVisibility` permiten controlar esos estados desde la página; `ref.getData()`
 devuelve las filas originales y los ids seleccionados, incluso si el filtro los oculta.
@@ -283,8 +284,7 @@ Los iconos de severidad de `FeedbackDialog` usan los tokens `--ui-info`,
 
 ### Ajustes 0.5.0
 
-Cambios aditivos preparados para la siguiente publicación; la versión del paquete
-es 0.5.0-beta.1 y los defaults existentes se conservan.
+Cambios aditivos que no alteran los defaults existentes.
 
 - `--ui-control-height` define la altura de `TextField` mediano, `DateField` y
   `SearchableSelectField` (2.5rem por defecto). Puede sobrescribirse en un módulo;
@@ -334,12 +334,14 @@ Si falta un provider global se emite un aviso de desarrollo, como con `toast`.
 
 ## Estado
 
-En construcción por fases. Versión preparada: **0.5.0-beta.4** (canal `next`).
+En construcción por fases. Publicadas en npm: **0.4.0** (`latest`) y **0.5.0-beta.2** (`next`).
+
+La `0.5.0` se cierra con G2, G3, `EntityLookupField` + `EntityLookupGroup` y G4. Hasta entonces no salen betas intermedias: habrá una sola para probar todo en el frontend y, después, la versión final.
 
 | Versión | Fase | Contenido |
 | --- | --- | --- |
-| 0.5.0-beta.4 | G1 — Menú de filtros | Cada encabezado filtrable lleva un icono que abre un menú con condición y valor; reemplaza la fila de filtros. Nuevas `filterOperators`, `messages.filter*` y slots `filterButton` y `filterMenu`. Se eliminan los slots `filterRow` y `filterCell` y el token `--ui-grid-filter-height`. |
-| 0.5.0-beta.3 | Correcciones | El cuerpo de `Dialog` trae padding por defecto (`classNames={{ body: "p-0" }}` lo quita) y su pie alinea a la derecha. `RadioGroup` alinea sus opciones al inicio. `FeedbackDialog` avisa en desarrollo si `rejectLabel` llega sin `showReject`. |
+| 0.5.0-beta.4 (sin publicar) | G1 — Menú de filtros | Cada encabezado filtrable lleva un icono que abre un menú con condición y valor; reemplaza la fila de filtros. Nuevas `filterOperators`, `messages.filter*` y slots `filterButton` y `filterMenu`. Se eliminan los slots `filterRow` y `filterCell` y el token `--ui-grid-filter-height`. |
+| 0.5.0-beta.3 (sin publicar) | Correcciones | El cuerpo de `Dialog` trae padding por defecto (`classNames={{ body: "p-0" }}` lo quita) y su pie alinea a la derecha. `RadioGroup` alinea sus opciones al inicio. `FeedbackDialog` avisa en desarrollo si `rejectLabel` llega sin `showReject`. |
 | 0.5.0-beta.2 | G1 — TanStack v9 | Migra `DataGrid` a `@tanstack/react-table@^9.3.1`, con la API nativa de esa mayor. La API pública de `DataGrid` no cambia; el peer pasa de la v8 a la v9. |
 | 0.5.0-beta.1 | G1 — Corrección | Limita el peer a `@tanstack/react-table@^8.21.3`: con `0.5.0-beta.0`, una instalación limpia resolvía la v9 y el paquete no cargaba. Todos los peers pasan de `>=` a `^`, con Radix y React actualizados; sube los mínimos de Radix. |
 | 0.5.0-beta.0 | G1 — Consulta | `DataGrid`, factorías, filtros, selección, paginación y tokens; subpath `./data-display`. |
@@ -348,10 +350,10 @@ En construcción por fases. Versión preparada: **0.5.0-beta.4** (canal `next`).
 | 0.2.0 | 2a — Controles de formulario | `CheckboxField`, `RadioGroup`, `Fieldset`, `FormGrid`; subpath `./layout`. |
 | 0.1.0 | 0–1 — Infraestructura y primitivas | `Button`, `Tooltip`, `FormField`, `TextField`. |
 
-Implementados para la siguiente publicación: `Dialog` y `FeedbackDialog` (`./overlays`). Siguientes: Fase 4 (`FilePickerField`, DataGrid G2/G3/G4, `EntityLookupField`), Fase 5 (`SectionPanel`, `PageShell`) y Fase 6 (estable `1.0.0`).
+Después de la `0.5.0`: `FilePickerField`, Fase 5 (`SectionPanel`, `PageShell`), los componentes que faltan para reemplazar PrimeReact y Fase 6 (estable `1.0.0`).
 
 ## Publicación (mantenedores)
 
 1. Crear `NPM_TOKEN` (token de automatización con 2FA) en la organización `@teams4soft` y guardarlo como secret del repo.
 2. Crear un GitHub Release marcado como pre-release para la versión de `package.json` (p. ej. `v0.5.0-beta.1`): el workflow publica con provenance en `next`. Los releases estables usan `latest`.
-3. El workflow de release ejecuta `node scripts/verify-clean-install.mjs` con React 18 y 19 y no publica si falla: instala el resultado de `pnpm pack` en un proyecto vacío, sin fijar peers, y comprueba que carga y renderiza en ESM y CJS. Tras publicar, instalar `@teams4soft/teams4soft-ui@next` y probar la página piloto del frontend, incluida su convivencia con el preflight de Tailwind/PrimeReact.
+3. El workflow de release ejecuta `node scripts/verify-clean-install.mjs` con React 18 y 19 y no publica si falla: instala el resultado de `pnpm pack` en un proyecto vacío, sin fijar peers, y comprueba que carga y renderiza en ESM y CJS. Tras publicar, instalar la versión exacta (con `minimumReleaseAge` de pnpm 11, `@next` resuelve a la anterior durante las primeras 24 horas) y probar la página piloto del frontend, incluida su convivencia con el preflight de Tailwind/PrimeReact.
