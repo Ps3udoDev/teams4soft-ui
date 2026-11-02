@@ -754,6 +754,20 @@ describe("DataGrid: celdas editables", () => {
     expect(data.dirtyIds).toEqual(["r-3"]);
   });
 
+  it("el primer carácter que reemplaza un texto seleccionado no se pierde", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DataGrid columns={editableColumns} defaultValue={editableRows} getRowId={rowId} onChange={onChange} />);
+    await user.click(policyInput(0));
+    await user.keyboard("{Control>}a{/Control}Hola");
+    expect(policyInput(0)).toHaveValue("Hola");
+    await user.click(amountInput(1));
+    await user.keyboard("{Control>}a{/Control}7");
+    expect(amountInput(1)).toHaveValue("7");
+    await user.tab();
+    expect(onChange).toHaveBeenLastCalledWith(expect.anything(), { type: "edit", rowId: "r-2", field: "collectedAmount", prev: 20, next: 7 });
+  });
+
   it("confirmar re-renderiza una sola fila y teclear ninguna (spec §12)", async () => {
     const user = userEvent.setup();
     const renders = new Map<string, number>();

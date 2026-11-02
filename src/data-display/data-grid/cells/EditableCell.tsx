@@ -18,6 +18,15 @@ export interface CellFocusPlan {
   previous?: string;
 }
 
+// `window.event` no es fiable para saber qué evento cerró el popover (jsdom con React 18 lo deja obsoleto): el último keydown se anota en captura de ventana.
+let lastKeydown: Event | undefined;
+let trackingKeydown = false;
+function trackKeydown() {
+  if (trackingKeydown || typeof window === "undefined") return;
+  trackingKeydown = true;
+  window.addEventListener("keydown", event => { lastKeydown = event; }, true);
+}
+
 function findCell(root: Element, rowId: string, field: string) {
   return Array.from(root.querySelectorAll<HTMLElement>("td[data-row-id]")).find(cell => cell.dataset.rowId === rowId && cell.dataset.field === field);
 }
@@ -89,8 +98,9 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnter
   const closedByEvent = React.useRef<Event | undefined>(undefined);
   const onPopoverOpenChange = (open: boolean) => {
     popoverOpen.current = open;
-    closedByEvent.current = open ? undefined : window.event;
+    closedByEvent.current = open ? undefined : lastKeydown;
   };
+  React.useEffect(trackKeydown, []);
   useClientLayoutEffect(() => {
     if (!reverting.current) return;
     reverting.current = false;
@@ -138,7 +148,7 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnter
     if (comesFromCell(event) && !event.currentTarget.contains(event.relatedTarget)) setDraftDirty(false);
   };
 
-  return <td {...cellProps} ref={cellRef} data-editable="" data-row-id={rowId} data-field={column.field} data-draft-dirty={draftDirty || undefined} onInputCapture={markDirty} onPasteCapture={markDirty} onKeyDownCapture={planEnter} onKeyDown={handleKeyDown} onBlur={leave}>
+  return <td {...cellProps} ref={cellRef} data-editable="" data-row-id={rowId} data-field={column.field} data-draft-dirty={draftDirty || undefined} onInput={markDirty} onPasteCapture={markDirty} onKeyDownCapture={planEnter} onKeyDown={handleKeyDown} onBlur={leave}>
     {/* El Tooltip siempre montado: que aparezca un error no debe remontar el editor ni quitarle el foco. */}
     <Tooltip content={error} open={Boolean(error) && tooltipOpen} onOpenChange={setTooltipOpen} unstyled={unstyled}>
       <div data-slot="editor">
