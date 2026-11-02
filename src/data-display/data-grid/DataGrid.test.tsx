@@ -2387,6 +2387,51 @@ describe("DataGrid: revisión final de G2", () => {
     });
   });
 
+  describe("Tab que hace desaparecer la fila", () => {
+    const filtered: Line[] = [{ id: "r-1", policy: "P1", collectedAmount: 1 }, { id: "r-2", policy: "P2", collectedAmount: 2 }, { id: "r-3", policy: "P3", collectedAmount: 3 }];
+    const typeOverFiltered = async (user: User, index: number) => {
+      render(<DataGrid columns={lineColumns} defaultValue={filtered} getRowId={lineId} />);
+      await applyFilter(user, "Póliza", "P");
+      await retype(user, policyInput(index), "Otra");
+      await user.tab();
+    };
+
+    it("el foco pasa a la misma columna de la fila siguiente", async () => {
+      const user = userEvent.setup();
+      await typeOverFiltered(user, 0);
+      expect(bodyRows()).toHaveLength(2);
+      expect(policyInput(0)).toHaveValue("P2");
+      expect(policyInput(0)).toHaveFocus();
+    });
+
+    it("en la última fila visible, a la anterior", async () => {
+      const user = userEvent.setup();
+      await typeOverFiltered(user, 2);
+      expect(bodyRows()).toHaveLength(2);
+      expect(policyInput(1)).toHaveValue("P2");
+      expect(policyInput(1)).toHaveFocus();
+    });
+
+    it("un Shift+Tab cuyo destino está en otra fila conserva ese destino", async () => {
+      const user = userEvent.setup();
+      render(<DataGrid columns={lineColumns} defaultValue={filtered} getRowId={lineId} />);
+      await applyFilter(user, "Póliza", "P");
+      await retype(user, policyInput(1), "Otra");
+      await user.tab({ shift: true });
+      expect(bodyRows()).toHaveLength(2);
+      expect(amountInput(0)).toHaveFocus();
+    });
+
+    it("sin que el foco salte si la fila sigue visible", async () => {
+      const user = userEvent.setup();
+      render(<DataGrid columns={lineColumns} defaultValue={filtered} getRowId={lineId} />);
+      await applyFilter(user, "Póliza", "P");
+      await retype(user, policyInput(0), "P9");
+      await user.tab();
+      expect(amountInput(0)).toHaveFocus();
+    });
+  });
+
   describe("avisos de desarrollo", () => {
     it("una columna lookup editable sin cellTypes avisa una vez; con cellTypes o readOnly no", () => {
       const warn = silenceWarnings();

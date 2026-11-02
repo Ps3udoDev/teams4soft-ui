@@ -9,12 +9,14 @@ const focusableSelector = "input:not(:disabled), select:not(:disabled), textarea
 // Enter activa estos controles del editor (limpiar, abrir calendario); checkbox y radio lo ignoran.
 const actionSelector = "button:not([role=checkbox]):not([role=radio]), a[href]";
 
-/** Destino del foco tras un Enter. Se calcula antes de confirmar: la fila puede moverse o desaparecer. */
+/** Destino del foco tras un Enter o un Tab. Se calcula antes de confirmar: la fila puede moverse o desaparecer. */
 export interface CellFocusPlan {
   rowId: string;
   field: string;
   next?: string;
   previous?: string;
+  /** Tab: el navegador ya mueve el foco; el plan solo actúa si la fila dejó de estar visible. */
+  onlyIfGone?: boolean;
 }
 
 // `window.event` no es fiable para saber qué evento cerró el popover (jsdom con React 18 lo deja obsoleto): el último keydown se anota en captura de ventana.
@@ -37,8 +39,9 @@ export function focusCellElement(root: Element, rowId: string, field: string): b
 }
 
 // Una celda con error conserva el foco: Enter no baja hasta corregirla; Tab sí permite salir.
-export function settleCellFocus(table: HTMLElement, { rowId, field, next, previous }: CellFocusPlan) {
+export function settleCellFocus(table: HTMLElement, { rowId, field, next, previous, onlyIfGone }: CellFocusPlan) {
   const own = findCell(table, rowId, field);
+  if (onlyIfGone && own) return;
   const invalid = own && (own.matches("[data-invalid]") || own.querySelector("[aria-invalid='true']"));
   if (!invalid && next && focusCellElement(table, next, field)) return;
   // Reordenar la fila puede sacar el foco de la celda aunque siga montada.
@@ -62,7 +65,7 @@ export interface EditableCellProps<T> {
   value: unknown;
   error?: string;
   onCommit: (value: unknown) => void;
-  /** Se llama tras el Enter que confirma, en el mismo lote que la escritura al store. */
+  /** Se llama tras el Enter o el Tab que confirma, en el mismo lote que la escritura al store. */
   onEnterCommit: (plan: CellFocusPlan) => void;
   editor: React.ComponentType<EditCellProps<T>>;
   disabled: boolean;
@@ -136,12 +139,13 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnter
   // El plan se fija en captura, antes de que el editor confirme. El preventDefault espera a la burbuja porque
   // NumberField no confirma un Enter ya cancelado.
   const enterPlan = React.useRef<CellFocusPlan | undefined>(undefined);
-  const planEnter = (event: React.KeyboardEvent<HTMLTableCellElement>) => {
+  const tabPlan = React.useRef<CellFocusPlan | undefined>(undefined);
+  const planFocus = (event: React.KeyboardEvent<HTMLTableCellElement>) => {
     const cell = event.currentTarget;
+    const plan = () => ({ rowId, field: column.field, next: neighbourRowId(cell, column.field, "nextElementSibling"), previous: neighbourRowId(cell, column.field, "previousElementSibling") });
     const leavesCell = event.key === "Enter" && !popoverOpen.current && comesFromCell(event) && !(event.target as Element).closest(actionSelector);
-    enterPlan.current = leavesCell
-      ? { rowId, field: column.field, next: neighbourRowId(cell, column.field, "nextElementSibling"), previous: neighbourRowId(cell, column.field, "previousElementSibling") }
-      : undefined;
+    enterPlan.current = leavesCell ? plan() : undefined;
+    tabPlan.current = event.key === "Tab" && comesFromCell(event) ? { ...plan(), onlyIfGone: true } : undefined;
   };
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTableCellElement>) => {
     revert(event);
@@ -153,12 +157,17 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnter
 
   // NumberField omite onCommit si el número ya se confirmó: salir de la celda cierra el borrador igualmente.
   const leave = (event: React.FocusEvent<HTMLTableCellElement>) => {
+    const plan = tabPlan.current;
+    tabPlan.current = undefined;
     // Con el popover del editor abierto, el foco puede estar en su portal: no es salir de la celda.
     if (popoverOpen.current) return;
-    if (comesFromCell(event) && !event.currentTarget.contains(event.relatedTarget)) setDirty(false);
+    if (!comesFromCell(event) || event.currentTarget.contains(event.relatedTarget)) return;
+    setDirty(false);
+    // Si la confirmación hace desaparecer la fila (un filtro), un destino del Tab en esa fila se va con ella y el foco caería en <body>.
+    if (plan && event.currentTarget.closest("tr")?.contains(event.relatedTarget)) onEnterCommit(plan);
   };
 
-  return <td {...cellProps} ref={cellRef} data-editable="" data-row-id={rowId} data-field={column.field} onInputCapture={markDirty} onPasteCapture={markDirty} onKeyDownCapture={planEnter} onKeyDown={handleKeyDown} onBlur={leave}>
+  return <td {...cellProps} ref={cellRef} data-editable="" data-row-id={rowId} data-field={column.field} onInputCapture={markDirty} onPasteCapture={markDirty} onKeyDownCapture={planFocus} onKeyDown={handleKeyDown} onBlur={leave}>
     {/* El Tooltip siempre montado: que aparezca un error no debe remontar el editor ni quitarle el foco. */}
     <Tooltip content={error} open={Boolean(error) && tooltipOpen} onOpenChange={setTooltipOpen} unstyled={unstyled}>
       <div data-slot="editor" className={editorClassName} style={editorStyle}>
