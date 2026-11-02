@@ -24,6 +24,10 @@ interface UseGridRowsArgs<T> {
   editing: boolean;
   messages: DataGridMessages;
   getSelectedIds: () => string[];
+  /** Con servidor, un `value` externo con otro conjunto de ids es la página nueva: base nueva, sin diff ni `onChange`; con los mismos ids, un refresco que conserva la base. */
+  serverSide?: boolean;
+  /** Un `value` externo quitó estas filas del store. */
+  onRowsGone?: (ids: Set<string>) => void;
 }
 
 export interface GridRowsApi<T> {
@@ -41,6 +45,8 @@ export interface GridRowsApi<T> {
   addRow: (row: T) => boolean;
   removeRow: (id: string) => void;
   validate: () => boolean;
+  /** La grilla emitió una consulta: el siguiente `value` con otros ids es su respuesta y no una fila añadida a mano. */
+  markQueryEmitted: () => void;
   /** La grilla pide una fila a `onAddRow`: el siguiente `value` ya no es una carga inicial, sino esa fila. */
   disarmFirstLoad: () => void;
   commitCell: (rowId: string, column: DataGridColumn<T>, value: unknown, grid: DataGridHandle<T>) => void;
@@ -88,18 +94,50 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
   // Todo array emitido: un padre asíncrono puede devolver uno anterior al último; ya está en el store y se ignora.
   const emittedRows = React.useRef(new WeakSet<T[]>());
   const seenValue = React.useRef(value);
+  // Con servidor, otro conjunto de ids sin una consulta de por medio no es una página: es alguien que cambió `value`.
+  const queryEmitted = React.useRef(false);
+  const markQueryEmitted = React.useCallback(() => { queryEmitted.current = true; }, []);
   // Carga asíncrona: mientras la base esté vacía y no se haya emitido nada, un value nuevo es la base.
   const awaitingFirstLoad = React.useRef((args.value ?? args.defaultValue ?? []).length === 0);
   // Un value nuevo se pinta ya; el store lo adopta justo después, antes de que el navegador pinte.
-  const rows = value !== undefined && value !== seenValue.current && value !== lastEmittedRows.current && !emittedRows.current.has(value) ? value : snapshot;
+  const isExternal = value !== undefined && value !== seenValue.current && value !== lastEmittedRows.current && !emittedRows.current.has(value);
+  const rows = isExternal ? value : snapshot;
+  const sameIds = (next: T[], current: T[]) => {
+    const ids = new Set(current.map(row => latest.current.getRowId(row)));
+    return ids.size === next.length && next.every(row => ids.has(latest.current.getRowId(row)));
+  };
+  // Con servidor, otro conjunto de ids es otra página: sus celdas se remontan para soltar los borradores. Se decide
+  // durante el render, no en el efecto: un re-render síncrono posterior remontaría celdas ya enfocadas por focusCell.
+  const [revisionFor, setRevisionFor] = React.useState(value);
+  if (args.serverSide && value !== revisionFor) {
+    setRevisionFor(value);
+    if (isExternal && !sameIds(value, snapshot)) setRevision(current => current + 1);
+  }
   useClientLayoutEffect(() => {
     seenValue.current = value;
     if (value === undefined || value === lastEmittedRows.current || emittedRows.current.has(value)) return;
     lastEmittedRows.current = value;
-    if (awaitingFirstLoad.current) {
-      awaitingFirstLoad.current = value.length === 0;
+    const serverRefresh = latest.current.serverSide;
+    if (latest.current.serverSide && !sameIds(value, store.getRows())) {
+      const diff = latest.current.editing ? store.getDiff() : undefined;
+      if (!queryEmitted.current && diff && (diff.dirtyIds.length > 0 || diff.addedIds.length > 0 || diff.removedIds.length > 0)) {
+        devWarn("DataGrid: con serverSide, un `value` con otro conjunto de ids se adopta como base nueva y descarta las ediciones sin guardar. Para añadir una fila usa ref.addRow(row) y para quitarla ref.removeRow(id).");
+      }
       store.reset(value);
-    } else store.replaceCurrent(value);
+      awaitingFirstLoad.current = false;
+      // Un arreglo emitido de otra página ya no es el estado actual: volver a él debe adoptarse.
+      emittedRows.current = new WeakSet();
+    } else if (latest.current.serverSide) store.replaceCurrent(value);
+    else {
+      const kept = new Set(value.map(row => latest.current.getRowId(row)));
+      const gone = new Set(store.getRows().map(row => latest.current.getRowId(row)).filter(id => !kept.has(id)));
+      if (awaitingFirstLoad.current) {
+        awaitingFirstLoad.current = value.length === 0;
+        store.reset(value);
+      } else store.replaceCurrent(value);
+      if (gone.size > 0) latest.current.onRowsGone?.(gone);
+    }
+    if (serverRefresh) queryEmitted.current = false;
     const live = Object.fromEntries(Object.entries(errorsRef.current).filter(([id]) => store.getRow(id) !== undefined));
     if (Object.keys(live).length !== Object.keys(errorsRef.current).length) setErrors(live);
     revalidateShown();
@@ -177,5 +215,5 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
 
   const disarmFirstLoad = React.useCallback(() => { awaitingFirstLoad.current = false; }, []);
 
-  return { store, rows, errors, setErrors, emit, revision, getData, reset, patchRow, addRow, removeRow, validate, disarmFirstLoad, commitCell };
+  return { store, rows, errors, setErrors, emit, revision, getData, reset, patchRow, addRow, removeRow, validate, markQueryEmitted, disarmFirstLoad, commitCell };
 }

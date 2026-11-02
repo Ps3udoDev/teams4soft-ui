@@ -4,6 +4,7 @@ import { DateField, SearchableSelectField, TextField } from "../../../forms";
 import { cn } from "../../../lib";
 import { Button } from "../../../primitives";
 import type { DataGridColumn, DataGridFilterOperator, DataGridFilterValue, DataGridMessages } from "../DataGrid.types";
+import { useRemoteSelect } from "../use-remote-options";
 import { filterOperatorsFor, resolveFilterKind } from "./filter-fns";
 
 export interface FilterMenuProps<T> {
@@ -35,7 +36,18 @@ export function FilterMenu<T>({ column, value, onChange, messages, className, st
   const [operator, setOperator] = React.useState<DataGridFilterOperator>(value?.operator ?? operators[0]!);
   const [draft, setDraft] = React.useState<unknown>(value?.value);
   const enterOnDateInput = React.useRef(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  // Radix devuelve el foco al botón al cerrar; si la carga ya lo deshabilitó, se hace al terminar.
+  const focusPending = React.useRef(false);
+  // Misma búsqueda remota que el editor; el filtro compara por valor, así que el borrador conserva su opción.
+  const remote = useRemoteSelect(column, draft, open);
   React.useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
+  React.useEffect(() => {
+    if (disabled || !focusPending.current) return;
+    focusPending.current = false;
+    const active = document.activeElement;
+    if (!active || active === document.body) triggerRef.current?.focus();
+  }, [disabled]);
   if (!kind) return null;
 
   const active = value !== undefined;
@@ -80,10 +92,16 @@ export function FilterMenu<T>({ column, value, onChange, messages, className, st
     </div>;
     if (kind === "select") {
       const booleanOptions = [{ value: true, label: messages.yes }, { value: false, label: messages.no }];
-      const options = column.type === "checkbox" ? booleanOptions : [...(column.options ?? [])];
-      const getValue = column.type === "checkbox" ? (o: unknown) => (o as { value: boolean }).value : column.getOptionValue ?? ((o: unknown) => (o as { value: unknown }).value);
-      const getLabel = column.type === "checkbox" ? (o: unknown) => (o as { label: string }).label : column.getOptionLabel ?? ((o: unknown) => String((o as { label: unknown }).label ?? ""));
-      return <SearchableSelectField label={label} classNames={{ label: "sr-only" }} options={options} getOptionValue={getValue} getOptionLabel={getLabel} value={draft ?? null} onValueChange={next => setDraft(next ?? undefined)} clearable unstyled={unstyled} />;
+      const useRemote = remote.remote && column.type !== "checkbox";
+      const options = column.type === "checkbox" ? booleanOptions : useRemote ? remote.options : [...(column.options ?? [])];
+      const getValue = column.type === "checkbox" ? (o: unknown) => (o as { value: boolean }).value : useRemote ? remote.getOptionValue : column.getOptionValue ?? ((o: unknown) => (o as { value: unknown }).value);
+      const getLabel = column.type === "checkbox" ? (o: unknown) => (o as { label: string }).label : useRemote ? remote.getOptionLabel : column.getOptionLabel ?? ((o: unknown) => String((o as { label: unknown }).label ?? ""));
+      const remoteProps = useRemote ? {
+        filterOption: remote.filterOption, loading: remote.loading, onInputValueChange: remote.onInputValueChange,
+        onOpenChange: remote.onOpenChange, invalid: remote.error, errorMessage: remote.error ? remote.loadOptionsError : undefined,
+        emptyMessage: remote.error ? remote.loadOptionsError : undefined,
+      } : undefined;
+      return <SearchableSelectField label={label} classNames={{ label: "sr-only" }} options={options} getOptionValue={getValue} getOptionLabel={getLabel} {...remoteProps} value={draft ?? null} onValueChange={(next, option) => { if (useRemote) remote.onPick(option); setDraft(next ?? undefined); }} clearable unstyled={unstyled} />;
     }
     return <TextField aria-label={label} value={String(draft ?? "")} inputMode={kind === "number" ? "decimal" : undefined} unstyled={unstyled} onValueChange={setDraft} />;
   }
@@ -91,14 +109,19 @@ export function FilterMenu<T>({ column, value, onChange, messages, className, st
   return (
     <Popover.Root open={disabled ? false : open} onOpenChange={handleOpenChange}>
       <Popover.Trigger asChild>
-        <button type="button" data-slot="filterButton" data-active={active || undefined} disabled={disabled} aria-label={active ? messages.filterActiveLabel(column.header) : label} style={style}
+        <button ref={triggerRef} type="button" data-slot="filterButton" data-filter-field={column.field} data-active={active || undefined} disabled={disabled} aria-label={active ? messages.filterActiveLabel(column.header) : label} style={style}
           className={cn(!unstyled && "inline-flex size-6 shrink-0 items-center justify-center rounded-(--radius-ui-sm) text-ui-foreground/60 hover:bg-ui-muted hover:text-ui-foreground focus-visible:outline-2 focus-visible:outline-ui-focus disabled:opacity-50 data-active:bg-ui-primary/10 data-active:text-ui-primary", className)}>
           <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M3 5h18l-7 8v6l-4-2v-4z" /></svg>
         </button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content aria-label={label} align="end" sideOffset={4} data-slot="filterMenu" style={menuStyle}
+        <Popover.Content aria-label={label} align="end" sideOffset={4} data-slot="filterMenu" data-filter-field={column.field} style={menuStyle}
           className={cn(!unstyled && "z-50 w-64 rounded-(--radius-ui-md) border border-ui-border bg-ui-background p-3 text-sm font-normal text-ui-foreground shadow-md", menuClassName)}
+          onCloseAutoFocus={event => {
+            if (!triggerRef.current?.disabled) return;
+            event.preventDefault();
+            focusPending.current = true;
+          }}
           onOpenAutoFocus={event => {
             event.preventDefault();
             (event.currentTarget as HTMLElement).querySelector("input")?.focus();

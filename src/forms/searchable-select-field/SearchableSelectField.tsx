@@ -167,8 +167,11 @@ export function SearchableSelectField<TOption, TValue>({
   );
   const text = isTextControlled ? inputValue : internalText;
 
+  // Texto escrito por la persona y aún sin confirmar: una etiqueta tardía no debe pisarlo.
+  const typingRef = React.useRef(false);
   const setText = React.useCallback(
     (next: string) => {
+      typingRef.current = false;
       if (!isTextControlled) setInternalText(next);
       onInputValueChange?.(next);
     },
@@ -190,6 +193,17 @@ export function SearchableSelectField<TOption, TValue>({
     setUnresolved(false);
     setFilterQuery(null);
   }, [value, selectedLabel, isTextControlled]);
+
+  // Con opciones remotas la etiqueta del mismo valor puede llegar después: se sincroniza el texto
+  // salvo que se esté escribiendo, y sin notificar `onInputValueChange` para no disparar búsquedas.
+  const lastLabelRef = React.useRef(selectedLabel);
+  React.useEffect(() => {
+    if (lastLabelRef.current === selectedLabel) return;
+    lastLabelRef.current = selectedLabel;
+    // Una etiqueta que desaparece (opciones en recarga) no borra el texto: un blur lo confirmaría vacío.
+    if (selectedLabel === "" || isTextControlled || filterQuery !== null || typingRef.current) return;
+    setInternalText(selectedLabel);
+  }, [selectedLabel, isTextControlled, filterQuery]);
 
   // --- Apertura (controlada / no controlada) --------------------------------
   const [openState, setOpenState] = React.useState(defaultOpen ?? false);
@@ -519,6 +533,7 @@ export function SearchableSelectField<TOption, TValue>({
     const next = event.target.value;
     setUnresolved(false);
     setText(next);
+    typingRef.current = true;
     if (!openOnType) {
       setFilterQuery(null);
       setActiveIndex(-1);
