@@ -8,6 +8,7 @@ import { Dialog } from "../../overlays/dialog/Dialog";
 import { DataGrid } from "./DataGrid";
 import { buildPersistStorageKey } from "./persist";
 import type { DataGridCellComponent, DataGridColumn, DataGridHandle } from "./DataGrid.types";
+import type { DataGridChange } from "../index";
 
 beforeAll(() => {
   const proto = Element.prototype as unknown as Record<string, unknown>;
@@ -112,10 +113,13 @@ describe("DataGrid: tabla de consulta", () => {
 
   it("avisa una vez por id duplicado", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // La clave del <tr> es el id: React avisa de claves duplicadas, ruido ajeno a lo que se comprueba aquí.
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
     render(<DataGrid columns={columns} value={rows} getRowId={() => "repetido"} />);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("repetido"));
     warn.mockRestore();
+    error.mockRestore();
   });
 
   it("acumula anchos CSS en columnas fijas y mantiene el orden inicial editable", async () => {
@@ -1632,5 +1636,318 @@ describe("DataGrid: teclado de captura", () => {
     expect(sort.closest("th")).toHaveAttribute("aria-sort", "ascending");
     await user.click(sort);
     expect(sort.closest("th")).toHaveAttribute("aria-sort", "descending");
+  });
+});
+
+describe("DataGrid: ref completo, onChange y toolbar Agregar", () => {
+  type Line = { id: string; policy: string | null; collectedAmount: number | null; net?: number | null; dueDate?: string | null };
+  const lineRows: Line[] = [
+    { id: "r-1", policy: "Pérez", collectedAmount: 10 },
+    { id: "r-2", policy: "Bravo", collectedAmount: 20 },
+    { id: "r-3", policy: "Alfa", collectedAmount: 30 },
+  ];
+  const lineColumns: DataGridColumn<Line>[] = [
+    { field: "policy", header: "Póliza", editable: true, filter: true },
+    { field: "collectedAmount", header: "Imp. cobrado", type: "currency", editable: true },
+  ];
+  const lineId = (row: Line) => row.id;
+  const policyInput = (index: number) => within(bodyRows()[index]!).getByRole("textbox", { name: "Póliza" }) as HTMLInputElement;
+  const amountInput = (index: number) => within(bodyRows()[index]!).getByRole("textbox", { name: "Imp. cobrado" }) as HTMLInputElement;
+  const retype = async (user: User, input: HTMLInputElement, text: string) => {
+    await user.clear(input);
+    await user.type(input, text);
+  };
+  const manyRows = (count: number): Line[] => Array.from({ length: count }, (_, i) => ({ id: `r-${i + 1}`, policy: `P${i + 1}`, collectedAmount: i + 1, dueDate: null }));
+  const requiredColumns: DataGridColumn<Line>[] = [{ ...lineColumns[0]!, required: true }, lineColumns[1]!];
+  const cellOf = (rowId: string, field: string) => Array.from(document.querySelectorAll<HTMLElement>("td[data-row-id]")).find(cell => cell.dataset.rowId === rowId && cell.dataset.field === field);
+
+  it("exporta GridChange como DataGridChange", () => {
+    const change: DataGridChange = { type: "add", rowId: "x", field: null, prev: undefined, next: undefined };
+    expect(change.type).toBe("add");
+  });
+
+  it("patchRow emite un edit por campo y la celda se actualiza", () => {
+    const ref = React.createRef<DataGridHandle<Line>>();
+    const onChange = vi.fn();
+    render(<DataGrid ref={ref} columns={lineColumns} defaultValue={lineRows} getRowId={lineId} onChange={onChange} />);
+    act(() => ref.current?.patchRow("r-2", { policy: "Nuevo" }));
+    expect(policyInput(1)).toHaveValue("Nuevo");
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0]![1]).toEqual({ type: "edit", rowId: "r-2", field: "policy", prev: "Bravo", next: "Nuevo" });
+    expect(onChange.mock.calls[0]![0].dirtyIds).toEqual(["r-2"]);
+  });
+
+  it("removeRow quita la fila, la reporta en removedIds y emite remove", () => {
+    const ref = React.createRef<DataGridHandle<Line>>();
+    const onChange = vi.fn();
+    render(<DataGrid ref={ref} columns={lineColumns} defaultValue={lineRows} getRowId={lineId} onChange={onChange} />);
+    act(() => ref.current?.removeRow("r-2"));
+    expect(bodyRows()).toHaveLength(2);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0]![1]).toEqual({ type: "remove", rowId: "r-2", field: null, prev: lineRows[1], next: undefined });
+    expect(ref.current?.getData()).toMatchObject({ removedIds: ["r-2"], addedIds: [], dirtyIds: [] });
+    act(() => ref.current?.removeRow("no-existe"));
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("removeRow descarta los errores de la fila quitada", async () => {
+    const user = userEvent.setup();
+    const ref = React.createRef<DataGridHandle<Line>>();
+    render(<DataGrid ref={ref} columns={requiredColumns} defaultValue={lineRows} getRowId={lineId} />);
+    await user.clear(policyInput(0));
+    await user.tab();
+    expect(ref.current?.getData().isValid).toBe(false);
+    act(() => ref.current?.removeRow("r-1"));
+    expect(ref.current?.getData()).toMatchObject({ errors: {}, isValid: true });
+  });
+
+  it("removeRow('r-1') conserva el borrador y el foco de una celda de r-2 (Review Focus 9)", async () => {
+    const user = userEvent.setup();
+    const ref = React.createRef<DataGridHandle<Line>>();
+    render(<DataGrid ref={ref} columns={lineColumns} defaultValue={lineRows} getRowId={lineId} />);
+    await retype(user, policyInput(1), "Borrador");
+    act(() => ref.current?.removeRow("r-1"));
+    expect(policyInput(0)).toHaveValue("Borrador");
+    expect(policyInput(0)).toHaveFocus();
+  });
+
+  it("addRow con 10 filas y pageSize 10 salta a la página 2 y enfoca la primera celda editable", () => {
+    const ref = React.createRef<DataGridHandle<Line>>();
+    const onChange = vi.fn();
+    render(<DataGrid ref={ref} columns={lineColumns} defaultValue={manyRows(10)} getRowId={lineId} pagination={{ pageSize: 10 }} onChange={onChange} />);
+    expect(screen.getByText("Página 1 de 1")).toBeInTheDocument();
+    act(() => ref.current?.addRow({ id: "n-1", policy: "Nueva", collectedAmount: 1 }));
+    expect(screen.getByText("Página 2 de 2")).toBeInTheDocument();
+    expect(bodyRows()).toHaveLength(1);
+    expect(policyInput(0)).toHaveValue("Nueva");
+    expect(policyInput(0)).toHaveFocus();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0]![1]).toEqual({ type: "add", rowId: "n-1", field: null, prev: undefined, next: { id: "n-1", policy: "Nueva", collectedAmount: 1 } });
+    expect(ref.current?.getData().addedIds).toEqual(["n-1"]);
+  });
+
+  it("addRow con un id existente avisa y no emite onChange", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    onTestFinished(() => warn.mockRestore());
+    const ref = React.createRef<DataGridHandle<Line>>();
+    const onChange = vi.fn();
+    render(<DataGrid ref={ref} columns={lineColumns} defaultValue={lineRows} getRowId={lineId} onChange={onChange} />);
+    act(() => ref.current?.addRow({ id: "r-1", policy: "Otra", collectedAmount: 0 }));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("r-1"));
+    expect(ref.current?.getData()).toMatchObject({ addedIds: [], dirtyIds: [] });
+    expect(policyInput(0)).toHaveValue("Pérez");
+  });
+
+  it("addRow() sin fila llama a onAddRow y sin onAddRow avisa", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    onTestFinished(() => warn.mockRestore());
+    const ref = React.createRef<DataGridHandle<Line>>();
+    const onAddRow = vi.fn();
+    const { rerender } = render(<DataGrid ref={ref} columns={lineColumns} defaultValue={lineRows} getRowId={lineId} />);
+    act(() => ref.current?.addRow());
+    expect(warn).toHaveBeenCalledTimes(1);
+    rerender(<DataGrid ref={ref} columns={lineColumns} defaultValue={lineRows} getRowId={lineId} onAddRow={onAddRow} />);
+    act(() => ref.current?.addRow());
+    expect(onAddRow).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("addRow cuya fila oculta un filtro activo avisa y no limpia el filtro ni cambia de página", async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    onTestFinished(() => warn.mockRestore());
+    const ref = React.createRef<DataGridHandle<Line>>();
+    render(<DataGrid ref={ref} columns={lineColumns} defaultValue={lineRows} getRowId={lineId} />);
+    await applyFilter(user, "Póliza", "Alfa");
+    expect(bodyRows()).toHaveLength(1);
+    act(() => ref.current?.addRow({ id: "n-1", policy: "Nueva", collectedAmount: 1 }));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("n-1"));
+    expect(bodyRows()).toHaveLength(1);
+    expect(screen.getByText("Página 1 de 1")).toBeInTheDocument();
+    expect(filterButton("Póliza")).toHaveAccessibleName("Filtro activo en Póliza");
+    expect(ref.current?.getData().addedIds).toEqual(["n-1"]);
+  });
+
+  it("focusCell sobre una fila oculta por un filtro avisa, sin cambio de página y con el filtro intacto", async () => {
+    const user = userEvent.setup();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    onTestFinished(() => warn.mockRestore());
+    const ref = React.createRef<DataGridHandle<Line>>();
+    render(<DataGrid ref={ref} columns={lineColumns} defaultValue={manyRows(25)} getRowId={lineId} pagination={{ pageSize: 10 }} />);
+    await applyFilter(user, "Póliza", "P1", "startsWith");
+    expect(screen.getByText("Página 1 de 2")).toBeInTheDocument();
+    const before = bodyRows().length;
+    (document.activeElement as HTMLElement | null)?.blur();
+    act(() => ref.current?.focusCell("r-5", "policy"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("r-5"));
+    expect(screen.getByText("Página 1 de 2")).toBeInTheDocument();
+    expect(bodyRows()).toHaveLength(before);
+    expect(filterButton("Póliza")).toHaveAccessibleName("Filtro activo en Póliza");
+    expect(document.body).toHaveFocus();
+  });
+
+  it("focusCell('r-15', 'dueDate') desde la página 1 cambia a la página 2 y enfoca la celda", () => {
+    const ref = React.createRef<DataGridHandle<Line>>();
+    const dated: DataGridColumn<Line>[] = [lineColumns[0]!, { field: "dueDate", header: "Vencimiento", type: "date", editable: true }];
+    render(<DataGrid ref={ref} columns={dated} defaultValue={manyRows(15)} getRowId={lineId} pagination={{ pageSize: 10 }} />);
+    expect(screen.getByText("Página 1 de 2")).toBeInTheDocument();
+    act(() => ref.current?.focusCell("r-15", "dueDate"));
+    expect(screen.getByText("Página 2 de 2")).toBeInTheDocument();
+    const cell = cellOf("r-15", "dueDate")!;
+    expect(cell).toBeDefined();
+    expect(cell.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(cell);
+  });
+
+  it("validate() pinta los errores de todas las celdas y devuelve false", () => {
+    const ref = React.createRef<DataGridHandle<Line>>();
+    const onChange = vi.fn();
+    render(<DataGrid ref={ref} columns={requiredColumns} defaultValue={[{ id: "r-1", policy: null, collectedAmount: 1 }, ...lineRows.slice(1)]} getRowId={lineId} onChange={onChange} />);
+    expect(ref.current?.getData().isValid).toBe(true);
+    let valid = true;
+    act(() => { valid = ref.current!.validate(); });
+    expect(valid).toBe(false);
+    expect(cellOf("r-1", "policy")).toHaveAttribute("data-invalid");
+    expect(bodyRows()[0]).toHaveAttribute("data-invalid");
+    expect(ref.current?.getData().errors["r-1"]?.policy).toBe("Requerido");
+    expect(ref.current?.getData().isValid).toBe(false);
+    expect(onChange).not.toHaveBeenCalled();
+    act(() => ref.current?.patchRow("r-1", { policy: "Listo" }));
+    act(() => { valid = ref.current!.validate(); });
+    expect(valid).toBe(true);
+    expect(cellOf("r-1", "policy")).not.toHaveAttribute("data-invalid");
+  });
+
+  it("un padre controlado con setRows(data.rows) emite una vez por commit y reenviar un array equivalente no emite", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    function Parent({ copy }: { copy: number }) {
+      const [current, setCurrent] = React.useState(lineRows);
+      const shown = copy > 0 ? current.map(row => ({ ...row })) : current;
+      return <DataGrid columns={lineColumns} value={shown} getRowId={lineId} onChange={(data, change) => { onChange(data, change); setCurrent(data.rows); }} />;
+    }
+    const { rerender } = render(<Parent copy={0} />);
+    await retype(user, policyInput(0), "Editada");
+    await user.tab();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(policyInput(0)).toHaveValue("Editada");
+    rerender(<Parent copy={1} />);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(policyInput(0)).toHaveValue("Editada");
+  });
+
+  it("column.onCommit puede llamar a grid.patchRow para recalcular el neto", async () => {
+    const user = userEvent.setup();
+    const ref = React.createRef<DataGridHandle<Line>>();
+    const onChange = vi.fn();
+    const withNet: DataGridColumn<Line>[] = [
+      { field: "collectedAmount", header: "Imp. cobrado", type: "currency", editable: true, onCommit: ({ row, value, grid }) => grid.patchRow(row.id, { net: (value as number) * 0.9 }) },
+      { field: "net", header: "Neto", type: "currency" },
+    ];
+    render(<DataGrid ref={ref} columns={withNet} defaultValue={lineRows} getRowId={lineId} onChange={onChange} />);
+    await retype(user, amountInput(1), "100");
+    await user.tab();
+    const row = ref.current!.getData().rows[1]!;
+    expect(row).toMatchObject({ id: "r-2", collectedAmount: 100 });
+    expect(row.net).toBeCloseTo(90);
+    expect(ref.current?.getData().dirtyIds).toEqual(["r-2"]);
+    expect(onChange.mock.lastCall![0].rows[1]).toEqual(row);
+    expect(within(bodyRows()[1]!).getByText("$90.00")).toBeInTheDocument();
+  });
+
+  it("muestra el botón Agregar solo con onAddRow y sin readOnly", async () => {
+    const user = userEvent.setup();
+    const onAddRow = vi.fn();
+    const { rerender } = render(<DataGrid columns={lineColumns} defaultValue={lineRows} getRowId={lineId} />);
+    expect(screen.queryByRole("button", { name: "Agregar" })).not.toBeInTheDocument();
+    rerender(<DataGrid columns={lineColumns} defaultValue={lineRows} getRowId={lineId} onAddRow={onAddRow} />);
+    await user.click(screen.getByRole("button", { name: "Agregar" }));
+    expect(onAddRow).toHaveBeenCalledTimes(1);
+    rerender(<DataGrid columns={lineColumns} defaultValue={lineRows} getRowId={lineId} onAddRow={onAddRow} readOnly />);
+    expect(screen.queryByRole("button", { name: "Agregar" })).not.toBeInTheDocument();
+    rerender(<DataGrid columns={lineColumns} defaultValue={lineRows} getRowId={lineId} onAddRow={onAddRow} messages={{ addRow: "Nueva línea" }} columnToggler={false} />);
+    expect(screen.getByRole("button", { name: "Nueva línea" })).toBeInTheDocument();
+  });
+
+  it("un value externo revalida lo que ya muestra un error y no valida el resto", async () => {
+    const user = userEvent.setup();
+    const ref = React.createRef<DataGridHandle<Line>>();
+    const grid = (value: Line[]) => <DataGrid ref={ref} columns={requiredColumns} value={value} getRowId={lineId} />;
+    const { rerender } = render(grid(lineRows));
+    await user.clear(policyInput(0));
+    await user.tab();
+    expect(cellOf("r-1", "policy")).toHaveAttribute("data-invalid");
+    expect(ref.current?.getData().isValid).toBe(false);
+    const current = ref.current!.getData().rows;
+    rerender(grid(current.map(row => row.id === "r-1" ? { ...row, policy: "Rellenada" } : row.id === "r-2" ? { ...row, policy: "" } : row)));
+    expect(policyInput(0)).toHaveValue("Rellenada");
+    expect(cellOf("r-1", "policy")).not.toHaveAttribute("data-invalid");
+    expect(bodyRows()[0]).not.toHaveAttribute("data-invalid");
+    expect(cellOf("r-2", "policy")).not.toHaveAttribute("data-invalid");
+    expect(ref.current?.getData()).toMatchObject({ errors: {}, isValid: true });
+  });
+
+  it("patchRow que rellena una celda con error la revalida", async () => {
+    const user = userEvent.setup();
+    const ref = React.createRef<DataGridHandle<Line>>();
+    render(<DataGrid ref={ref} columns={requiredColumns} defaultValue={lineRows} getRowId={lineId} />);
+    await user.clear(policyInput(0));
+    await user.tab();
+    expect(cellOf("r-1", "policy")).toHaveAttribute("data-invalid");
+    act(() => ref.current?.patchRow("r-1", { policy: "Rellenada" }));
+    expect(cellOf("r-1", "policy")).not.toHaveAttribute("data-invalid");
+    expect(ref.current?.getData()).toMatchObject({ errors: {}, isValid: true });
+  });
+
+  it("confirmar el mismo valor revalida una celda que ya muestra un error", async () => {
+    const user = userEvent.setup();
+    const ref = React.createRef<DataGridHandle<Line>>();
+    const crossField: DataGridColumn<Line>[] = [{ ...lineColumns[0]!, validate: (_value, row) => row.collectedAmount === 0 ? "No cero" : null }, lineColumns[1]!];
+    render(<DataGrid ref={ref} columns={crossField} defaultValue={[{ id: "r-1", policy: "Pérez", collectedAmount: 0 }]} getRowId={lineId} />);
+    await retype(user, policyInput(0), "Nuevo");
+    await user.tab();
+    expect(cellOf("r-1", "policy")).toHaveAttribute("data-invalid");
+    act(() => ref.current?.patchRow("r-1", { collectedAmount: 5 }));
+    expect(cellOf("r-1", "policy")).toHaveAttribute("data-invalid");
+    await retype(user, policyInput(0), "Nuevo");
+    await user.tab();
+    expect(cellOf("r-1", "policy")).not.toHaveAttribute("data-invalid");
+    expect(ref.current?.getData().isValid).toBe(true);
+  });
+
+  it("addRow sobre la tabla vacía bloquea la adopción de la primera carga asíncrona", () => {
+    const ref = React.createRef<DataGridHandle<Line>>();
+    const onChange = vi.fn();
+    const grid = (value: Line[]) => <DataGrid ref={ref} columns={lineColumns} value={value} getRowId={lineId} onChange={onChange} />;
+    const added: Line = { id: "n-1", policy: "Nueva", collectedAmount: 1 };
+    const { rerender } = render(grid([]));
+    act(() => ref.current?.addRow(added));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    rerender(grid([added, ...lineRows]));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(ref.current?.getData()).toMatchObject({ addedIds: ["n-1", "r-1", "r-2", "r-3"], dirtyIds: [], removedIds: [] });
+  });
+
+  it("un padre controlado con await save() y dos commits rápidos no pierde ninguna edición", async () => {
+    const ref = React.createRef<DataGridHandle<Line>>();
+    let calls = 0;
+    function Parent() {
+      const [current, setCurrent] = React.useState(lineRows);
+      return <DataGrid ref={ref} columns={lineColumns} value={current} getRowId={lineId} onChange={async data => {
+        const delay = calls++ === 0 ? 30 : 0;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        setCurrent(data.rows);
+      }} />;
+    }
+    render(<Parent />);
+    act(() => {
+      ref.current?.patchRow("r-1", { policy: "Primera" });
+      ref.current?.patchRow("r-2", { policy: "Segunda" });
+    });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 80)); });
+    expect(policyInput(0)).toHaveValue("Primera");
+    expect(policyInput(1)).toHaveValue("Segunda");
+    expect(ref.current?.getData().dirtyIds).toEqual(["r-1", "r-2"]);
   });
 });

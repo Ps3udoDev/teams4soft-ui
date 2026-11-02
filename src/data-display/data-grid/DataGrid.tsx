@@ -11,7 +11,7 @@ import { gridFeatures, type GridFeatures } from "./table-features";
 import { useGridColumns } from "./use-grid-columns";
 import { useClientLayoutEffect, useGridRows } from "./use-grid-rows";
 import { definition, frozenSide, GridRow, type GridRowView } from "./GridRow";
-import { settleCellFocus, type CellFocusPlan } from "./cells/EditableCell";
+import { focusCellElement, settleCellFocus, type CellFocusPlan } from "./cells/EditableCell";
 import { ReadCellStyleContext } from "./cells/read-cells";
 import { resolveFilterKind } from "./filters/filter-fns";
 import { FilterMenu } from "./filters/FilterMenu";
@@ -30,7 +30,7 @@ function toRowSelection(ids: string[]): RowSelectionState {
 function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.ForwardedRef<DataGridHandle<T>>) {
   const {
     columns, getRowId, value, defaultValue, columnVisibility, onColumnVisibilityChange,
-    onChange, readOnly = false, persistKey, columnToggler = true, selectionMode = "none", selection, onSelectionChange,
+    onChange, onAddRow, readOnly = false, persistKey, columnToggler = true, selectionMode = "none", selection, onSelectionChange,
     pagination, loading = false, toolbar, initialSort, density = "normal", maxHeight,
     emptyState, cellTypes, className, classNames, styles, style, unstyled = false,
   } = props;
@@ -39,7 +39,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   const selectedIds = selection ?? internalSelection;
   const selectionRef = React.useRef(selectedIds);
   selectionRef.current = selectedIds;
-  const { store, rows, errors, revision, getData, reset, patchRow, commitCell } = useGridRows<T>({ value, defaultValue, getRowId, onChange, columns: readOnly ? noColumns : columns, messages, getSelectedIds: () => selectionRef.current });
+  const { store, rows, errors, revision, getData, reset, patchRow, addRow: addStoreRow, removeRow, validate, commitCell } = useGridRows<T>({ value, defaultValue, getRowId, onChange, columns: readOnly ? noColumns : columns, messages, getSelectedIds: () => selectionRef.current });
   const latest = React.useRef(props);
   useClientLayoutEffect(() => { latest.current = props; });
   const warnedIds = React.useRef(new Set<string>());
@@ -100,11 +100,48 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
     setPagination(current => current.pageIndex >= pageCount ? { ...current, pageIndex: pageCount - 1 } : current);
   }, [pageCount]);
 
-  const grid = React.useMemo<DataGridHandle<T>>(() => ({ getData, reset, patchRow }), [getData, reset, patchRow]);
-  React.useImperativeHandle(ref, () => grid, [grid]);
   const radioName = React.useId();
   const contentRef = React.useRef<HTMLDivElement>(null);
   const tableRef = React.useRef<HTMLTableElement>(null);
+  // La página y el foco se resuelven tras el render que ya tiene la fila nueva, sobre las filas filtradas y ordenadas.
+  const jump = React.useRef<{ id: string; field?: string } | undefined>(undefined);
+  const [, setJumpRequest] = React.useState(0);
+  const requestJump = React.useCallback((id: string, field?: string) => {
+    jump.current = { id, field };
+    setJumpRequest(current => current + 1);
+  }, []);
+  const addRow = React.useCallback((row?: T) => {
+    if (row === undefined) {
+      if (latest.current.onAddRow) latest.current.onAddRow();
+      else devWarn("DataGrid: addRow() sin fila requiere la prop onAddRow.");
+      return;
+    }
+    if (addStoreRow(row)) requestJump(latest.current.getRowId(row));
+  }, [addStoreRow, requestJump]);
+  const focusCell = React.useCallback((id: string, field: string) => requestJump(id, field), [requestJump]);
+  const grid = React.useMemo<DataGridHandle<T>>(() => ({ getData, reset, patchRow, addRow, removeRow, validate, focusCell }), [getData, reset, patchRow, addRow, removeRow, validate, focusCell]);
+  React.useImperativeHandle(ref, () => grid, [grid]);
+  useClientLayoutEffect(() => {
+    const target = jump.current;
+    const root = tableRef.current;
+    if (!target || !root) return;
+    const index = table.getPrePaginatedRowModel().rows.findIndex(item => item.id === target.id);
+    if (index < 0) {
+      jump.current = undefined;
+      devWarn(`DataGrid: la fila "${target.id}" no está entre las filas visibles (filtro activo o id inexistente); no se cambia de página ni se enfoca.`);
+      return;
+    }
+    if (pagination !== false) {
+      const pageIndex = Math.floor(index / paginationState.pageSize);
+      if (pageIndex !== paginationState.pageIndex) {
+        setPagination(current => ({ ...current, pageIndex }));
+        return;
+      }
+    }
+    jump.current = undefined;
+    const field = target.field ?? Array.from(root.querySelectorAll<HTMLElement>("td[data-row-id]")).find(cell => cell.dataset.rowId === target.id)?.dataset.field;
+    if (field) focusCellElement(root, target.id, field);
+  });
   // El contador entra en el mismo lote que la confirmación: el efecto ve las filas ya movidas o filtradas,
   // también si la confirmación no cambió nada y no habría otro render.
   const focusPlan = React.useRef<CellFocusPlan | undefined>(undefined);
@@ -196,7 +233,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   return <ReadCellStyleContext.Provider value={unstyled}><TooltipProvider><div data-slot="root" data-density={density} data-loading={loading || undefined} aria-busy={loading || undefined}
     className={cn(!unstyled && "relative font-(family-name:--ui-grid-font) text-ui-foreground", className, classNames?.root)} style={{ ...styles?.root, ...style }}>
     <div ref={contentRef}>
-      <GridToolbar className={classNames?.toolbar} style={styles?.toolbar} unstyled={unstyled} toggler={columnToggler ? <ColumnToggler columns={columns} visibility={visibility} onToggle={(field, visible) => setVisibility(previous => ({ ...previous, [field]: visible }))} messages={messages} className={classNames?.columnToggler} style={styles?.columnToggler} unstyled={unstyled} disabled={loading} /> : undefined}>{toolbar}</GridToolbar>
+      <GridToolbar addLabel={messages.addRow} onAdd={onAddRow && !readOnly ? () => latest.current.onAddRow?.() : undefined} disabled={loading} className={classNames?.toolbar} style={styles?.toolbar} unstyled={unstyled} toggler={columnToggler ? <ColumnToggler columns={columns} visibility={visibility} onToggle={(field, visible) => setVisibility(previous => ({ ...previous, [field]: visible }))} messages={messages} className={classNames?.columnToggler} style={styles?.columnToggler} unstyled={unstyled} disabled={loading} /> : undefined}>{toolbar}</GridToolbar>
       <div className={cn(!unstyled && "overflow-auto")} style={{ maxHeight, overflow: unstyled ? undefined : "auto" }}>
         <table ref={tableRef} data-slot="table" role={editing ? "grid" : undefined} tabIndex={editing ? -1 : undefined} className={cn(!unstyled && "w-full border-separate border-spacing-0 text-sm", classNames?.table)} style={styles?.table}>
           <thead className={cn(!unstyled && "sticky top-0 z-10")}>
@@ -223,7 +260,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
               {visibleColumns.map(column => <td key={column.id} className={cn(!unstyled && "px-3 py-2")} style={cellStyle(column)}><Skeleton unstyled={unstyled} /></td>)}
             </tr>) : displayedRows.length === 0 ? <tr><td colSpan={Math.max(1, visibleColumns.length)} data-slot="empty" className={cn(!unstyled && "p-8 text-center", classNames?.empty)} style={styles?.empty}>
               {hasFilters ? messages.noResults : <>{emptyState?.icon}<div>{emptyState?.title ?? messages.emptyTitle}</div>{emptyState?.hint && <div>{emptyState.hint}</div>}</>}
-            </td></tr> : displayedRows.map(row => <GridRow key={`${row.id}:${row.index}`} row={row} isSelected={row.getIsSelected()} isDirty={dirtyIds.has(row.id)} errorsForRow={errors[row.id]} rowClassName={props.getRowClassName?.(row.original)} columnsKey={columnsKey} presentationKey={presentationKey} columns={columns} cellTypes={cellTypes} view={rowView} />)}
+            </td></tr> : displayedRows.map(row => <GridRow key={row.id} row={row} isSelected={row.getIsSelected()} isDirty={dirtyIds.has(row.id)} errorsForRow={errors[row.id]} rowClassName={props.getRowClassName?.(row.original)} columnsKey={columnsKey} presentationKey={presentationKey} columns={columns} cellTypes={cellTypes} view={rowView} />)}
           </tbody>
         </table>
       </div>

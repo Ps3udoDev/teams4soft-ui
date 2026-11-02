@@ -22,6 +22,13 @@ export type DataGridHandle<T> = {
   getData(): DataGridData<T>;
   reset(rows: T[]): void;
   patchRow(id: string, partial: Partial<T>): void;
+  /** Sin `row` solo es válido con `onAddRow`, que es quien crea la fila. */
+  addRow(row?: T): void;
+  removeRow(id: string): void;
+  /** Pinta los errores de todas las celdas editables y devuelve `isValid`. */
+  validate(): boolean;
+  /** Cambia de página si hace falta y enfoca la celda; no limpia filtros. */
+  focusCell(id: string, field: string): void;
 };
 export type DataGridCellContext<T> = { row: T; value: unknown; rowId: string; grid: DataGridHandle<T> };
 /** `onCommit` escribe el valor de la celda por `rowId`; `editable` indica si la columna admite edición en esta fila. */
@@ -118,6 +125,8 @@ export interface DataGridProps<T> {
   value?: T[];
   defaultValue?: T[];
   onChange?: (data: DataGridData<T>, change: GridChange) => void;
+  /** Botón de la barra y destino de `ref.addRow()` sin argumento: crea la fila quien lo recibe. */
+  onAddRow?: () => void;
   /** `true` fuerza consulta aunque haya columnas editables. */
   readOnly?: boolean;
   columnVisibility?: Record<string, boolean>;

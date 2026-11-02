@@ -1,6 +1,7 @@
 import * as React from "react";
 import { createGridRowsStore, type GridChange, type GridRowsStore } from "./grid-rows-store";
-import { isCellEditable, validateCell } from "./validation";
+import { devWarn } from "../../lib";
+import { isCellEditable, validateCell, validateRows } from "./validation";
 import type { DataGridColumn, DataGridData, DataGridHandle, DataGridMessages } from "./DataGrid.types";
 
 export const useClientLayoutEffect = typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
@@ -36,6 +37,10 @@ export interface GridRowsApi<T> {
   getData: () => DataGridData<T>;
   reset: (rows: T[]) => void;
   patchRow: (id: string, partial: Partial<T>) => void;
+  /** `false` si no se añadió (id ya existente). */
+  addRow: (row: T) => boolean;
+  removeRow: (id: string) => void;
+  validate: () => boolean;
   commitCell: (rowId: string, column: DataGridColumn<T>, value: unknown, grid: DataGridHandle<T>) => void;
 }
 
@@ -57,25 +62,43 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
     setErrorsState(next);
   }, []);
 
+  const revalidate = React.useCallback((rowId: string, column: DataGridColumn<T>) => {
+    const row = store.getRow(rowId);
+    if (row === undefined) return;
+    const message = isCellEditable(column, row) ? validateCell(column, (row as Record<string, unknown>)[column.field], row, latest.current.messages) : null;
+    setErrors(withCellError(errorsRef.current, rowId, column.field, message));
+  }, [store, setErrors]);
+
+  // Un value externo solo revalida lo que ya muestra un error: el resto se valida al confirmar o con validate().
+  const revalidateShown = React.useCallback(() => {
+    for (const [rowId, fields] of Object.entries(errorsRef.current)) {
+      for (const field of Object.keys(fields)) {
+        const column = latest.current.columns.find(item => item.field === field);
+        if (column) revalidate(rowId, column);
+      }
+    }
+  }, [revalidate]);
+
   const lastEmittedRows = React.useRef(value);
+  // Todo array emitido: un padre asíncrono puede devolver uno anterior al último; ya está en el store y se ignora.
+  const emittedRows = React.useRef(new WeakSet<T[]>());
   const seenValue = React.useRef(value);
   // Carga asíncrona: mientras la base esté vacía y no se haya emitido nada, un value nuevo es la base.
   const awaitingFirstLoad = React.useRef((args.value ?? args.defaultValue ?? []).length === 0);
   // Un value nuevo se pinta ya; el store lo adopta justo después, antes de que el navegador pinte.
-  const rows = value !== undefined && value !== seenValue.current && value !== lastEmittedRows.current ? value : snapshot;
+  const rows = value !== undefined && value !== seenValue.current && value !== lastEmittedRows.current && !emittedRows.current.has(value) ? value : snapshot;
   useClientLayoutEffect(() => {
     seenValue.current = value;
-    if (value === undefined || value === lastEmittedRows.current) return;
+    if (value === undefined || value === lastEmittedRows.current || emittedRows.current.has(value)) return;
     lastEmittedRows.current = value;
     if (awaitingFirstLoad.current) {
       awaitingFirstLoad.current = value.length === 0;
       store.reset(value);
-      return;
-    }
-    store.replaceCurrent(value);
+    } else store.replaceCurrent(value);
     const live = Object.fromEntries(Object.entries(errorsRef.current).filter(([id]) => store.getRow(id) !== undefined));
     if (Object.keys(live).length !== Object.keys(errorsRef.current).length) setErrors(live);
-  }, [value, store, setErrors]);
+    revalidateShown();
+  }, [value, store, setErrors, revalidateShown]);
 
   const getData = React.useCallback((): DataGridData<T> => ({
     rows: store.getRows(),
@@ -88,19 +111,16 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
   const emit = React.useCallback((change: GridChange) => {
     awaitingFirstLoad.current = false;
     lastEmittedRows.current = store.getRows();
+    emittedRows.current.add(lastEmittedRows.current);
     latest.current.onChange?.(getData(), change);
   }, [store, getData]);
 
-  const revalidate = React.useCallback((rowId: string, column: DataGridColumn<T>) => {
-    const row = store.getRow(rowId);
-    if (row === undefined) return;
-    const message = isCellEditable(column, row) ? validateCell(column, (row as Record<string, unknown>)[column.field], row, latest.current.messages) : null;
-    setErrors(withCellError(errorsRef.current, rowId, column.field, message));
-  }, [store, setErrors]);
-
   const commitCell = React.useCallback<GridRowsApi<T>["commitCell"]>((rowId, column, next, grid) => {
     const change = store.edit(rowId, column.field, next);
-    if (!change) return;
+    if (!change) {
+      if (errorsRef.current[rowId]?.[column.field] !== undefined) revalidate(rowId, column);
+      return;
+    }
     revalidate(rowId, column);
     column.onCommit?.({ row: store.getRow(rowId)!, value: next, prev: change.prev, grid });
     emit(change);
@@ -114,6 +134,31 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
     changes.forEach(emit);
   }, [store, revalidate, emit]);
 
+  const addRow = React.useCallback((row: T) => {
+    if (store.getRow(latest.current.getRowId(row)) !== undefined) {
+      devWarn(`DataGrid: cannot add a row with an existing id "${latest.current.getRowId(row)}".`);
+      return false;
+    }
+    emit(store.add(row));
+    return true;
+  }, [store, emit]);
+
+  const removeRow = React.useCallback((id: string) => {
+    const change = store.remove(id);
+    if (!change) return;
+    if (errorsRef.current[id]) {
+      const { [id]: _removed, ...others } = errorsRef.current;
+      setErrors(others);
+    }
+    emit(change);
+  }, [store, setErrors, emit]);
+
+  const validate = React.useCallback(() => {
+    const next = validateRows(store.getRows(), latest.current.columns, latest.current.getRowId, latest.current.messages);
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  }, [store, setErrors]);
+
   const reset = React.useCallback((next: T[]) => {
     const change = store.reset(next);
     setErrors({});
@@ -121,5 +166,5 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
     emit(change);
   }, [store, setErrors, emit]);
 
-  return { store, rows, errors, setErrors, emit, revision, getData, reset, patchRow, commitCell };
+  return { store, rows, errors, setErrors, emit, revision, getData, reset, patchRow, addRow, removeRow, validate, commitCell };
 }
