@@ -33,7 +33,7 @@ describe("factorías de columnas", () => {
     ]);
     expect(column).toMatchObject({ field: "__actions", header: "Acciones", type: "custom", sortable: false, filter: false, hideable: false, frozen: "right" });
     const row: Premium = { id: "r-2", policy: "Segunda", amount: 10, dueDate: "2026-10-30", method: 1 };
-    const context: DataGridCellContext<Premium> = { row, value: undefined, rowId: row.id, grid: { getData: () => ({ rows: [row], selectedIds: [] }) } };
+    const context: DataGridCellContext<Premium> = { row, value: undefined, rowId: row.id, grid: { getData: () => ({ rows: [row], selectedIds: [], dirtyIds: [], addedIds: [], removedIds: [], errors: {}, isValid: true }), reset: () => {}, patchRow: () => {}, addRow: () => {}, removeRow: () => {}, validate: () => true, focusCell: () => {} } };
     render(<>{column.render?.(context)}</>);
     expect(screen.queryByRole("button", { name: "Eliminar" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Ver" }));

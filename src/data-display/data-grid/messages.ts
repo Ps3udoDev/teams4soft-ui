@@ -37,4 +37,5 @@ export const dataGridMessagesEs: DataGridMessages = {
   yes: "Sí",
   no: "No",
   addRow: "Agregar",
+  required: "Requerido",
 };

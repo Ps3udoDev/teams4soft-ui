@@ -53,6 +53,18 @@ describe("Dialog", () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
+  it("Escape no cierra si nace dentro de un elemento con borrador pendiente, y sí fuera de él", async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(<Dialog open title="Consulta" onOpenChange={onOpenChange}><div data-draft-dirty="true"><input aria-label="Con borrador" /></div><input aria-label="Sin borrador" /></Dialog>);
+    await user.click(screen.getByRole("textbox", { name: "Con borrador" }));
+    await user.keyboard("{Escape}");
+    expect(onOpenChange).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("textbox", { name: "Sin borrador" }));
+    await user.keyboard("{Escape}");
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it("muestra un LoadingOverlay bloqueante sobre el body", () => {
     render(<Dialog open title="Consulta" loading loadingMessage="Cargando resultados" />);
     expect(screen.getByRole("status")).toHaveAttribute("data-blocking", "true");

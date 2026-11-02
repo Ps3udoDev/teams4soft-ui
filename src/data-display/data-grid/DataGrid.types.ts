@@ -1,4 +1,5 @@
 import type * as React from "react";
+import type { GridChange } from "./grid-rows-store";
 
 export type DataGridColumnType = "text" | "number" | "currency" | "percent" | "date" | "select" | "lookup" | "checkbox" | "radio" | "custom";
 export type DataGridFilterKind = "text" | "select" | "number" | "date";
@@ -8,10 +9,30 @@ export type DataGridSelectionMode = "none" | "single" | "multiple";
 export type DataGridDensity = "compact" | "normal";
 export type DataGridSort = { field: string; direction: "asc" | "desc" };
 export type DataGridPagination = { pageSize?: number; pageSizeOptions?: number[] } | false;
-export type DataGridData<T> = { rows: T[]; selectedIds: string[] };
-export type DataGridHandle<T> = { getData(): DataGridData<T> };
+export type DataGridData<T> = {
+  rows: T[];
+  selectedIds: string[];
+  dirtyIds: string[];
+  addedIds: string[];
+  removedIds: string[];
+  errors: Record<string, Record<string, string>>;
+  isValid: boolean;
+};
+export type DataGridHandle<T> = {
+  getData(): DataGridData<T>;
+  reset(rows: T[]): void;
+  patchRow(id: string, partial: Partial<T>): void;
+  /** Sin `row` solo es válido con `onAddRow`, que es quien crea la fila. */
+  addRow(row?: T): void;
+  removeRow(id: string): void;
+  /** Pinta los errores de todas las celdas editables y devuelve `isValid`. */
+  validate(): boolean;
+  /** Cambia de página si hace falta y enfoca la celda; no limpia filtros. */
+  focusCell(id: string, field: string): void;
+};
 export type DataGridCellContext<T> = { row: T; value: unknown; rowId: string; grid: DataGridHandle<T> };
-export type DataGridCellComponent<T> = React.ComponentType<DataGridCellContext<T> & { column: DataGridColumn<T> }>;
+/** `onCommit` escribe el valor de la celda por `rowId`; `editable` indica si la columna admite edición en esta fila; `error` es su mensaje de validación. */
+export type DataGridCellComponent<T> = React.ComponentType<DataGridCellContext<T> & { column: DataGridColumn<T>; onCommit: (value: unknown) => void; editable: boolean; error?: string }>;
 
 export interface DataGridColumn<T, TOption = unknown> {
   field: keyof T & string;
@@ -36,6 +57,12 @@ export interface DataGridColumn<T, TOption = unknown> {
   getOptionValue?(option: TOption): unknown;
   getOptionLabel?(option: TOption): string;
   render?: (ctx: DataGridCellContext<T>) => React.ReactNode;
+  editable?: boolean | ((row: T) => boolean);
+  /** Props del editor interno. La celda conserva `value`, `onCommit`/`onValueChange` y `aria-label`; `className` y `classNames` se suman, y `onBlur`/`onKeyDown` se componen con la confirmación. */
+  editorProps?: Record<string, unknown>;
+  required?: boolean;
+  validate?: (value: unknown, row: T) => string | null;
+  onCommit?: (ctx: { row: T; value: unknown; prev: unknown; grid: DataGridHandle<T> }) => void;
 }
 
 export interface DataGridClassNames {
@@ -82,6 +109,7 @@ export interface DataGridMessages {
   yes: string;
   no: string;
   addRow: string;
+  required: string;
 }
 
 export type DataGridEmptyState = { icon?: React.ReactNode; title?: React.ReactNode; hint?: React.ReactNode };
@@ -89,8 +117,24 @@ export type DataGridEmptyState = { icon?: React.ReactNode; title?: React.ReactNo
 export interface DataGridProps<T> {
   columns: DataGridColumn<T>[];
   getRowId: (row: T) => string;
+  /**
+   * Filas en modo controlado. Mientras la grilla esté intacta y vacía, el primer `value` no vacío se adopta
+   * como base sin emitir `onChange`: una carga asíncrona (`[]` y luego las filas) empieza con el diff vacío.
+   * Las recargas posteriores se hacen con `ref.reset(rows)`.
+   * Un arreglo antiguo que la grilla ya emitió se ignora; para revertir, usar `ref.reset(rows)`.
+   * Un padre que ignora `onChange` conserva la edición hasta que `value` cambie de identidad.
+   * `columns` y `cellTypes` deben ser estables (constante de módulo o `useMemo`), o se re-renderizan todas las filas.
+   */
   value?: T[];
   defaultValue?: T[];
+  onChange?: (data: DataGridData<T>, change: GridChange) => void;
+  /**
+   * Botón de la barra y destino de `ref.addRow()` sin argumento: crea la fila quien lo recibe, con `ref.addRow(row)`
+   * (salta a su página y la enfoca) o añadiéndola a `value`. En ambos casos cuenta en `addedIds`.
+   */
+  onAddRow?: () => void;
+  /** `true` fuerza consulta aunque haya columnas editables. */
+  readOnly?: boolean;
   columnVisibility?: Record<string, boolean>;
   onColumnVisibilityChange?: (visibility: Record<string, boolean>) => void;
   columnToggler?: boolean;

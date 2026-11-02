@@ -26,4 +26,6 @@
   --ui-grid-font: inherit;
   --ui-grid-row-height: 2.5rem;
   --ui-grid-row-height-compact: 2rem;
+  --ui-grid-editor-height: 2rem;
+  --ui-grid-editor-height-compact: 1.75rem;
 }

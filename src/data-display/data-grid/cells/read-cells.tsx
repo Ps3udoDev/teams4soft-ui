@@ -17,7 +17,7 @@ const CheckboxCell: DataGridCellComponent<unknown> = ({ column, value, row }) =>
   if (value == null || (typeof value === "number" && !Number.isFinite(value))) return null;
   return <CheckboxField checked={value === true} disabled label={column.header} classNames={{ label: "sr-only" }} unstyled={unstyled} />;
 };
-const CustomCell: DataGridCellComponent<unknown> = ({ column, ...context }) => <>{column.render?.(context) ?? column.format?.(context.value, context.row)}</>;
+const CustomCell: DataGridCellComponent<unknown> = ({ column, row, value, rowId, grid }) => <>{column.render?.({ row, value, rowId, grid }) ?? column.format?.(value, row)}</>;
 
 // Componentes estables: el registro no crea tipos nuevos al renderizar la tabla.
 export const readCellRegistry: Record<DataGridColumnType, DataGridCellComponent<any>> = {
