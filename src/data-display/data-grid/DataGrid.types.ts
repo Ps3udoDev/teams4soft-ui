@@ -2,6 +2,8 @@ import type * as React from "react";
 
 export type DataGridColumnType = "text" | "number" | "currency" | "percent" | "date" | "select" | "lookup" | "checkbox" | "radio" | "custom";
 export type DataGridFilterKind = "text" | "select" | "number" | "date";
+export type DataGridFilterOperator = "contains" | "notContains" | "startsWith" | "endsWith" | "equals" | "notEquals" | "gt" | "gte" | "lt" | "lte" | "before" | "after";
+export type DataGridFilterValue = { operator: DataGridFilterOperator; value: unknown };
 export type DataGridSelectionMode = "none" | "single" | "multiple";
 export type DataGridDensity = "compact" | "normal";
 export type DataGridSort = { field: string; direction: "asc" | "desc" };
@@ -25,6 +27,8 @@ export interface DataGridColumn<T, TOption = unknown> {
   hideable?: boolean;
   sortable?: boolean;
   filter?: boolean | DataGridFilterKind;
+  /** Limita las condiciones del menú de filtro; la primera es la inicial y con una sola se oculta el selector. */
+  filterOperators?: readonly DataGridFilterOperator[];
   format?: (value: unknown, row: T) => React.ReactNode;
   fractionDigits?: number;
   currencySymbol?: string;
@@ -40,8 +44,8 @@ export interface DataGridClassNames {
   table: string;
   headerRow: string;
   headerCell: string;
-  filterRow: string;
-  filterCell: string;
+  filterButton: string;
+  filterMenu: string;
   body: string;
   row: string;
   cell: string;
@@ -59,6 +63,11 @@ export interface DataGridMessages {
   noResults: string;
   columns: string;
   filterLabel: (header: string) => string;
+  filterActiveLabel: (header: string) => string;
+  filterOperator: string;
+  filterOperators: Record<DataGridFilterOperator, string>;
+  filterApply: string;
+  filterClear: string;
   sortLabel: (header: string) => string;
   selectAll: string;
   selectRow: string;

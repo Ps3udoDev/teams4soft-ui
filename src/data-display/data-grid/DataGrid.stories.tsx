@@ -47,7 +47,7 @@ function SelectionExample() {
 export const Seleccion: Story = { render: () => <SelectionExample /> };
 export const Filtros: Story = {
   args: { pagination: false },
-  parameters: { docs: { description: { story: "Busca «perez» para comprobar la coincidencia sin diacríticos. Estado filtra por el valor de la opción, mostrando su etiqueta." } } },
+  parameters: { docs: { description: { story: "Pulsa el icono de cada encabezado para elegir la condición y el valor. Busca «perez» para comprobar la coincidencia sin diacríticos. Estado filtra por el valor de la opción, mostrando su etiqueta." } } },
 };
 
 function LoadingExample({ initial }: { initial: boolean }) {

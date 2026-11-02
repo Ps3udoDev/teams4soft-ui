@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DataGridColumn, DataGridColumnType } from "../DataGrid.types";
-import { matchesFilter, normalizeText, resolveFilterKind } from "./filter-fns";
+import { filterOperatorsFor, matchesFilter, normalizeText, resolveFilterKind } from "./filter-fns";
 
 type Row = { x: unknown };
 const col = (props: Partial<DataGridColumn<Row>> = {}): DataGridColumn<Row> => ({ field: "x", header: "X", ...props });
@@ -17,6 +17,49 @@ describe("resolveFilterKind", () => {
     expect(resolveFilterKind(col({ filter: false }))).toBeNull();
     expect(resolveFilterKind(col({ type: "number", filter: "select" }))).toBe("select");
     expect(resolveFilterKind(col({ type: "status" }))).toBeNull();
+  });
+});
+
+describe("filterOperatorsFor", () => {
+  it("define las condiciones según el tipo de filtro", () => {
+    expect(filterOperatorsFor(col())).toEqual(["contains", "notContains", "startsWith", "endsWith", "equals", "notEquals"]);
+    expect(filterOperatorsFor(col({ type: "number" }))).toEqual(["equals", "notEquals", "gt", "gte", "lt", "lte"]);
+    expect(filterOperatorsFor(col({ type: "date" }))).toEqual(["equals", "notEquals", "before", "after"]);
+    expect(filterOperatorsFor(col({ type: "select" }))).toEqual(["equals"]);
+  });
+  it("respeta filterOperators e ignora una lista vacía", () => {
+    expect(filterOperatorsFor(col({ filterOperators: ["endsWith"] }))).toEqual(["endsWith"]);
+    expect(filterOperatorsFor(col({ filterOperators: [] }))[0]).toBe("contains");
+  });
+});
+
+describe("matchesFilter con condición", () => {
+  it("aplica condiciones de texto sobre el texto normalizado", () => {
+    expect(matchesFilter(col(), "Pérez López", "PEREZ", "startsWith")).toBe(true);
+    expect(matchesFilter(col(), "Pérez López", "lopez", "startsWith")).toBe(false);
+    expect(matchesFilter(col(), "Pérez López", "LÓPEZ", "endsWith")).toBe(true);
+    expect(matchesFilter(col(), "Pérez", "perez", "equals")).toBe(true);
+    expect(matchesFilter(col(), "Pérez López", "perez", "equals")).toBe(false);
+    expect(matchesFilter(col(), "Pérez", "perez", "notEquals")).toBe(false);
+    expect(matchesFilter(col(), "Pérez", "lopez", "notContains")).toBe(true);
+    expect(matchesFilter(col(), null, "lopez", "notContains")).toBe(true);
+  });
+  it("compara números; una celda vacía solo cumple distinto de", () => {
+    expect(matchesFilter(col({ type: "number" }), 10, 5, "gt")).toBe(true);
+    expect(matchesFilter(col({ type: "number" }), 5, 5, "gte")).toBe(true);
+    expect(matchesFilter(col({ type: "number" }), 5, 5, "lt")).toBe(false);
+    expect(matchesFilter(col({ type: "number" }), 5, 5, "lte")).toBe(true);
+    expect(matchesFilter(col({ type: "number" }), 5, 6, "notEquals")).toBe(true);
+    expect(matchesFilter(col({ type: "number" }), null, 6, "notEquals")).toBe(true);
+    expect(matchesFilter(col({ type: "number" }), null, 6, "gt")).toBe(false);
+  });
+  it("compara fechas ISO; una celda inválida solo cumple distinto de", () => {
+    expect(matchesFilter(col({ type: "date" }), "2026-10-01", "2026-10-15", "before")).toBe(true);
+    expect(matchesFilter(col({ type: "date" }), "2026-10-15", "2026-10-15", "before")).toBe(false);
+    expect(matchesFilter(col({ type: "date" }), "2026-10-30", "2026-10-15", "after")).toBe(true);
+    expect(matchesFilter(col({ type: "date" }), "2026-10-30", "2026-10-15", "notEquals")).toBe(true);
+    expect(matchesFilter(col({ type: "date" }), null, "2026-10-15", "after")).toBe(false);
+    expect(matchesFilter(col({ type: "date" }), null, "2026-10-15", "notEquals")).toBe(true);
   });
 });
 

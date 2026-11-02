@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { ColumnDef, ColumnVisibilityState, RowData, Updater } from "@tanstack/react-table";
-import type { DataGridCellComponent, DataGridColumn, DataGridMessages } from "./DataGrid.types";
+import type { DataGridCellComponent, DataGridColumn, DataGridFilterValue, DataGridMessages } from "./DataGrid.types";
 import type { GridFeatures } from "./table-features";
 import { matchesFilter, resolveFilterKind } from "./filters/filter-fns";
 import { buildPersistStorageKey, readPersistedVisibility, writePersistedVisibility } from "./persist";
@@ -65,7 +65,7 @@ export function useGridColumns<T extends RowData>({ columns, columnVisibility, o
     enableHiding: column.hideable ?? true,
     enableResizing: column.resizable ?? false,
     enableColumnFilter: resolveFilterKind(column) !== null,
-    filterFn: (row, _columnId, filterValue) => matchesFilter(column, row.original[column.field], filterValue),
+    filterFn: (row, _columnId, filter: DataGridFilterValue) => matchesFilter(column, row.original[column.field], filter.value, filter.operator),
     size: typeof column.width === "number" ? column.width : undefined,
     minSize: column.minWidth,
     meta: { column },
