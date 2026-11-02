@@ -163,6 +163,109 @@ describe("DataGrid: celda lookup, foco y modal", () => {
     await waitFor(() => expect(inputs()[1]).toHaveValue(""));
   });
 
+  describe("modal cancelado en una fila que no es la última", () => {
+    const resolved: Row[] = [{ id: "r-1", ramo: 10, note: "a" }, { id: "r-2", ramo: 30, note: "b" }];
+    const cancelAndRevert = async (user: ReturnType<typeof userEvent.setup>, onChange: ReturnType<typeof vi.fn>) => {
+      await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(queryDialog()).not.toBeInTheDocument());
+      await waitFor(() => expect(inputs()[0]).toHaveFocus());
+      expect(inputs()[1]).not.toHaveFocus();
+      expect(inputs()[0]).toHaveValue("Ramo");
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(inputs()[0]).toHaveValue("Ramo 1"));
+      expect(onChange).not.toHaveBeenCalled();
+      expect(inputs()[0]).toHaveFocus();
+    };
+
+    it("búsqueda iniciada con Enter: el foco vuelve a su celda y otro Escape revierte", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(<DataGrid columns={[column({ loadOptions: makeLoader() })]} defaultValue={resolved} getRowId={rowId} onChange={onChange} />);
+      await waitFor(() => expect(inputs()[0]).toHaveValue("Ramo 1"));
+      await user.type(inputs()[0]!, "{Backspace}{Backspace}");
+      await user.keyboard("{Enter}");
+      await cancelAndRevert(user, onChange);
+    });
+
+    it("búsqueda iniciada con Tab: el foco vuelve a su celda y otro Escape revierte", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(<DataGrid columns={[column({ loadOptions: makeLoader() })]} defaultValue={resolved} getRowId={rowId} onChange={onChange} />);
+      await waitFor(() => expect(inputs()[0]).toHaveValue("Ramo 1"));
+      await user.type(inputs()[0]!, "{Backspace}{Backspace}");
+      await user.tab();
+      await cancelAndRevert(user, onChange);
+    });
+
+    it("búsqueda iniciada con Tab que ya salió de la celda antes de responder: igual", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      const gate = deferred<Opt[]>();
+      const loadOptions = vi.fn((query: string) => query === "Ramo" ? gate.promise : Promise.resolve(search(query)));
+      render(<DataGrid columns={[column({ loadOptions })]} defaultValue={resolved} getRowId={rowId} onChange={onChange} />);
+      await waitFor(() => expect(inputs()[0]).toHaveValue("Ramo 1"));
+      await user.type(inputs()[0]!, "{Backspace}{Backspace}");
+      await user.tab();
+      await user.tab();
+      expect(inputs()[1]).toHaveFocus();
+      await act(async () => { gate.resolve(search("Ramo")); });
+      await cancelAndRevert(user, onChange);
+    });
+  });
+
+  describe("Enter sobre texto no escrito", () => {
+    const walk: Row[] = [{ id: "r-1", ramo: 999, note: "a" }, { id: "r-2", ramo: 30, note: "b" }, { id: "r-3", ramo: null, note: "c" }];
+
+    it("recorrer la columna con Enter no busca, no emite, no abre nada y conserva los valores", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      const loadOptions = makeLoader();
+      render(<DataGrid columns={[column({ loadOptions })]} defaultValue={walk} getRowId={rowId} onChange={onChange} />);
+      await waitFor(() => expect(inputs()[1]).toHaveValue("Otro"));
+      expect(inputs()[0]).toHaveValue("999");
+      act(() => inputs()[0]!.focus());
+      await user.keyboard("{Enter}");
+      expect(inputs()[1]).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(inputs()[2]).toHaveFocus();
+      await flush();
+      expect(queriesOf(loadOptions)).toEqual([""]);
+      expect(onChange).not.toHaveBeenCalled();
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+      expect(inputs().map(input => input.value)).toEqual(["999", "Otro", ""]);
+    });
+
+    it("también con el catálogo aún pendiente sobre un id sin resolver", async () => {
+      const user = userEvent.setup();
+      const gate = deferred<Opt[]>();
+      const loadOptions = vi.fn((_query: string) => gate.promise);
+      const onChange = vi.fn();
+      render(<DataGrid columns={[column({ loadOptions })]} defaultValue={stored} getRowId={rowId} onChange={onChange} />);
+      act(() => inputs()[0]!.focus());
+      await user.keyboard("{Enter}");
+      expect(inputs()[1]).toHaveFocus();
+      await flush();
+      expect(queriesOf(loadOptions)).toEqual([""]);
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("lo escrito con Enter sí busca y escribe", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      const loadOptions = makeLoader();
+      render(<DataGrid columns={[column({ loadOptions })]} defaultValue={walk} getRowId={rowId} onChange={onChange} />);
+      await waitFor(() => expect(inputs()[1]).toHaveValue("Otro"));
+      await user.clear(inputs()[2]!);
+      await user.type(inputs()[2]!, "Ramo 2");
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+      expect(countOf(loadOptions, "Ramo 2")).toBe(1);
+      expect(lastRows(onChange)[2]!.ramo).toBe(20);
+    });
+  });
+
   it("Escape sin modal revierte lo escrito a la etiqueta confirmada", async () => {
     const user = userEvent.setup();
     render(<DataGrid columns={[column({ loadOptions: makeLoader() })]} defaultValue={stored} getRowId={rowId} />);

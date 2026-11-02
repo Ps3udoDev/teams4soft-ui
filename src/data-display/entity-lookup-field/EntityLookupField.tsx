@@ -232,13 +232,12 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
     wasOpenRef.current = open;
   }, [open, closeController]);
 
-  // Re-syncs only when the selected id changes, so a re-render with a fresh object of the same record never touches typed text.
+  // Re-syncs when the selected id changes, or when the same record's label changes while the input still shows the old one, so typed text is never touched.
   const previousRef = React.useRef({ id: selectedId, label: selectedLabel ?? "" });
   React.useEffect(() => {
     const previous = previousRef.current;
     previousRef.current = { id: selectedId, label: selectedLabel ?? "" };
     if (previous.id === selectedId) {
-      // A label that arrives late for the same record replaces the old one, but only if that is what the input still shows.
       if (previous.label !== (selectedLabel ?? "") && textRef.current === previous.label) setText(selectedLabel ?? "");
       return;
     }
@@ -263,7 +262,7 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
       event.preventDefault();
       if (inert) return;
       if (onTriggerClick) onTriggerClick();
-      else if (textRef.current.trim() !== "") void runLookup(textRef.current.trim(), "commit");
+      else if (latest.current.searchOnEnter === "dirty" ? isDirtyText() : textRef.current.trim() !== "") void runLookup(textRef.current.trim(), "commit");
     } else if (event.key === "Tab" && !inert && !onTriggerClick && isDirtyText()) {
       void runLookup(textRef.current.trim(), "commit");
     }

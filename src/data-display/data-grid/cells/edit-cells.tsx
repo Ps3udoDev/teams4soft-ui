@@ -17,6 +17,8 @@ export interface EditCellProps<T> {
   onCommit: (value: unknown) => void;
   /** Los editores con popover avisan de su apertura: con uno abierto, Escape solo lo cierra. */
   onPopoverOpenChange?: (open: boolean) => void;
+  /** El editor registra una búsqueda en curso: lo escrito sigue siendo revertible aunque el foco salga de la celda. */
+  trackSearch?: <V>(search: Promise<V>) => Promise<V>;
   /** El editor avisa de un error propio (carga remota) para que la celda lo muestre en su tooltip. */
   onLoadError?: (message: string | undefined) => void;
   label: string;
@@ -117,7 +119,7 @@ function stopFromPortal(event: React.SyntheticEvent<HTMLDivElement>) {
   if (!event.currentTarget.contains(event.target as Node)) event.stopPropagation();
 }
 
-function LookupEditor<T>({ column, value, onCommit, onPopoverOpenChange, onLoadError, label, disabled, invalid, error, unstyled, className }: EditCellProps<T>) {
+function LookupEditor<T>({ column, value, onCommit, onPopoverOpenChange, trackSearch, onLoadError, label, disabled, invalid, error, unstyled, className }: EditCellProps<T>) {
   const lookup = useRemoteLookup<T, any>(column, value);
   const [searchFailed, setSearchFailed] = React.useState(false);
   const reportedError = searchFailed ? lookup.loadOptionsError : undefined;
@@ -130,11 +132,15 @@ function LookupEditor<T>({ column, value, onCommit, onPopoverOpenChange, onLoadE
     [lookupColumns, header, getOptionLabel],
   );
   return <div style={{ display: "contents" }} onFocus={stopFromPortal} onPointerMove={stopFromPortal}>
-    <EntityLookupField<any> resolveOnBlur disabled={disabled} invalid={invalid || searchFailed} unstyled={unstyled} columns={columns}
+    <EntityLookupField<any> resolveOnBlur searchOnEnter="dirty" disabled={disabled} invalid={invalid || searchFailed} unstyled={unstyled} columns={columns}
       {...withEditorProps(column, { className, classNames: { root: cn(!unstyled && "min-w-40"), trigger: cn(!unstyled && "h-(--ui-control-height) w-(--ui-control-height) shrink-0") } })}
       aria-label={label} aria-describedby={linked.describedBy}
       selectedItem={lookup.selectedItem} getItemId={lookup.getItemId} getItemLabel={lookup.getItemLabel}
-      search={query => { setSearchFailed(false); return lookup.search(query); }}
+      search={query => {
+        setSearchFailed(false);
+        const search = lookup.search(query);
+        return trackSearch ? trackSearch(search) : search;
+      }}
       onSearchError={failure => { setSearchFailed(true); (editorProps.onSearchError as ((failure: unknown) => void) | undefined)?.(failure); }}
       onSelectionChange={item => {
         if (item === null) return onCommit(null);

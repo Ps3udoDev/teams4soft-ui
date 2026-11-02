@@ -113,6 +113,11 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnter
     popoverOpen.current = open;
     closedByEvent.current = open ? undefined : lastKeydown;
   };
+  const pendingSearches = React.useRef(0);
+  const trackSearch = React.useCallback(<V,>(search: Promise<V>) => {
+    pendingSearches.current += 1;
+    return search.finally(() => { pendingSearches.current -= 1; });
+  }, []);
   React.useEffect(trackKeydown, []);
   useClientLayoutEffect(() => {
     if (clearDirtyOnCommit.current) { clearDirtyOnCommit.current = false; setDirty(false); }
@@ -165,7 +170,8 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnter
     // Con el popover del editor abierto, el foco puede estar en su portal: no es salir de la celda.
     if (popoverOpen.current) return;
     if (!comesFromCell(event) || event.currentTarget.contains(event.relatedTarget)) return;
-    setDirty(false);
+    // El Enter o Tab que lanzó la búsqueda ya movió el foco, pero su resultado aún puede abrir un modal que se cancele.
+    if (pendingSearches.current === 0) setDirty(false);
     // Si la confirmación hace desaparecer la fila (un filtro), un destino del Tab en esa fila se va con ella y el foco caería en <body>.
     if (plan && event.currentTarget.closest("tr")?.contains(event.relatedTarget)) onEnterCommit(plan);
   };
@@ -174,7 +180,7 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnter
     {/* El Tooltip siempre montado: que aparezca un error no debe remontar el editor ni quitarle el foco. */}
     <Tooltip content={shownError} open={Boolean(shownError) && tooltipOpen} onOpenChange={setTooltipOpen} unstyled={unstyled}>
       <div data-slot="editor" className={editorClassName} style={editorStyle}>
-        <Editor key={editorKey} rowId={rowId} column={column} value={value} draft={draft} onDraftChange={setDraft} onCommit={commit} onPopoverOpenChange={onPopoverOpenChange} onLoadError={setLoadError} label={column.header}
+        <Editor key={editorKey} rowId={rowId} column={column} value={value} draft={draft} onDraftChange={setDraft} onCommit={commit} onPopoverOpenChange={onPopoverOpenChange} trackSearch={trackSearch} onLoadError={setLoadError} label={column.header}
           disabled={disabled} invalid={Boolean(error)} error={error} unstyled={unstyled} className={unstyled ? undefined : "h-(--ui-control-height)"} />
       </div>
     </Tooltip>

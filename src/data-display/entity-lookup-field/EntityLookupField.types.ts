@@ -66,6 +66,8 @@ export interface EntityLookupFieldProps<T>
 
   /** Remote mode only. @default true */
   autoSelectSingle?: boolean;
+  /** `"dirty"`: Enter searches only when the text differs from the current selection's label, as Tab does. @default "always" */
+  searchOnEnter?: "always" | "dirty";
   resolveOnBlur?: boolean;
   onResolveNotFound?(text: string): void;
   onCreateRequest?(query: string): void;

@@ -1031,6 +1031,41 @@ describe("EntityLookupField pie del modal y formulario", () => {
   });
 });
 
+describe("EntityLookupField searchOnEnter", () => {
+  const selected = prov(1);
+  const searchFn = () => remote((query) => provs(1, 2).filter((p) => p.name.includes(query)));
+
+  it("por defecto Enter busca también sobre el texto de la selección", async () => {
+    const search = searchFn();
+    const { user } = setup({ initial: selected, search });
+    act(() => input().focus());
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(1));
+  });
+
+  it("\"dirty\": Enter sobre la selección no busca y sigue sin enviar el formulario", () => {
+    const search = searchFn();
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    render(<form onSubmit={onSubmit}><Harness initial={selected} search={search} searchOnEnter="dirty" /></form>);
+    expect(fireEvent.keyDown(input(), { key: "Enter" })).toBe(false);
+    expect(search).not.toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("\"dirty\": lo escrito sí busca con Enter, también al repetir tras cancelar el modal", async () => {
+    const search = searchFn();
+    const { user } = setup({ search, searchOnEnter: "dirty" });
+    await user.type(input(), "Proveedor");
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(dialog()).toBeInTheDocument());
+    expect(search).toHaveBeenCalledTimes(1);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+  });
+});
+
 describe("EntityLookupField sin label visible y etiqueta tardía", () => {
   const item = (name: string): Prov => ({ id: 1, name, code: "C1" });
   const field = (selected: Prov | null, extra: Partial<EntityLookupFieldProps<Prov>> = {}) => (
