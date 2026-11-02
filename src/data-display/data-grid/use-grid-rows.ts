@@ -24,6 +24,10 @@ interface UseGridRowsArgs<T> {
   editing: boolean;
   messages: DataGridMessages;
   getSelectedIds: () => string[];
+  /** Con servidor, cada `value` externo es la página nueva: base nueva, sin diff ni `onChange`. */
+  serverSide?: boolean;
+  /** Un `value` externo quitó estas filas del store. */
+  onRowsGone?: (ids: Set<string>) => void;
 }
 
 export interface GridRowsApi<T> {
@@ -96,10 +100,20 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
     seenValue.current = value;
     if (value === undefined || value === lastEmittedRows.current || emittedRows.current.has(value)) return;
     lastEmittedRows.current = value;
-    if (awaitingFirstLoad.current) {
-      awaitingFirstLoad.current = value.length === 0;
+    if (latest.current.serverSide) {
       store.reset(value);
-    } else store.replaceCurrent(value);
+      awaitingFirstLoad.current = false;
+      // Los borradores abiertos son de la página anterior.
+      setRevision(current => current + 1);
+    } else {
+      const kept = new Set(value.map(row => latest.current.getRowId(row)));
+      const gone = new Set(store.getRows().map(row => latest.current.getRowId(row)).filter(id => !kept.has(id)));
+      if (awaitingFirstLoad.current) {
+        awaitingFirstLoad.current = value.length === 0;
+        store.reset(value);
+      } else store.replaceCurrent(value);
+      if (gone.size > 0) latest.current.onRowsGone?.(gone);
+    }
     const live = Object.fromEntries(Object.entries(errorsRef.current).filter(([id]) => store.getRow(id) !== undefined));
     if (Object.keys(live).length !== Object.keys(errorsRef.current).length) setErrors(live);
     revalidateShown();

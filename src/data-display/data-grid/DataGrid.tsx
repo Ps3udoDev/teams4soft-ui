@@ -21,7 +21,7 @@ import { GridPaginator } from "./pagination/GridPaginator";
 import { ColumnToggler } from "./toolbar/ColumnToggler";
 import { GridToolbar } from "./toolbar/GridToolbar";
 import { dataGridMessagesEs } from "./messages";
-import type { DataGridFilterValue, DataGridHandle, DataGridProps } from "./DataGrid.types";
+import type { DataGridFilterValue, DataGridHandle, DataGridProps, DataGridQuery } from "./DataGrid.types";
 
 const noColumns: never[] = [];
 const noIds = new Set<string>();
@@ -34,7 +34,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   const {
     columns, getRowId, value, defaultValue, columnVisibility, onColumnVisibilityChange,
     onChange, onAddRow, readOnly = false, persistKey, columnToggler = true, selectionMode = "none", selection, onSelectionChange,
-    pagination, loading = false, toolbar, initialSort, density = "normal", maxHeight,
+    pagination, serverSide, loading = false, toolbar, initialSort, density = "normal", maxHeight,
     emptyState, cellTypes, className, classNames, styles, style, unstyled = false,
   } = props;
   const messages = React.useMemo(() => ({ ...dataGridMessagesEs, ...props.messages }), [props.messages]);
@@ -42,8 +42,12 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   const selectedIds = selection ?? internalSelection;
   const selectionRef = React.useRef(selectedIds);
   selectionRef.current = selectedIds;
+  const server = serverSide !== undefined;
+  // Un total ilegible no debe romper el paginador.
+  const totalRecords = serverSide && Number.isFinite(serverSide.totalRecords) && serverSide.totalRecords > 0 ? serverSide.totalRecords : 0;
+  const dropRows = React.useRef<(gone: (id: string) => boolean) => void>(() => {});
   const editing = !readOnly && columns.some(column => column.editable === true || typeof column.editable === "function");
-  const { store, rows: storeRows, errors, revision, getData, reset: resetRows, patchRow, addRow: addStoreRow, removeRow: removeStoreRow, validate, disarmFirstLoad, commitCell } = useGridRows<T>({ value, defaultValue, getRowId, onChange, columns: readOnly ? noColumns : columns, editing, messages, getSelectedIds: () => selectionRef.current });
+  const { store, rows: storeRows, errors, revision, getData, reset: resetRows, patchRow, addRow: addStoreRow, removeRow: removeStoreRow, validate, disarmFirstLoad, commitCell } = useGridRows<T>({ value, defaultValue, getRowId, onChange, columns: readOnly ? noColumns : columns, editing, messages, getSelectedIds: () => selectionRef.current, serverSide: server, onRowsGone: ids => dropRows.current(id => ids.has(id)) });
   // Las celdas, el orden y los filtros leen las columnas ya resueltas con las etiquetas del catálogo remoto.
   const remote = useRemoteOptions(columns);
   // TanStack memoiza orden y filtro por los datos: al llegar etiquetas hace falta una identidad nueva para recalcularlos.
@@ -84,18 +88,35 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   }), [columns, selectionMode]);
   const [sorting, setSorting] = React.useState<SortingState>(() => initialSort ? [{ id: initialSort.field, desc: initialSort.direction === "desc" }] : []);
   const [storedFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>({});
+  const [paginationState, setPagination] = React.useState(() => ({
+    pageIndex: 0,
+    pageSize: pagination === false ? 10 : Math.max(1, pagination?.pageSize ?? 10),
+  }));
+  // Con servidor, orden y filtro cambian de página en el mismo lote: una sola consulta.
+  const backToFirstPage = () => setPagination(current => current.pageIndex === 0 ? current : { ...current, pageIndex: 0 });
   // Sin su columna, un filtro ocultaría filas y no habría campo para limpiarlo.
   let columnFilters = storedFilters;
   const visibleFilters = storedFilters.filter(filter => visibility[filter.id] !== false);
   if (visibleFilters.length !== storedFilters.length) {
     columnFilters = visibleFilters;
     setColumnFilters(visibleFilters);
+    if (server) backToFirstPage();
   }
-  const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>({});
-  const [paginationState, setPagination] = React.useState(() => ({
-    pageIndex: 0,
-    pageSize: pagination === false ? 10 : Math.max(1, pagination?.pageSize ?? 10),
-  }));
+  const filtersRef = React.useRef(columnFilters);
+  filtersRef.current = columnFilters;
+  const onSortingChange = React.useCallback((updater: Updater<SortingState>) => {
+    setSorting(updater);
+    if (latest.current.serverSide) setPagination(current => current.pageIndex === 0 ? current : { ...current, pageIndex: 0 });
+  }, []);
+  // Aplicar lo mismo, o limpiar sin filtro, no es un cambio: ni re-renderiza ni vuelve a la primera página.
+  const onColumnFiltersChange = React.useCallback((updater: Updater<ColumnFiltersState>) => {
+    const next = typeof updater === "function" ? updater(filtersRef.current) : updater;
+    if (JSON.stringify(next) === JSON.stringify(filtersRef.current)) return;
+    filtersRef.current = next;
+    setColumnFilters(next);
+    if (latest.current.serverSide) setPagination(current => current.pageIndex === 0 ? current : { ...current, pageIndex: 0 });
+  }, []);
   const rowSelection = React.useMemo(() => toRowSelection(selectedIds), [selectedIds]);
   const updateSelection = React.useCallback((updater: Updater<RowSelectionState>) => {
     const next = typeof updater === "function" ? updater(toRowSelection(selectionRef.current)) : updater;
@@ -109,6 +130,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   const dropFromSelection = React.useCallback((gone: (id: string) => boolean) => {
     if (selectionRef.current.some(gone)) updateSelection(current => toRowSelection(Object.keys(current).filter(id => !gone(id))));
   }, [updateSelection]);
+  dropRows.current = dropFromSelection;
   const removeRow = React.useCallback((id: string) => {
     if (store.getRow(id) !== undefined) dropFromSelection(selected => selected === id);
     removeStoreRow(id);
@@ -121,19 +143,24 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   const table = useTable({
     features: gridFeatures, data: rows, columns: tableColumns, getRowId,
     state: { columnVisibility: visibility, sorting, columnFilters, columnPinning, columnSizing, pagination: paginationState, rowSelection },
-    onColumnVisibilityChange: setVisibility, onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters, onColumnSizingChange: setColumnSizing,
+    onColumnVisibilityChange: setVisibility, onSortingChange,
+    onColumnFiltersChange, onColumnSizingChange: setColumnSizing,
     onPaginationChange: setPagination, onRowSelectionChange: updateSelection,
     // Las features son estáticas: sin paginación, manualPagination deja pasar todas las filas.
-    manualPagination: pagination === false, autoResetPageIndex: false, sortDescFirst: false, columnResizeMode: "onChange",
+    manualPagination: pagination === false || server, manualSorting: server, manualFiltering: server,
+    rowCount: server ? totalRecords : undefined, autoResetPageIndex: false, sortDescFirst: false, columnResizeMode: "onChange",
     enableRowSelection: selectionMode !== "none", enableMultiRowSelection: selectionMode === "multiple",
     defaultColumn: { enableResizing: false },
   });
   const pageCount = Math.max(1, table.getPageCount());
   // Antes de pintar: si no, al quitar la última fila de la página se vería un fotograma del estado vacío.
+  // Con servidor, un total que baja o un 0 transitorio no es motivo para saltar de página: solo se corrige
+  // cuando ya no queda nada que mostrar (se borró la última fila de la última página).
+  const emptyPastEnd = server && pagination !== false && !loading && rows.length === 0 && totalRecords > 0;
   useClientLayoutEffect(() => {
+    if (server && !emptyPastEnd) return;
     setPagination(current => current.pageIndex >= pageCount ? { ...current, pageIndex: pageCount - 1 } : current);
-  }, [pageCount]);
+  }, [pageCount, server, emptyPastEnd]);
 
   const radioName = React.useId();
   const contentRef = React.useRef<HTMLDivElement>(null);
@@ -170,7 +197,8 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
       devWarn(`DataGrid: la fila "${target.id}" no está entre las filas visibles (filtro activo o id inexistente); no se cambia de página ni se enfoca.`);
       return;
     }
-    if (pagination !== false) {
+    // Con servidor los índices son locales a la página: no hay otra página que calcular.
+    if (pagination !== false && !server) {
       const pageIndex = Math.floor(index / paginationState.pageSize);
       if (pageIndex !== paginationState.pageIndex) {
         setPagination(current => ({ ...current, pageIndex }));
@@ -228,7 +256,27 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   ];
   const displayedRows = table.getRowModel().rows;
   const hasFilters = columnFilters.some(f => f.value !== "" && f.value != null);
-  const totalRows = table.getFilteredRowModel().rows.length;
+  const totalRows = server ? totalRecords : table.getFilteredRowModel().rows.length;
+  // Un solo efecto emite la consulta: compara por valor, así StrictMode, un onQueryChange nuevo o un total distinto no reemiten.
+  const lastQuery = React.useRef<string | undefined>(undefined);
+  const unpaged = pagination === false;
+  const { pageIndex: queryPage, pageSize: queryPageSize } = paginationState;
+  React.useEffect(() => {
+    if (!server) {
+      lastQuery.current = undefined;
+      return;
+    }
+    const query: DataGridQuery = {
+      pageIndex: unpaged ? 0 : queryPage,
+      pageSize: queryPageSize,
+      sorting: sorting.map(item => ({ field: item.id, desc: item.desc })),
+      filters: Object.fromEntries(columnFilters.filter(item => item.value != null).map(item => [item.id, item.value as DataGridFilterValue])),
+    };
+    const key = JSON.stringify(query);
+    if (key === lastQuery.current) return;
+    lastQuery.current = key;
+    latest.current.serverSide?.onQueryChange(query);
+  }, [server, unpaged, queryPage, queryPageSize, sorting, columnFilters]);
   const rowHeight = density === "compact" ? "h-(--ui-grid-row-height-compact)" : "h-(--ui-grid-row-height)";
   const dirtyIds = React.useMemo(() => editing ? new Set(store.getDiff().dirtyIds) : noIds, [editing, store, rows, revision]);
   const rowEvents = React.useMemo(() => ({

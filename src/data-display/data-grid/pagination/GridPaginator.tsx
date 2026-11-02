@@ -30,7 +30,7 @@ export function GridPaginator<T extends RowData>({ table, totalRows, pageSizeOpt
     <span>{messages.range(first, last, totalRows)}</span>
     <div className={cn(!unstyled && "flex flex-wrap items-center gap-2")}>
       {navButton(messages.firstPage, "«", page <= 1, () => table.setPageIndex(0))}
-      {navButton(messages.previousPage, "‹", page <= 1, () => table.previousPage())}
+      {navButton(messages.previousPage, "‹", page <= 1, () => table.setPageIndex(page - 2))}
       <span>{messages.pageOf(page, pages)}</span>
       {navButton(messages.nextPage, "›", page >= pages, () => table.nextPage())}
       {navButton(messages.lastPage, "»", page >= pages, () => table.setPageIndex(pages - 1))}

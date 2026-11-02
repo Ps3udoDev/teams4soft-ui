@@ -9,6 +9,13 @@ export type DataGridSelectionMode = "none" | "single" | "multiple";
 export type DataGridDensity = "compact" | "normal";
 export type DataGridSort = { field: string; direction: "asc" | "desc" };
 export type DataGridPagination = { pageSize?: number; pageSizeOptions?: number[] } | false;
+/** Consulta que la grilla pide al servidor; `pageIndex` empieza en 0. */
+export type DataGridQuery = {
+  pageIndex: number;
+  pageSize: number;
+  sorting: Array<{ field: string; desc: boolean }>;
+  filters: Record<string, DataGridFilterValue>;
+};
 export type DataGridData<T> = {
   rows: T[];
   selectedIds: string[];
@@ -152,6 +159,16 @@ export interface DataGridProps<T> {
   selection?: string[];
   onSelectionChange?: (ids: string[]) => void;
   pagination?: DataGridPagination;
+  /**
+   * Pagina, ordena y filtra en el servidor: la grilla no toca las filas de `value`, que deben ser la página actual
+   * (exige `value`). Emite `onQueryChange` al montar y cada vez que cambia la consulta; un cambio de orden o filtro
+   * vuelve a `pageIndex: 0` en una sola llamada. `totalRecords` fija el número de páginas y el total del rango.
+   * Con `pagination={false}` la consulta lleva `pageIndex: 0` y el tamaño por defecto.
+   * Cada `value` externo se adopta como base nueva y sin `onChange`: `dirtyIds`, `addedIds` y `removedIds` describen
+   * solo la página actual y las ediciones sin guardar dejan de contar al cambiar de página; guarda por celda o antes de paginar.
+   * La selección conserva los ids de otras páginas.
+   */
+  serverSide?: { totalRecords: number; onQueryChange: (query: DataGridQuery) => void };
   loading?: boolean;
   toolbar?: React.ReactNode;
   onRowClick?: (row: T, event: React.MouseEvent<HTMLTableRowElement>) => void;
