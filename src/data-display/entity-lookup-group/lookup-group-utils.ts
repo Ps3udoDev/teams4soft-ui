@@ -4,7 +4,7 @@ import type { LookupGroupField, NormalizedField } from "./EntityLookupGroup.type
 
 const read = (values: Record<string, string>, key: string): string => (values[key] ?? "").trim();
 
-export function normalizeFields<T>(fields: readonly LookupGroupField<T>[]): NormalizedField<T>[] {
+export function normalizeFields(fields: readonly LookupGroupField[]): NormalizedField[] {
   const marked = fields.flatMap((field, index) => (field.primary ? [index] : []));
   if (marked.length > 1) {
     devWarn(`EntityLookupGroup: only one field can be \`primary\`; using "${fields[marked[0] as number]?.key}".`);
@@ -18,13 +18,13 @@ export function normalizeFields<T>(fields: readonly LookupGroupField<T>[]): Norm
   }));
 }
 
-export function buildDefaultParams<T>({
+export function buildDefaultParams({
   fields,
   values,
   term,
   searchParam = "search",
 }: {
-  fields: readonly NormalizedField<T>[];
+  fields: readonly NormalizedField[];
   values: Record<string, string>;
   term: string;
   searchParam?: string;
@@ -44,11 +44,11 @@ export function buildDefaultParams<T>({
   return params;
 }
 
-export function buildDefaultSearchLabel<T>({
+export function buildDefaultSearchLabel({
   fields,
   values,
 }: {
-  fields: readonly NormalizedField<T>[];
+  fields: readonly NormalizedField[];
   values: Record<string, string>;
 }): string {
   return fields
@@ -59,7 +59,7 @@ export function buildDefaultSearchLabel<T>({
 }
 
 export function applySelection<T>(
-  fields: readonly NormalizedField<T>[],
+  fields: readonly NormalizedField[],
   values: Record<string, string>,
   item: T,
 ): Record<string, string> {
@@ -76,7 +76,7 @@ export function applySelection<T>(
         break;
       }
     }
-    // Legacy clears the field when the row has nothing for it, so a stale value never survives a new selection.
+    // A field the row has nothing for is emptied: a value left from the previous selection would pair with the new row's others.
     next[field.key] = picked;
   }
   return next;

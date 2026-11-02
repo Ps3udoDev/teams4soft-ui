@@ -9,6 +9,7 @@ export interface LookupInputProps {
   id?: string;
   name?: string;
   placeholder?: string;
+  type?: string;
   value: string;
   onValueChange: (value: string) => void;
   onKeyDown: React.KeyboardEventHandler<HTMLInputElement>;
@@ -54,7 +55,7 @@ function Spinner() {
 
 export const LookupInput = React.forwardRef<HTMLInputElement, LookupInputProps>(function LookupInput(
   {
-    id, name, placeholder, value, onValueChange, onKeyDown, onBlur, inert, disabled, readOnly, invalid, clearable, clearLabel, busy, triggerLabel,
+    id, name, placeholder, type, value, onValueChange, onKeyDown, onBlur, inert, disabled, readOnly, invalid, clearable, clearLabel, busy, triggerLabel,
     triggerIcon, onTrigger, criteria, activeCriterion, criteriaLabel, onCriterionSelect, onCriteriaOpenChange, trailingActions, unstyled, className, style, classNames, styles, ...aria
   },
   ref,
@@ -108,6 +109,7 @@ export const LookupInput = React.forwardRef<HTMLInputElement, LookupInputProps>(
         id={id}
         name={name}
         placeholder={placeholder}
+        type={type}
         value={value}
         onValueChange={onValueChange}
         onKeyDown={onKeyDown}

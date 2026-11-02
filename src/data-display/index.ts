@@ -5,6 +5,12 @@ export type { DataGridAction } from "./data-grid/column-factories";
 export type * from "./data-grid/DataGrid.types";
 export type { GridChange as DataGridChange } from "./data-grid/grid-rows-store";
 export { EntityLookupField } from "./entity-lookup-field/EntityLookupField";
+export { EntityLookupGroup } from "./entity-lookup-group/EntityLookupGroup";
+export type {
+  EntityLookupGroupProps,
+  EntityLookupGroupClassNames,
+  LookupGroupField,
+} from "./entity-lookup-group/EntityLookupGroup.types";
 export type {
   EntityLookupFieldProps,
   EntityLookupFieldClassNames,

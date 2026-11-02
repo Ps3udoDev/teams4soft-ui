@@ -4,7 +4,7 @@ import { applySelection, buildDefaultParams, buildDefaultSearchLabel, normalizeF
 
 type Person = { paterno?: string; materno?: string; name?: string; alias?: string | null; id?: number };
 
-const fields = normalizeFields<Person>([
+const fields = normalizeFields([
   { key: "paterno", param: "apellidoPaterno", selectField: "paterno" },
   { key: "materno", param: "apellidoMaterno", selectField: "materno" },
   { key: "nombre", param: "nombre", selectField: "name" },
@@ -133,14 +133,14 @@ describe("applySelection", () => {
   });
 
   it("uses the first non-empty key of a list", () => {
-    const list = normalizeFields<Person>([{ key: "n", selectField: ["alias", "name"] }]);
+    const list = normalizeFields([{ key: "n", selectField: ["alias", "name"] }]);
     expect(applySelection(list, {}, { alias: "", name: "FELIPE" })).toEqual({ n: "FELIPE" });
     expect(applySelection(list, {}, { alias: "FE", name: "FELIPE" })).toEqual({ n: "FE" });
     expect(applySelection(list, {}, { alias: null, name: "FELIPE" })).toEqual({ n: "FELIPE" });
   });
 
   it("stringifies numeric 0 as non-empty", () => {
-    const list = normalizeFields<Person>([{ key: "n", selectField: "id" }]);
+    const list = normalizeFields([{ key: "n", selectField: "id" }]);
     expect(applySelection(list, {}, { id: 0 })).toEqual({ n: "0" });
   });
 
@@ -153,7 +153,7 @@ describe("applySelection", () => {
   });
 
   it("leaves fields without selectField untouched and does not mutate values", () => {
-    const list = normalizeFields<Person>([{ key: "keep" }, { key: "n", selectField: "name" }]);
+    const list = normalizeFields([{ key: "keep" }, { key: "n", selectField: "name" }]);
     const values = { keep: "K", n: "old" };
     const next = applySelection(list, values, row);
     expect(next).toEqual({ keep: "K", n: "FELIPE" });
