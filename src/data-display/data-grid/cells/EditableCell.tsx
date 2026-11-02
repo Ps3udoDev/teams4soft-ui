@@ -21,10 +21,6 @@ export interface EditableCellProps<T> {
   cellProps: React.TdHTMLAttributes<HTMLTableCellElement> & Record<`data-${string}`, unknown>;
 }
 
-// Contenido de popover (DateField, SearchableSelectField) que Radix monta en un portal.
-const portalSelector = "[data-radix-popper-content-wrapper]";
-const portalOf = (node: EventTarget | null) => node instanceof Element ? node.closest(portalSelector) : null;
-
 // React hace burbujear los eventos de un portal hasta la celda aunque vivan fuera de su DOM.
 function comesFromCell(event: React.SyntheticEvent<HTMLTableCellElement>) {
   return event.target instanceof Node && event.currentTarget.contains(event.target);
@@ -44,11 +40,13 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, editor:
 
   const cellRef = React.useRef<HTMLTableCellElement>(null);
   const reverting = React.useRef(false);
-  // Radix cierra el popover antes de que este Escape llegue a la celda: el cierre se libera tras el evento, no durante.
+  // Estado abierto del popover del propio editor. Radix lo cierra con un listener de documento que corre antes
+  // de que el Escape llegue a la celda: se anota el evento que provocó el cierre para no tratarlo también como revertir.
   const popoverOpen = React.useRef(false);
+  const closedByEvent = React.useRef<Event | undefined>(undefined);
   const onPopoverOpenChange = (open: boolean) => {
-    if (open) popoverOpen.current = true;
-    else setTimeout(() => { popoverOpen.current = false; }, 0);
+    popoverOpen.current = open;
+    closedByEvent.current = open ? undefined : window.event;
   };
   useClientLayoutEffect(() => {
     if (!reverting.current) return;
@@ -65,7 +63,7 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, editor:
     if (comesFromCell(event)) setDraftDirty(true);
   };
   const revert = (event: React.KeyboardEvent<HTMLTableCellElement>) => {
-    if (event.key !== "Escape" || popoverOpen.current || !draftDirty || !comesFromCell(event)) return;
+    if (event.key !== "Escape" || popoverOpen.current || event.nativeEvent === closedByEvent.current || !draftDirty || !comesFromCell(event)) return;
     reverting.current = true;
     setDraft(value);
     setDraftDirty(false);
@@ -74,12 +72,9 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, editor:
 
   // NumberField omite onCommit si el número ya se confirmó: salir de la celda cierra el borrador igualmente.
   const leave = (event: React.FocusEvent<HTMLTableCellElement>) => {
-    const next = event.relatedTarget;
-    if (event.currentTarget.contains(next)) return;
-    // Pasar del editor a su popover (o moverse dentro de él) no es salir de la celda.
-    const from = portalOf(event.target);
-    if (portalOf(next) && (!from || from === portalOf(next))) return;
-    if (comesFromCell(event) || from) setDraftDirty(false);
+    // Con el popover del editor abierto, el foco puede estar en su portal: no es salir de la celda.
+    if (popoverOpen.current) return;
+    if (comesFromCell(event) && !event.currentTarget.contains(event.relatedTarget)) setDraftDirty(false);
   };
 
   return <td {...cellProps} ref={cellRef} data-editable="" data-draft-dirty={draftDirty || undefined} onInputCapture={markDirty} onPasteCapture={markDirty} onKeyDown={revert} onBlur={leave}>

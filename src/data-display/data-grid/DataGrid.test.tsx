@@ -1298,13 +1298,42 @@ describe("DataGrid: editores date, select, checkbox, radio y custom", () => {
     const td = input.closest("td")!;
     const listbox = await screen.findByRole("listbox");
     expect(td).toHaveAttribute("data-draft-dirty");
-    fireEvent.blur(input, { relatedTarget: listbox });
+    // El listado no recibe foco (patrón combobox): lo que decide es el estado abierto del propio editor.
+    expect(listbox).toBeInTheDocument();
+    fireEvent.blur(input, { relatedTarget: document.body });
     expect(td).toHaveAttribute("data-draft-dirty");
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
     expect(input).toHaveValue("");
     expect(td).toHaveAttribute("data-draft-dirty");
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("un segundo Esc, ya sin popover, sí revierte el borrador", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DataGrid columns={base({ field: "method", header: "Forma", type: "select", options: methods })} defaultValue={items} getRowId={idOf} onChange={onChange} />);
+    const input = screen.getByRole("combobox", { name: "Forma" });
+    await user.type(input, "Ta");
+    const td = input.closest("td")!;
+    await screen.findByRole("listbox");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(td).toHaveAttribute("data-draft-dirty");
+    await user.keyboard("{Escape}");
+    expect(td).not.toHaveAttribute("data-draft-dirty");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("cerrado el popover, salir de la celda vuelve a limpiar el borrador", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={base({ field: "method", header: "Forma", type: "select", options: methods })} defaultValue={items} getRowId={idOf} />);
+    const input = screen.getByRole("combobox", { name: "Forma" });
+    await user.type(input, "Ta");
+    await screen.findByRole("listbox");
+    await user.keyboard("{Escape}");
+    fireEvent.blur(input, { relatedTarget: document.body });
+    expect(input.closest("td")).not.toHaveAttribute("data-draft-dirty");
   });
 
   it("onRowClick y onRowDoubleClick ignoran clics que llegan desde un portal dentro de una celda", async () => {
