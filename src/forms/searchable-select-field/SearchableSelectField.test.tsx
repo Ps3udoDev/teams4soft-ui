@@ -642,3 +642,20 @@ describe("SearchableSelectField — etiqueta tardía", () => {
     expect(screen.getByRole("combobox")).toHaveValue("xy");
   });
 });
+
+describe("SearchableSelectField — etiqueta que desaparece", () => {
+  it("si las opciones se vacían y vuelven, el texto no se borra y un blur no limpia el valor", async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    const props = { label: "País", getOptionValue: (o: Country) => o.code, getOptionLabel: (o: Country) => o.name, onValueChange, clearable: true, openOnType: false };
+    const { rerender } = render(<SearchableSelectField<Country, string> {...props} options={countries} value="MX" />);
+    expect(screen.getByRole("combobox")).toHaveValue("México");
+    rerender(<SearchableSelectField<Country, string> {...props} options={[]} value="MX" />);
+    expect(screen.getByRole("combobox")).toHaveValue("México");
+    await user.click(screen.getByRole("combobox"));
+    await user.tab();
+    expect(onValueChange).not.toHaveBeenCalled();
+    rerender(<SearchableSelectField<Country, string> {...props} options={countries} value="MX" />);
+    expect(screen.getByRole("combobox")).toHaveValue("México");
+  });
+});

@@ -15,6 +15,8 @@ export interface EditCellProps<T> {
   onCommit: (value: unknown) => void;
   /** Los editores con popover avisan de su apertura: con uno abierto, Escape solo lo cierra. */
   onPopoverOpenChange?: (open: boolean) => void;
+  /** El editor avisa de un error propio (carga remota) para que la celda lo muestre en su tooltip. */
+  onLoadError?: (message: string | undefined) => void;
   label: string;
   disabled: boolean;
   invalid: boolean;
@@ -86,12 +88,14 @@ function DateEditor<T>({ column, value, onCommit, onPopoverOpenChange, label, di
     {...withEditorProps(column, { classNames: { label: hiddenLabel, root: cn(!unstyled && "min-w-40", className), control: cn(!unstyled && invalidBorder), error: error && hiddenLabel } })} label={label} value={typeof value === "string" ? value : null} onValueChange={onCommit} onOpenChange={open => { onPopoverOpenChange?.(open); (column.editorProps?.onOpenChange as ((open: boolean) => void) | undefined)?.(open); }} />;
 }
 
-function SelectEditor<T>({ column, value, onCommit, onPopoverOpenChange, label, disabled, invalid, error, unstyled, className }: EditCellProps<T>) {
+function SelectEditor<T>({ column, value, onCommit, onPopoverOpenChange, onLoadError, label, disabled, invalid, error, unstyled, className }: EditCellProps<T>) {
   const staticOptions = React.useMemo(() => [...(column.options ?? [])], [column.options]);
   const remote = useRemoteSelect(column, value);
   // Con loadOptions la búsqueda es del servidor; un error de validación pasa por delante del de carga.
   const loadFailed = remote.remote && remote.error;
   const shownError = error ?? (loadFailed ? remote.loadOptionsError : undefined);
+  const reportedError = loadFailed ? remote.loadOptionsError : undefined;
+  React.useEffect(() => { onLoadError?.(reportedError); }, [onLoadError, reportedError]);
   const remoteProps = remote.remote ? {
     options: remote.options, getOptionValue: remote.getOptionValue, getOptionLabel: remote.getOptionLabel,
     filterOption: remote.filterOption, loading: remote.loading, onInputValueChange: remote.onInputValueChange,

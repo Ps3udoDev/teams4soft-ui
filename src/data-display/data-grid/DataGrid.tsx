@@ -43,7 +43,11 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   const selectionRef = React.useRef(selectedIds);
   selectionRef.current = selectedIds;
   const editing = !readOnly && columns.some(column => column.editable === true || typeof column.editable === "function");
-  const { store, rows, errors, revision, getData, reset: resetRows, patchRow, addRow: addStoreRow, removeRow: removeStoreRow, validate, disarmFirstLoad, commitCell } = useGridRows<T>({ value, defaultValue, getRowId, onChange, columns: readOnly ? noColumns : columns, editing, messages, getSelectedIds: () => selectionRef.current });
+  const { store, rows: storeRows, errors, revision, getData, reset: resetRows, patchRow, addRow: addStoreRow, removeRow: removeStoreRow, validate, disarmFirstLoad, commitCell } = useGridRows<T>({ value, defaultValue, getRowId, onChange, columns: readOnly ? noColumns : columns, editing, messages, getSelectedIds: () => selectionRef.current });
+  // Las celdas, el orden y los filtros leen las columnas ya resueltas con las etiquetas del catálogo remoto.
+  const remote = useRemoteOptions(columns);
+  // TanStack memoiza orden y filtro por los datos: al llegar etiquetas hace falta una identidad nueva para recalcularlos.
+  const rows = React.useMemo(() => remote.version === 0 ? storeRows : [...storeRows], [storeRows, remote.version]);
   const latest = React.useRef(props);
   useClientLayoutEffect(() => { latest.current = props; });
   const warnedIds = React.useRef(new Set<string>());
@@ -68,8 +72,6 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
     }
   }, [columns, cellTypes, readOnly]);
 
-  // Las celdas, el orden y los filtros leen las columnas ya resueltas con las etiquetas del catálogo remoto.
-  const remote = useRemoteOptions(columns);
   const { columnDefs, visibility, setVisibility } = useGridColumns({ columns: remote.columns, cellTypes, columnVisibility, onColumnVisibilityChange, persistKey, messages });
   useCatalogLoading(remote.store, columns, visibility);
   const remoteContext = React.useMemo(() => ({ store: remote.store, loadOptionsError: messages.loadOptionsError }), [remote.store, messages.loadOptionsError]);

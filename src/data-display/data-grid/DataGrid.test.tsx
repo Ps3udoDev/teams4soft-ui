@@ -2698,3 +2698,84 @@ describe("DataGrid: select remoto con loadOptions", () => {
     expect(second).not.toHaveBeenCalledWith("");
   });
 });
+
+describe("DataGrid: select remoto, correcciones", () => {
+  type Pay = { id: string; method: number | null };
+  type Opt = { value: number; label: string };
+  const payId = (row: Pay) => row.id;
+  const empty: Pay[] = [{ id: "r-1", method: null }];
+  function deferred<V>() {
+    let resolve!: (value: V) => void;
+    const promise = new Promise<V>(res => { resolve = res; });
+    return { promise, resolve };
+  }
+  const methodColumn = (extra: Partial<DataGridColumn<Pay>>): DataGridColumn<Pay> => ({ field: "method", header: "Forma", type: "select", ...extra });
+  const combo = () => screen.getByRole("combobox", { name: "Forma" });
+  const settle = (ms = 320) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)); });
+  const queriesOf = (fn: { mock: { calls: unknown[][] } }) => fn.mock.calls.map(call => call[0]);
+
+  it("borrar hasta una etiqueta conocida vuelve a buscar", async () => {
+    const user = userEvent.setup();
+    const loadOptions = vi.fn(async (query: string) => query === "" ? [{ value: 1, label: "ab" }] : [{ value: 7, label: `resultado ${query}` }]);
+    render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={empty} getRowId={payId} />);
+    await user.type(combo(), "abc");
+    await waitFor(() => expect(loadOptions).toHaveBeenCalledWith("abc"));
+    await user.keyboard("{Backspace}");
+    await waitFor(() => expect(loadOptions).toHaveBeenCalledWith("ab"));
+    expect(await screen.findByRole("option", { name: "resultado ab" })).toBeInTheDocument();
+  });
+
+  it("escribir una etiqueta conocida dentro del debounce descarta la búsqueda anterior", async () => {
+    const user = userEvent.setup();
+    const loadOptions = vi.fn(async (query: string) => query === "" ? [{ value: 1, label: "ab" }] : [{ value: 7, label: `resultado ${query}` }]);
+    render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={empty} getRowId={payId} />);
+    await user.type(combo(), "ab");
+    await waitFor(() => expect(loadOptions).toHaveBeenCalledWith("ab"));
+    await settle();
+    expect(queriesOf(loadOptions)).not.toContain("a");
+  });
+
+  it("el orden activo se recalcula con las etiquetas que llegan y el ancho se conserva", async () => {
+    const gate = deferred<Opt[]>();
+    const loadOptions = vi.fn((_query: string) => gate.promise);
+    const rows: Pay[] = [{ id: "a", method: 1 }, { id: "b", method: 2 }];
+    render(<DataGrid columns={[methodColumn({ loadOptions, width: 200 })]} value={rows} getRowId={payId} initialSort={{ field: "method", direction: "asc" }} />);
+    const order = () => bodyRows().map(row => within(row).getAllByRole("cell")[0]!.textContent);
+    expect(order()).toEqual(["1", "2"]);
+    await act(async () => { gate.resolve([{ value: 1, label: "Zeta" }, { value: 2, label: "Alfa" }]); });
+    expect(order()).toEqual(["Alfa", "Zeta"]);
+    expect(within(bodyRows()[0]!).getAllByRole("cell")[0]).toHaveStyle({ width: "200px" });
+  });
+
+  it("un filtro de texto aplicado antes del catálogo se reevalúa al llegar", async () => {
+    const user = userEvent.setup();
+    const gate = deferred<Opt[]>();
+    const loadOptions = vi.fn((_query: string) => gate.promise);
+    const rows: Pay[] = [{ id: "a", method: 1 }, { id: "b", method: 2 }];
+    render(<DataGrid columns={[methodColumn({ loadOptions, filter: "text" })]} value={rows} getRowId={payId} />);
+    await applyFilter(user, "Forma", "alf");
+    expect(screen.queryByText("Alfa")).not.toBeInTheDocument();
+    await act(async () => { gate.resolve([{ value: 1, label: "Zeta" }, { value: 2, label: "Alfa" }]); });
+    expect(bodyRows()).toHaveLength(1);
+    expect(bodyRows()[0]).toHaveTextContent("Alfa");
+  });
+
+  it("el error de carga se ve en el tooltip de la celda", async () => {
+    const loadOptions = vi.fn(async (_query: string): Promise<Opt[]> => { throw new Error("red"); });
+    render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={empty} getRowId={payId} />);
+    await waitFor(() => expect(combo()).toHaveAttribute("aria-invalid", "true"));
+    act(() => { combo().focus(); });
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("No se pudieron cargar las opciones");
+  });
+
+  it("la opción elegida en una búsqueda se lee con su etiqueta al pasar a solo lectura", async () => {
+    const user = userEvent.setup();
+    const loadOptions = vi.fn(async (query: string) => query === "" ? [{ value: 1, label: "Efectivo" }] : [{ value: 9, label: "Cheque" }]);
+    const cols = (editable: boolean) => [methodColumn({ loadOptions, editable })];
+    const { rerender } = render(<DataGrid columns={cols(true)} defaultValue={empty} getRowId={payId} />);
+    await user.type(combo(), "Che");
+    await user.click(await screen.findByRole("option", { name: "Cheque" }));
+    rerender(<DataGrid columns={cols(false)} defaultValue={empty} getRowId={payId} />);
+    expect(bodyRows()[0]).toHaveTextContent("Cheque");
+  });
+});

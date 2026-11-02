@@ -84,6 +84,9 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnter
   const [draft, setDraft] = React.useState(value);
   const [editorKey, setEditorKey] = React.useState(0);
   const [tooltipOpen, setTooltipOpen] = React.useState(false);
+  // Error que el editor detecta por su cuenta (carga remota); la validación de la celda tiene prioridad.
+  const [loadError, setLoadError] = React.useState<string | undefined>(undefined);
+  const shownError = error ?? loadError;
   const clearDirtyOnCommit = React.useRef(false);
   const [committed, setCommitted] = React.useState(value);
   if (!Object.is(committed, value)) {
@@ -169,9 +172,9 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnter
 
   return <td {...cellProps} ref={cellRef} data-editable="" data-row-id={rowId} data-field={column.field} onInputCapture={markDirty} onPasteCapture={markDirty} onKeyDownCapture={planFocus} onKeyDown={handleKeyDown} onBlur={leave}>
     {/* El Tooltip siempre montado: que aparezca un error no debe remontar el editor ni quitarle el foco. */}
-    <Tooltip content={error} open={Boolean(error) && tooltipOpen} onOpenChange={setTooltipOpen} unstyled={unstyled}>
+    <Tooltip content={shownError} open={Boolean(shownError) && tooltipOpen} onOpenChange={setTooltipOpen} unstyled={unstyled}>
       <div data-slot="editor" className={editorClassName} style={editorStyle}>
-        <Editor key={editorKey} rowId={rowId} column={column} value={value} draft={draft} onDraftChange={setDraft} onCommit={commit} onPopoverOpenChange={onPopoverOpenChange} label={column.header}
+        <Editor key={editorKey} rowId={rowId} column={column} value={value} draft={draft} onDraftChange={setDraft} onCommit={commit} onPopoverOpenChange={onPopoverOpenChange} onLoadError={setLoadError} label={column.header}
           disabled={disabled} invalid={Boolean(error)} error={error} unstyled={unstyled} className={unstyled ? undefined : "h-(--ui-control-height)"} />
       </div>
     </Tooltip>

@@ -200,7 +200,8 @@ export function SearchableSelectField<TOption, TValue>({
   React.useEffect(() => {
     if (lastLabelRef.current === selectedLabel) return;
     lastLabelRef.current = selectedLabel;
-    if (isTextControlled || filterQuery !== null || typingRef.current) return;
+    // Una etiqueta que desaparece (opciones en recarga) no borra el texto: un blur lo confirmaría vacío.
+    if (selectedLabel === "" || isTextControlled || filterQuery !== null || typingRef.current) return;
     setInternalText(selectedLabel);
   }, [selectedLabel, isTextControlled, filterQuery]);
 

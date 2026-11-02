@@ -76,7 +76,9 @@ export function createRemoteOptions() {
     findOption,
     /** Recuerda una opción elegida que el catálogo "" no trae, para no perder su etiqueta. */
     remember(field: string, option: unknown, getValue: ValueOf) {
-      if (findOption(field, getValue(option), getValue) !== undefined) return;
+      // Solo cuenta lo que ya resuelve etiquetas de lectura: el catálogo "" y lo elegido antes, no otras búsquedas.
+      const value = getValue(option);
+      if ([...(results.get(field)?.get("") ?? []), ...(picked.get(field) ?? [])].some(known => getValue(known) === value)) return;
       picked.set(field, [...(picked.get(field) ?? []), option]);
       bump();
     },
@@ -134,7 +136,7 @@ export function useRemoteOptions<T>(columns: DataGridColumn<T>[]) {
     // La versión cambia solo cuando un catálogo llega o falla, o se recuerda una opción elegida.
     [columns, store, version],
   );
-  return { store, columns: resolvedColumns };
+  return { store, columns: resolvedColumns, version };
 }
 
 /** Solo las columnas remotas visibles cargan "" (una oculta lo hace al mostrarse). */
@@ -209,8 +211,8 @@ export function useRemoteSelect<T, O>(column: DataGridColumn<T, O>, value: unkno
 
   const onInputValueChange = (text: string) => {
     if (!remote) return;
-    // Escribir la etiqueta de una opción conocida (elegir, restaurar, sincronizar) no es una búsqueda.
-    if (text !== "" && (store.knownOptions(field).some(option => baseLabel(option) === text) || (extra === placeholder && text === String(value)))) return;
+    // Elegir o restaurar una etiqueta también llega aquí, pero cierra el selector en el mismo turno
+    // y onOpenChange(false) cancela este temporizador: la etiqueta nunca se busca.
     clearTimeout(timer.current);
     if (text.trim() === "") setQuery("");
     else timer.current = setTimeout(() => setQuery(text), DEBOUNCE_MS);
