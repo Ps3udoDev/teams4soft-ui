@@ -7,7 +7,7 @@ import { renderToString } from "react-dom/server";
 import { Dialog } from "../../overlays/dialog/Dialog";
 import { DataGrid } from "./DataGrid";
 import { buildPersistStorageKey } from "./persist";
-import type { DataGridColumn, DataGridHandle } from "./DataGrid.types";
+import type { DataGridCellComponent, DataGridColumn, DataGridHandle } from "./DataGrid.types";
 
 beforeAll(() => {
   const proto = Element.prototype as unknown as Record<string, unknown>;
@@ -1171,5 +1171,152 @@ describe("DataGrid: celdas editables", () => {
     expect(screen.getByRole("textbox", { name: "Tipo de cambio" })).toHaveValue("1.5000");
     expect(screen.getByRole("textbox", { name: "Pct" })).toHaveValue("15.00 %");
     expect(screen.getByRole("textbox", { name: "Pct" }).closest('[data-slot="editor"]')?.firstElementChild).toHaveClass("editor-slot");
+  });
+});
+
+describe("DataGrid: editores date, select, checkbox, radio y custom", () => {
+  type Item = { id: string; due: string | null; method: number | null; paid: boolean | null; side: string | null; note?: string; amount?: number | null };
+  const items: Item[] = [{ id: "r-1", due: null, method: null, paid: false, side: "D", amount: null }];
+  const methods = [{ value: 1, label: "Efectivo" }, { value: 2, label: "Tarjeta" }];
+  const sides = [{ value: "D", label: "Débito" }, { value: "C", label: "Crédito" }];
+  const idOf = (row: Item) => row.id;
+  const lastChange = (onChange: ReturnType<typeof vi.fn>) => onChange.mock.calls.at(-1)![1];
+  const base = (extra: Partial<DataGridColumn<Item>>): DataGridColumn<Item>[] => [{ editable: true, ...extra } as DataGridColumn<Item>];
+
+  it("date: la fecha escrita se confirma en blur como ISO", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DataGrid columns={base({ field: "due", header: "Vence", type: "date" })} defaultValue={items} getRowId={idOf} onChange={onChange} />);
+    await user.type(screen.getByLabelText("Vence"), "29/10/2026");
+    await user.tab();
+    expect(lastChange(onChange)).toEqual({ type: "edit", rowId: "r-1", field: "due", prev: null, next: "2026-10-29" });
+  });
+
+  it("select: elegir una opción guarda su valor y no la etiqueta", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DataGrid columns={base({ field: "method", header: "Forma", type: "select", options: methods })} defaultValue={items} getRowId={idOf} onChange={onChange} />);
+    await user.click(screen.getByRole("combobox", { name: "Forma" }));
+    await user.click(await screen.findByRole("option", { name: "Efectivo" }));
+    expect(lastChange(onChange)).toMatchObject({ type: "edit", field: "method", prev: null, next: 1 });
+  });
+
+  it("checkbox: confirma al cambiar", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DataGrid columns={base({ field: "paid", header: "Pagado", type: "checkbox" })} defaultValue={items} getRowId={idOf} onChange={onChange} />);
+    await user.click(screen.getByRole("checkbox", { name: "Pagado" }));
+    expect(lastChange(onChange)).toMatchObject({ field: "paid", prev: false, next: true });
+  });
+
+  it("radio: elige Crédito, guarda C y la lectura muestra la etiqueta", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const col = { field: "side", header: "D/C", type: "radio", options: sides } as const;
+    const { unmount } = render(<DataGrid columns={base(col)} defaultValue={items} getRowId={idOf} onChange={onChange} />);
+    expect(screen.getByRole("radio", { name: "Débito" })).toBeChecked();
+    await user.click(screen.getByRole("radio", { name: "Crédito" }));
+    expect(lastChange(onChange)).toMatchObject({ field: "side", prev: "D", next: "C" });
+    unmount();
+    render(<DataGrid columns={[{ ...col, editable: false }]} value={[{ ...items[0]!, side: "C" }]} getRowId={idOf} />);
+    expect(screen.getByText("Crédito")).toBeInTheDocument();
+  });
+
+  it("custom: la celda escribe con grid.patchRow", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const cols: DataGridColumn<Item>[] = [{ field: "note", header: "Nota", type: "custom", render: ({ grid, rowId }) => <button onClick={() => grid.patchRow(rowId, { note: "x" })}>poner</button> }];
+    render(<DataGrid columns={cols} defaultValue={items} getRowId={idOf} onChange={onChange} />);
+    await user.click(screen.getByRole("button", { name: "poner" }));
+    expect(lastChange(onChange)).toMatchObject({ type: "edit", rowId: "r-1", field: "note", next: "x" });
+  });
+
+  it("cellTypes propio recibe onCommit y editable, y su valor llega al JSON", async () => {
+    const user = userEvent.setup();
+    const ref = React.createRef<DataGridHandle<Item>>();
+    const Rating: DataGridCellComponent<Item> = ({ onCommit, editable, value }) => <button onClick={() => onCommit(5)}>{editable ? "editable" : "fijo"} {String(value)}</button>;
+    render(<DataGrid ref={ref} cellTypes={{ rating: Rating }} columns={base({ field: "amount", header: "Nota", type: "rating" })} defaultValue={items} getRowId={idOf} />);
+    await user.click(screen.getByRole("button", { name: "editable null" }));
+    expect(ref.current?.getData().rows[0]?.amount).toBe(5);
+  });
+
+  it("editorProps openOnType false: teclear no abre el listado y Tab resuelve", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DataGrid columns={base({ field: "method", header: "Forma", type: "select", options: methods, editorProps: { openOnType: false } })} defaultValue={items} getRowId={idOf} onChange={onChange} />);
+    act(() => screen.getByRole("combobox", { name: "Forma" }).focus());
+    await user.keyboard("Tarjeta");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    await user.tab();
+    expect(lastChange(onChange)).toMatchObject({ field: "method", next: 2 });
+  });
+
+  it("editorProps completePartialInput: '4' + Tab confirma el día 4 del mes actual", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DataGrid columns={base({ field: "due", header: "Vence", type: "date", editorProps: { completePartialInput: true } })} defaultValue={items} getRowId={idOf} onChange={onChange} />);
+    await user.type(screen.getByLabelText("Vence"), "4");
+    await user.tab();
+    const now = new Date();
+    expect(lastChange(onChange).next).toBe(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-04`);
+  });
+
+  it("editorProps allowNegative: una columna numérica acepta -5", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DataGrid columns={base({ field: "amount", header: "Saldo", type: "number", editorProps: { allowNegative: true } })} defaultValue={items} getRowId={idOf} onChange={onChange} />);
+    await user.type(screen.getByRole("textbox", { name: "Saldo" }), "-5");
+    await user.tab();
+    expect(lastChange(onChange)).toMatchObject({ field: "amount", next: -5 });
+  });
+
+  it("el popover de la fecha no cuenta como salir de la celda y Esc lo cierra sin revertir", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DataGrid columns={base({ field: "due", header: "Vence", type: "date" })} defaultValue={items} getRowId={idOf} onChange={onChange} />);
+    const input = screen.getByLabelText("Vence");
+    await user.type(input, "29/10");
+    const td = input.closest("td")!;
+    expect(td).toHaveAttribute("data-draft-dirty");
+    await user.keyboard("{ArrowDown}");
+    await screen.findByRole("dialog");
+    await waitFor(() => expect(document.activeElement?.closest("[role=dialog]")).not.toBeNull());
+    expect(td).toHaveAttribute("data-draft-dirty");
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByLabelText("Vence")).toHaveValue("29/10");
+    expect(td).toHaveAttribute("data-draft-dirty");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("el listado del select no cuenta como salir de la celda y Esc lo cierra sin revertir", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DataGrid columns={base({ field: "method", header: "Forma", type: "select", options: methods })} defaultValue={items} getRowId={idOf} onChange={onChange} />);
+    const input = screen.getByRole("combobox", { name: "Forma" });
+    await user.type(input, "Ta");
+    const td = input.closest("td")!;
+    const listbox = await screen.findByRole("listbox");
+    expect(td).toHaveAttribute("data-draft-dirty");
+    fireEvent.blur(input, { relatedTarget: listbox });
+    expect(td).toHaveAttribute("data-draft-dirty");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(input).toHaveValue("");
+    expect(td).toHaveAttribute("data-draft-dirty");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("onRowClick y onRowDoubleClick ignoran clics que llegan desde un portal dentro de una celda", async () => {
+    const user = userEvent.setup();
+    const onRowClick = vi.fn();
+    const onRowDoubleClick = vi.fn();
+    render(<DataGrid columns={base({ field: "method", header: "Forma", type: "select", options: methods })} defaultValue={items} getRowId={idOf} onRowClick={onRowClick} onRowDoubleClick={onRowDoubleClick} />);
+    await user.click(screen.getByRole("combobox", { name: "Forma" }));
+    const option = await screen.findByRole("option", { name: "Tarjeta" });
+    fireEvent.doubleClick(option);
+    await user.click(option);
+    expect(onRowClick).not.toHaveBeenCalled();
+    expect(onRowDoubleClick).not.toHaveBeenCalled();
   });
 });

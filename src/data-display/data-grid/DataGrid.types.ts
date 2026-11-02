@@ -24,7 +24,8 @@ export type DataGridHandle<T> = {
   patchRow(id: string, partial: Partial<T>): void;
 };
 export type DataGridCellContext<T> = { row: T; value: unknown; rowId: string; grid: DataGridHandle<T> };
-export type DataGridCellComponent<T> = React.ComponentType<DataGridCellContext<T> & { column: DataGridColumn<T> }>;
+/** `onCommit` escribe el valor de la celda por `rowId`; `editable` indica si la columna admite edición en esta fila. */
+export type DataGridCellComponent<T> = React.ComponentType<DataGridCellContext<T> & { column: DataGridColumn<T>; onCommit: (value: unknown) => void; editable: boolean }>;
 
 export interface DataGridColumn<T, TOption = unknown> {
   field: keyof T & string;
@@ -50,6 +51,8 @@ export interface DataGridColumn<T, TOption = unknown> {
   getOptionLabel?(option: TOption): string;
   render?: (ctx: DataGridCellContext<T>) => React.ReactNode;
   editable?: boolean | ((row: T) => boolean);
+  /** Props que se pasan tal cual al editor interno; la celda conserva `value`, `onCommit`/`onValueChange` y `aria-label`. */
+  editorProps?: Record<string, unknown>;
   required?: boolean;
   validate?: (value: unknown, row: T) => string | null;
   onCommit?: (ctx: { row: T; value: unknown; prev: unknown; grid: DataGridHandle<T> }) => void;

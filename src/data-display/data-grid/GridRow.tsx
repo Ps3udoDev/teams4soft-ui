@@ -10,8 +10,10 @@ import type { GridRowsStore } from "./grid-rows-store";
 import type { DataGridCellComponent, DataGridClassNames, DataGridColumn, DataGridDensity, DataGridHandle, DataGridSelectionMode } from "./DataGrid.types";
 
 const interactiveSelector = "button, input, select, textarea, a, [role=checkbox], [role=radio], [data-editable]";
+// Un portal dentro de una celda burbuja sus clics por React hasta la fila aunque su DOM esté fuera de ella.
 function isInteractive(event: React.MouseEvent<HTMLTableRowElement>) {
-  return event.target instanceof Element && Boolean(event.target.closest(interactiveSelector));
+  if (!(event.target instanceof Element) || !event.currentTarget.contains(event.target)) return true;
+  return Boolean(event.target.closest(interactiveSelector));
 }
 
 export function definition<T extends RowData>(column: Column<GridFeatures, T, unknown>): DataGridColumn<T> | undefined {
@@ -86,7 +88,8 @@ function GridRowInner<T extends RowData>({ row, isSelected, isDirty, errorsForRo
       if (col && Editor) return <EditableCell key={`${cell.id}:${revision}`} rowId={row.id} column={col} value={value} error={error} editor={Editor} cellProps={cellProps}
         onCommit={next => commitCell(row.id, col, next, grid)} disabled={loading} unstyled={unstyled} editorClassName={classNames?.editor} editorStyle={styles?.editor} />;
       return <td key={cell.id} {...cellProps}>
-        {cell.column.id === "__select" ? renderSelection(row.id) : col && <Cell column={col} row={row.original} value={value} rowId={row.id} grid={grid} />}
+        {cell.column.id === "__select" ? renderSelection(row.id) : col && <Cell column={col} row={row.original} value={value} rowId={row.id} grid={grid}
+          editable={!readOnly && isCellEditable(col, row.original)} onCommit={next => commitCell(row.id, col, next, grid)} />}
       </td>;
     })}
   </tr>;
