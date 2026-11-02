@@ -1,4 +1,5 @@
 import { formatIso } from "../../forms/date-field/date-utils";
+import { formatNumber } from "../../forms/number-field/number-utils";
 import type { DataGridColumn } from "./DataGrid.types";
 import { dataGridMessagesEs } from "./messages";
 
@@ -21,15 +22,13 @@ export function formatCellText<T, O = unknown>(
       const numericValue = Number(value);
       if (!Number.isFinite(numericValue)) return "";
       const digits = column.fractionDigits ?? 2;
-      const text = new Intl.NumberFormat(locale, {
-        style: "decimal", minimumFractionDigits: digits, maximumFractionDigits: digits,
-      }).format(numericValue);
-      if (column.type === "currency") {
-        const symbol = column.currencySymbol ?? "$";
-        return text.startsWith("-") ? `-${symbol}${text.slice(1)}` : `${symbol}${text}`;
-      }
-      if (column.type === "percent") return `${text} %`;
-      return text;
+      return formatNumber(numericValue, {
+        mode: column.type === "currency" ? "currency" : column.type === "percent" ? "percent" : "decimal",
+        minFractionDigits: digits,
+        maxFractionDigits: digits,
+        currencySymbol: column.currencySymbol,
+        locale,
+      });
     }
     case "date":
       return typeof value === "string" ? formatIso(value, { displayFormat: "dd/MM/yyyy" }) : "";
