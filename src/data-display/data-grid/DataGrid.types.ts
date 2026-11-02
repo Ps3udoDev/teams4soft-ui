@@ -31,8 +31,8 @@ export type DataGridHandle<T> = {
   focusCell(id: string, field: string): void;
 };
 export type DataGridCellContext<T> = { row: T; value: unknown; rowId: string; grid: DataGridHandle<T> };
-/** `onCommit` escribe el valor de la celda por `rowId`; `editable` indica si la columna admite edición en esta fila. */
-export type DataGridCellComponent<T> = React.ComponentType<DataGridCellContext<T> & { column: DataGridColumn<T>; onCommit: (value: unknown) => void; editable: boolean }>;
+/** `onCommit` escribe el valor de la celda por `rowId`; `editable` indica si la columna admite edición en esta fila; `error` es su mensaje de validación. */
+export type DataGridCellComponent<T> = React.ComponentType<DataGridCellContext<T> & { column: DataGridColumn<T>; onCommit: (value: unknown) => void; editable: boolean; error?: string }>;
 
 export interface DataGridColumn<T, TOption = unknown> {
   field: keyof T & string;
@@ -58,7 +58,7 @@ export interface DataGridColumn<T, TOption = unknown> {
   getOptionLabel?(option: TOption): string;
   render?: (ctx: DataGridCellContext<T>) => React.ReactNode;
   editable?: boolean | ((row: T) => boolean);
-  /** Props que se pasan tal cual al editor interno; la celda conserva `value`, `onCommit`/`onValueChange` y `aria-label`. */
+  /** Props del editor interno. La celda conserva `value`, `onCommit`/`onValueChange` y `aria-label`; `className` y `classNames` se suman, y `onBlur`/`onKeyDown` se componen con la confirmación. */
   editorProps?: Record<string, unknown>;
   required?: boolean;
   validate?: (value: unknown, row: T) => string | null;

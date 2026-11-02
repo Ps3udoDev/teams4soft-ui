@@ -74,7 +74,8 @@ function GridRowInner<T extends RowData>({ row, isSelected, isDirty, errorsForRo
       const col = definition(cell.column);
       const type = col?.type ?? "text";
       const CustomType = cellTypes?.[type];
-      const Editor = col && !CustomType && !readOnly && isCellEditable(col, row.original) ? editCellRegistry[type as keyof typeof editCellRegistry] : undefined;
+      const editable = col !== undefined && !readOnly && isCellEditable(col, row.original);
+      const Editor = col && !CustomType && editable ? editCellRegistry[type as keyof typeof editCellRegistry] : undefined;
       const Cell = CustomType ?? readCellRegistry[type as keyof typeof readCellRegistry] ?? readCellRegistry.text;
       const align = col?.align ?? (["number", "currency", "percent"].includes(type) ? "right" : "left");
       const pinned = cell.column.getIsPinned();
@@ -89,9 +90,11 @@ function GridRowInner<T extends RowData>({ row, isSelected, isDirty, errorsForRo
       };
       if (col && Editor) return <EditableCell key={`${cell.id}:${revision}`} rowId={row.id} column={col} value={value} error={error} editor={Editor} cellProps={cellProps}
         onCommit={next => commitCell(row.id, col, next, grid)} onEnterCommit={focusAfterEnter} disabled={loading} unstyled={unstyled} editorClassName={classNames?.editor} editorStyle={styles?.editor} />;
-      return <td key={cell.id} {...cellProps}>
+      // Una celda propia editable es destino de focusCell igual que las de la librería.
+      const focusTarget = col && CustomType && editable ? { "data-row-id": row.id, "data-field": col.field } : undefined;
+      return <td key={cell.id} {...cellProps} {...focusTarget}>
         {cell.column.id === "__select" ? renderSelection(row.id) : col && <Cell column={col} row={row.original} value={value} rowId={row.id} grid={grid}
-          editable={!readOnly && isCellEditable(col, row.original)} onCommit={next => commitCell(row.id, col, next, grid)} />}
+          editable={editable} error={error} onCommit={next => commitCell(row.id, col, next, grid)} />}
       </td>;
     })}
   </tr>;

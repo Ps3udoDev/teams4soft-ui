@@ -1,5 +1,5 @@
 import * as React from "react";
-import { cn, useClientLayoutEffect } from "../../../lib";
+import { useClientLayoutEffect } from "../../../lib";
 import { Tooltip } from "../../../primitives";
 import type { DataGridColumn } from "../DataGrid.types";
 import type { EditCellProps } from "./edit-cells";
@@ -161,10 +161,9 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnter
   return <td {...cellProps} ref={cellRef} data-editable="" data-row-id={rowId} data-field={column.field} onInputCapture={markDirty} onPasteCapture={markDirty} onKeyDownCapture={planEnter} onKeyDown={handleKeyDown} onBlur={leave}>
     {/* El Tooltip siempre montado: que aparezca un error no debe remontar el editor ni quitarle el foco. */}
     <Tooltip content={error} open={Boolean(error) && tooltipOpen} onOpenChange={setTooltipOpen} unstyled={unstyled}>
-      <div data-slot="editor">
+      <div data-slot="editor" className={editorClassName} style={editorStyle}>
         <Editor key={editorKey} rowId={rowId} column={column} value={value} draft={draft} onDraftChange={setDraft} onCommit={commit} onPopoverOpenChange={onPopoverOpenChange} label={column.header}
-          disabled={disabled} invalid={Boolean(error)} unstyled={unstyled} style={editorStyle}
-          className={cn(!unstyled && "h-(--ui-control-height) data-[invalid=true]:border-(--ui-grid-cell-invalid)", editorClassName)} />
+          disabled={disabled} invalid={Boolean(error)} error={error} unstyled={unstyled} className={unstyled ? undefined : "h-(--ui-control-height)"} />
       </div>
     </Tooltip>
   </td>;

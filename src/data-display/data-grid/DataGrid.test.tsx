@@ -1192,7 +1192,7 @@ describe("DataGrid: celdas editables", () => {
     render(<DataGrid columns={fx} value={[{ id: "r-1", policy: null, collectedAmount: 1.5, locked: 15 as unknown as boolean }]} getRowId={rowId} classNames={{ editor: "editor-slot" }} />);
     expect(screen.getByRole("textbox", { name: "Tipo de cambio" })).toHaveValue("1.5000");
     expect(screen.getByRole("textbox", { name: "Pct" })).toHaveValue("15.00 %");
-    expect(screen.getByRole("textbox", { name: "Pct" }).closest('[data-slot="editor"]')?.firstElementChild).toHaveClass("editor-slot");
+    expect(screen.getByRole("textbox", { name: "Pct" }).closest('[data-slot="editor"]')).toHaveClass("editor-slot");
   });
 });
 
@@ -2191,6 +2191,84 @@ describe("DataGrid: revisión final de G2", () => {
     });
   });
 
+  describe("celdas propias editables", () => {
+    const Own: DataGridCellComponent<Line> = ({ value, error, editable, onCommit }) => <label>Propia
+      <input aria-invalid={Boolean(error)} data-error={error} disabled={!editable} value={String(value ?? "")} onChange={event => onCommit(event.target.value)} /></label>;
+    const ownCells = { own: Own };
+    const ownColumns: DataGridColumn<Line>[] = [{ field: "policy", header: "Propia", type: "own", editable: true, required: true }];
+
+    it("un required vacío se puede enfocar y la celda recibe su error", () => {
+      const ref = React.createRef<DataGridHandle<Line>>();
+      render(<DataGrid ref={ref} cellTypes={ownCells} columns={ownColumns} defaultValue={[{ id: "r-1", policy: null, collectedAmount: 1 }]} getRowId={lineId} />);
+      const input = screen.getByRole("textbox", { name: "Propia" });
+      expect(input).not.toHaveAttribute("data-error");
+      let valid = true;
+      act(() => { valid = ref.current!.validate(); });
+      expect(valid).toBe(false);
+      expect(input).toHaveAttribute("data-error", "Requerido");
+      expect(cellOf("r-1", "policy")).toHaveAttribute("data-invalid");
+      act(() => ref.current?.focusCell("r-1", "policy"));
+      expect(input).toHaveFocus();
+    });
+
+    it("una celda propia que no es editable sigue sin marcarse como destino de foco", () => {
+      render(<DataGrid cellTypes={ownCells} columns={[{ ...ownColumns[0]!, editable: false }]} defaultValue={lineRows} getRowId={lineId} />);
+      expect(document.querySelectorAll("td[data-row-id]")).toHaveLength(0);
+    });
+  });
+
+  describe("editorProps", () => {
+    it("onBlur y onKeyDown de editorProps no sustituyen la confirmación de una celda text", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      const onBlur = vi.fn();
+      const onKeyDown = vi.fn();
+      const columns: DataGridColumn<Line>[] = [{ ...lineColumns[0]!, editorProps: { onBlur, onKeyDown } }];
+      render(<DataGrid columns={columns} defaultValue={lineRows} getRowId={lineId} onChange={onChange} />);
+      await retype(user, policyInput(0), "Tab");
+      await user.tab();
+      expect(onBlur).toHaveBeenCalled();
+      expect(onChange.mock.lastCall![1]).toMatchObject({ rowId: "r-1", next: "Tab" });
+      await retype(user, policyInput(1), "Enter");
+      await user.keyboard("{Enter}");
+      expect(onKeyDown).toHaveBeenCalled();
+      expect(onChange.mock.lastCall![1]).toMatchObject({ rowId: "r-2", next: "Enter" });
+    });
+
+    it("onBlur de editorProps no sustituye la confirmación de una celda numérica", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      const onBlur = vi.fn();
+      render(<DataGrid columns={[{ ...lineColumns[1]!, editorProps: { onBlur } }]} defaultValue={lineRows} getRowId={lineId} onChange={onChange} />);
+      await retype(user, amountInput(0), "5");
+      await user.tab();
+      expect(onBlur).toHaveBeenCalled();
+      expect(onChange.mock.lastCall![1]).toMatchObject({ rowId: "r-1", next: 5 });
+    });
+
+    it("classNames y className de editorProps se suman a los de la celda", () => {
+      const columns: DataGridColumn<Line>[] = [
+        { ...lineColumns[0]!, editorProps: { className: "mi-texto", classNames: { input: "mi-input" } } },
+        { ...lineColumns[1]!, editorProps: { className: "mi-numero" } },
+        { field: "due", header: "Vence", type: "date", editable: true, editorProps: { classNames: { label: "mi-label", control: "mi-control", root: "mi-root" } } },
+        { field: "method", header: "Forma", type: "select", options: [{ value: 1, label: "Uno" }], editable: true, editorProps: { classNames: { label: "mi-label" } } },
+        { field: "paid", header: "Pagado", type: "checkbox", editable: true, editorProps: { classNames: { label: "mi-label" } } },
+        { field: "side", header: "Lado", type: "radio", options: [{ value: "D", label: "D" }], editable: true, editorProps: { classNames: { label: "mi-label" } } },
+      ];
+      render(<DataGrid columns={columns} defaultValue={[lineRows[0]!]} getRowId={lineId} />);
+      expect(policyInput(0)).toHaveClass("mi-input");
+      expect(policyInput(0).parentElement).toHaveClass("mi-texto", "h-(--ui-control-height)");
+      expect(amountInput(0).parentElement).toHaveClass("mi-numero", "h-(--ui-control-height)");
+      const dateCell = cellOf("r-1", "due")!;
+      expect(within(dateCell).getByText("Vence")).toHaveClass("sr-only", "mi-label");
+      expect(dateCell.querySelector("input")!.parentElement).toHaveClass("mi-control");
+      expect(dateCell.querySelector(".mi-root")).toHaveClass("min-w-40");
+      expect(within(cellOf("r-1", "method")!).getByText("Forma")).toHaveClass("sr-only", "mi-label");
+      expect(within(cellOf("r-1", "paid")!).getByText("Pagado")).toHaveClass("sr-only", "mi-label");
+      expect(within(cellOf("r-1", "side")!).getByText("Lado")).toHaveClass("sr-only", "mi-label");
+    });
+  });
+
   describe("grillas de consulta", () => {
     const refreshed = lineRows.map(row => row.id === "r-1" ? { ...row, policy: "Refrescada" } : row);
 
@@ -2248,5 +2326,64 @@ describe("DataGrid: revisión final de G2", () => {
     await retype(user, amountInput(0), "5");
     await user.tab();
     expect(seen).toEqual([["collectedAmount", 5], ["total", 5]]);
+  });
+
+  describe("editores con error", () => {
+    const allEditors: DataGridColumn<Line>[] = [
+      { field: "policy", header: "Texto", required: true, editable: true },
+      { field: "collectedAmount", header: "Numero", type: "currency", required: true, editable: true },
+      { field: "due", header: "Fecha", type: "date", required: true, editable: true },
+      { field: "method", header: "Lista", type: "select", options: [{ value: 1, label: "Uno" }], required: true, editable: true },
+      { field: "paid", header: "Casilla", type: "checkbox", validate: () => "Revisar casilla", editable: true },
+      { field: "side", header: "Opcion", type: "radio", options: [{ value: "D", label: "D" }], required: true, editable: true },
+    ];
+    const blank: Line[] = [{ id: "r-1", policy: null, collectedAmount: null, due: null, method: null, paid: false, side: null }];
+    const showErrors = (props: Partial<DataGridProps<Line>> = {}) => {
+      const ref = React.createRef<DataGridHandle<Line>>();
+      render(<DataGrid ref={ref} columns={allEditors} defaultValue={blank} getRowId={lineId} {...props} />);
+      act(() => { ref.current?.validate(); });
+    };
+
+    it("el control de date y select usa --ui-grid-cell-invalid en lugar del color fijo", () => {
+      showErrors();
+      for (const field of ["due", "method"]) {
+        const control = cellOf("r-1", field)!.querySelector("input")!.parentElement!;
+        expect(control).toHaveAttribute("data-invalid");
+        expect(control).toHaveClass("data-[invalid=true]:border-(--ui-grid-cell-invalid)");
+        expect(control).not.toHaveClass("data-[invalid=true]:border-ui-danger");
+      }
+    });
+
+    it("classNames.editor y styles.editor van al elemento data-slot=editor", () => {
+      showErrors({ classNames: { editor: "editor-slot" }, styles: { editor: { color: "red" } } });
+      for (const field of allEditors.map(column => column.field)) {
+        const slot = cellOf("r-1", field)!.querySelector<HTMLElement>('[data-slot="editor"]')!;
+        expect(slot).toHaveClass("editor-slot");
+        expect(slot.style.color).toBe("red");
+        expect(slot.firstElementChild).not.toHaveClass("editor-slot");
+      }
+    });
+
+    it("el mensaje queda enlazado al control y desaparece al corregir", async () => {
+      const user = userEvent.setup();
+      showErrors();
+      expect(screen.getByRole("textbox", { name: "Texto" })).toHaveAccessibleDescription("Requerido");
+      expect(screen.getByRole("textbox", { name: "Numero" })).toHaveAccessibleDescription("Requerido");
+      expect(screen.getByLabelText("Fecha")).toHaveAccessibleDescription("Requerido");
+      expect(screen.getByRole("combobox", { name: "Lista" })).toHaveAccessibleDescription("Requerido");
+      expect(screen.getByRole("checkbox", { name: "Casilla" })).toHaveAccessibleDescription("Revisar casilla");
+      expect(screen.getByRole("radiogroup", { name: "Opcion" })).toHaveAccessibleDescription("Requerido");
+      await user.type(screen.getByRole("textbox", { name: "Texto" }), "Listo");
+      await user.tab();
+      expect(screen.getByRole("textbox", { name: "Texto" })).not.toHaveAccessibleDescription();
+    });
+
+    it("sin error de celda, el campo de fecha sigue mostrando a la vista su aviso de formato", async () => {
+      const user = userEvent.setup();
+      render(<DataGrid columns={[{ field: "due", header: "Fecha", type: "date", editable: true }]} defaultValue={blank} getRowId={lineId} />);
+      await user.type(screen.getByLabelText("Fecha"), "99");
+      await user.tab();
+      expect(screen.getByText(/Fecha no válida/)).not.toHaveClass("sr-only");
+    });
   });
 });
