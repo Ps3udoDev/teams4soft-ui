@@ -1,7 +1,6 @@
 import * as React from "react";
-import { cn } from "../../../lib";
+import { cn, useClientLayoutEffect } from "../../../lib";
 import { Tooltip } from "../../../primitives";
-import { useClientLayoutEffect } from "../use-grid-rows";
 import type { DataGridColumn } from "../DataGrid.types";
 import type { EditCellProps } from "./edit-cells";
 

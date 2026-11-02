@@ -38,19 +38,9 @@ function TextEditor<T>({ column, value, draft, onDraftChange, onCommit, label, d
 const numberModes = { number: "decimal", currency: "currency", percent: "percent" } as const;
 
 function NumberEditor<T>({ column, value, onCommit, label, disabled, invalid, unstyled, className, style }: EditCellProps<T>) {
-  // NumberField confirma en cada blur: sin cambios se devuelve el valor intacto para no redondearlo a fractionDigits.
-  const touched = React.useRef(false);
-  // Un valor externo reescribe el texto de NumberField: lo tecleado antes ya no cuenta como cambio.
-  React.useEffect(() => { touched.current = false; }, [value]);
-  const commit = (next: number | null) => {
-    const changed = touched.current;
-    touched.current = false;
-    onCommit(changed ? next : value);
-  };
   return <NumberField size="sm" mode={numberModes[column.type as keyof typeof numberModes]} fractionDigits={column.fractionDigits} currencySymbol={column.currencySymbol}
     disabled={disabled} invalid={invalid} unstyled={unstyled} className={className} style={style}
-    {...column.editorProps} aria-label={label} value={typeof value === "number" ? value : null}
-    onValueChange={() => { touched.current = true; }} onCommit={commit} />;
+    {...column.editorProps} aria-label={label} value={typeof value === "number" ? value : null} onCommit={onCommit} />;
 }
 
 const hiddenLabel = "sr-only";

@@ -1,10 +1,8 @@
 import * as React from "react";
 import { createGridRowsStore, type GridChange, type GridRowsStore } from "./grid-rows-store";
-import { devWarn } from "../../lib";
+import { devWarn, useClientLayoutEffect } from "../../lib";
 import { isCellEditable, validateCell, validateRows } from "./validation";
 import type { DataGridColumn, DataGridData, DataGridHandle, DataGridMessages } from "./DataGrid.types";
-
-export const useClientLayoutEffect = typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
 
 export type GridErrors = Record<string, Record<string, string>>;
 

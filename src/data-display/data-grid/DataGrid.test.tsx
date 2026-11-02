@@ -7,7 +7,7 @@ import { renderToString } from "react-dom/server";
 import { Dialog } from "../../overlays/dialog/Dialog";
 import { DataGrid } from "./DataGrid";
 import { buildPersistStorageKey } from "./persist";
-import type { DataGridCellComponent, DataGridColumn, DataGridHandle } from "./DataGrid.types";
+import type { DataGridCellComponent, DataGridColumn, DataGridData, DataGridHandle, DataGridProps } from "./DataGrid.types";
 import type { DataGridChange } from "../index";
 
 beforeAll(() => {
@@ -1977,5 +1977,73 @@ describe("DataGrid: ref completo, onChange y toolbar Agregar", () => {
     expect(policyInput(0)).toHaveValue("Primera");
     expect(policyInput(1)).toHaveValue("Segunda");
     expect(ref.current?.getData().dirtyIds).toEqual(["r-1", "r-2"]);
+  });
+});
+
+describe("DataGrid: revisión final de G2", () => {
+  type Line = { id: string; kind?: string; policy: string | null; collectedAmount: number | null; total?: number | null; due?: string | null; method?: number | null; paid?: boolean; side?: string | null };
+  const lineRows: Line[] = [
+    { id: "r-1", policy: "Pérez", collectedAmount: 10 },
+    { id: "r-2", policy: "Bravo", collectedAmount: 20 },
+    { id: "r-3", policy: "Alfa", collectedAmount: 30 },
+  ];
+  const lineColumns: DataGridColumn<Line>[] = [
+    { field: "policy", header: "Póliza", editable: true, filter: true },
+    { field: "collectedAmount", header: "Imp. cobrado", type: "currency", editable: true },
+  ];
+  const lineId = (row: Line) => row.id;
+  const policyInput = (index: number) => within(bodyRows()[index]!).getByRole("textbox", { name: "Póliza" }) as HTMLInputElement;
+  const amountInput = (index: number) => within(bodyRows()[index]!).getByRole("textbox", { name: "Imp. cobrado" }) as HTMLInputElement;
+  const retype = async (user: User, input: HTMLInputElement, text: string) => {
+    await user.clear(input);
+    await user.type(input, text);
+  };
+  const cellOf = (rowId: string, field: string) => Array.from(document.querySelectorAll<HTMLElement>("td[data-row-id]")).find(cell => cell.dataset.rowId === rowId && cell.dataset.field === field);
+  const silenceWarnings = () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    onTestFinished(() => warn.mockRestore());
+    return warn;
+  };
+
+  describe("NumberField dentro de la celda", () => {
+    it("un negativo sin allowNegative se muestra y se conserva al recorrerlo con Tab", async () => {
+      const user = userEvent.setup();
+      const ref = React.createRef<DataGridHandle<Line>>();
+      const onChange = vi.fn();
+      render(<DataGrid ref={ref} columns={lineColumns} defaultValue={[{ id: "r-1", policy: "A", collectedAmount: -500 }]} getRowId={lineId} onChange={onChange} />);
+      expect(amountInput(0)).toHaveValue("-$500.00");
+      await user.click(policyInput(0));
+      await user.tab();
+      await user.tab();
+      expect(amountInput(0)).toHaveValue("-$500.00");
+      expect(onChange).not.toHaveBeenCalled();
+      expect(ref.current?.getData().rows[0]?.collectedAmount).toBe(-500);
+    });
+
+    it("un texto que no es número al salir vuelve a mostrar el valor guardado", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(<DataGrid columns={lineColumns} defaultValue={lineRows} getRowId={lineId} onChange={onChange} />);
+      await user.click(amountInput(0));
+      await user.keyboard("{Control>}a{/Control}.");
+      expect(amountInput(0)).toHaveValue(".");
+      await user.tab();
+      expect(amountInput(0)).toHaveValue("$10.00");
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("recortar en onCommit con patchRow se refleja también al repetir el mismo número", async () => {
+      const user = userEvent.setup();
+      const ref = React.createRef<DataGridHandle<Line>>();
+      const clamped: DataGridColumn<Line>[] = [{ ...lineColumns[1]!, onCommit: ({ row, value, grid }) => { if ((value as number) > 100) grid.patchRow(row.id, { collectedAmount: 100 }); } }];
+      render(<DataGrid ref={ref} columns={clamped} defaultValue={lineRows} getRowId={lineId} />);
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await retype(user, amountInput(0), "150");
+        await user.keyboard("{Enter}");
+        expect(ref.current?.getData().rows[0]?.collectedAmount).toBe(100);
+        expect(amountInput(0)).toHaveValue("$100.00");
+        await user.click(amountInput(0));
+      }
+    });
   });
 });

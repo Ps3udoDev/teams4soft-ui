@@ -217,6 +217,112 @@ describe("NumberField", () => {
     expect(getInput().className).toBe("mi-input");
   });
 
+  it("un negativo externo sin allowNegative no cambia al salir ni al confirmar", async () => {
+    const user = userEvent.setup();
+    const onCommit = vi.fn();
+    render(<NumberField aria-label="Importe" mode="currency" defaultValue={-500} onCommit={onCommit} />);
+    const input = getInput();
+    expect(input).toHaveValue("-$500.00");
+    await user.tab();
+    await user.tab();
+    expect(input).toHaveValue("-$500.00");
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledWith(-500);
+  });
+
+  it("un valor con más decimales de los visibles se confirma intacto si no se toca", async () => {
+    const user = userEvent.setup();
+    const onCommit = vi.fn();
+    render(<NumberField aria-label="Importe" defaultValue={1.23456} onCommit={onCommit} />);
+    await user.tab();
+    await user.tab();
+    expect(onCommit).toHaveBeenCalledWith(1.23456);
+    expect(getInput()).toHaveValue("1.23");
+  });
+
+  it("un texto que no es número se descarta al salir y conserva el último número", async () => {
+    const user = userEvent.setup();
+    const onCommit = vi.fn();
+    render(<NumberField aria-label="Importe" defaultValue={5} onCommit={onCommit} />);
+    await user.click(getInput());
+    await user.keyboard("{Control>}a{/Control}.");
+    expect(getInput()).toHaveValue(".");
+    await user.tab();
+    expect(getInput()).toHaveValue("5.00");
+    expect(onCommit).toHaveBeenCalledWith(5);
+  });
+
+  it("vaciar sigue confirmando null", async () => {
+    const user = userEvent.setup();
+    const onCommit = vi.fn();
+    render(<NumberField aria-label="Importe" defaultValue={5} onCommit={onCommit} />);
+    await user.clear(getInput());
+    await user.tab();
+    expect(getInput()).toHaveValue("");
+    expect(onCommit).toHaveBeenCalledWith(null);
+  });
+
+  it("cambiar el símbolo sin foco reescribe el texto y el número sobrevive a enfocar y salir", async () => {
+    const user = userEvent.setup();
+    const onCommit = vi.fn();
+    const field = (symbol: string) => <NumberField aria-label="Importe" mode="currency" currencySymbol={symbol} value={1250} onCommit={onCommit} />;
+    const { rerender } = render(field("$"));
+    expect(getInput()).toHaveValue("$1,250.00");
+    rerender(field("US$"));
+    expect(getInput()).toHaveValue("US$1,250.00");
+    await user.tab();
+    expect(getInput()).toHaveValue("1,250.00");
+    await user.tab();
+    expect(getInput()).toHaveValue("US$1,250.00");
+    expect(onCommit).toHaveBeenCalledWith(1250);
+  });
+
+  it("cambiar los decimales sin foco reformatea; con foco respeta lo escrito hasta salir", async () => {
+    const user = userEvent.setup();
+    const field = (digits: number) => <NumberField aria-label="TC" fractionDigits={digits} defaultValue={1.5} />;
+    const { rerender } = render(field(2));
+    rerender(field(4));
+    expect(getInput()).toHaveValue("1.5000");
+    await user.click(getInput());
+    await user.keyboard("{Control>}a{/Control}12.");
+    rerender(field(3));
+    expect(getInput()).toHaveValue("12.");
+    await user.tab();
+    expect(getInput()).toHaveValue("12.000");
+  });
+
+  it("un padre que recorta al confirmar vuelve a recibir el commit y el texto refleja su valor, una y otra vez", async () => {
+    const user = userEvent.setup();
+    const commits: Array<number | null> = [];
+    function Clamped() {
+      const [value, setValue] = useState<number | null>(10);
+      return <NumberField aria-label="Importe" value={value} onCommit={next => { commits.push(next); setValue(Math.min(next ?? 0, 100)); }} />;
+    }
+    render(<Clamped />);
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await user.clear(getInput());
+      await user.type(getInput(), "150{Enter}");
+      expect(commits).toHaveLength(attempt);
+      expect(commits[attempt - 1]).toBe(150);
+      expect(getInput()).toHaveValue("100.00");
+    }
+  });
+
+  it("controlado: el eco del número confirmado no repite onCommit al salir", async () => {
+    const user = userEvent.setup();
+    const onCommit = vi.fn();
+    function Echo() {
+      const [value, setValue] = useState<number | null>(null);
+      return <NumberField aria-label="Importe" value={value} onCommit={next => { onCommit(next); setValue(next); }} />;
+    }
+    render(<Echo />);
+    await user.type(getInput(), "12.{Enter}");
+    expect(getInput()).toHaveValue("12.");
+    await user.tab();
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(getInput()).toHaveValue("12.00");
+  });
+
   it("reenvia la ref al input", () => {
     const ref = { current: null as HTMLInputElement | null };
     render(<NumberField aria-label="Importe" ref={ref} />);

@@ -3,13 +3,13 @@ import {
   useTable, type Column, type ColumnDef, type ColumnFiltersState,
   type ColumnSizingState, type RowData, type RowSelectionState, type SortingState, type Updater,
 } from "@tanstack/react-table";
-import { cn, devWarn } from "../../lib";
+import { cn, devWarn, useClientLayoutEffect } from "../../lib";
 import { CheckboxField } from "../../forms";
 import { LoadingOverlay, Progress, Skeleton } from "../../feedback";
 import { TooltipProvider } from "../../primitives";
 import { gridFeatures, type GridFeatures } from "./table-features";
 import { useGridColumns } from "./use-grid-columns";
-import { useClientLayoutEffect, useGridRows } from "./use-grid-rows";
+import { useGridRows } from "./use-grid-rows";
 import { definition, frozenSide, GridRow, type GridRowView } from "./GridRow";
 import { focusCellElement, settleCellFocus, type CellFocusPlan } from "./cells/EditableCell";
 import { ReadCellStyleContext } from "./cells/read-cells";

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { cn, mergeRefs } from "../../lib";
+import { cn, mergeRefs, useClientLayoutEffect } from "../../lib";
 import { TextField } from "../text-field/TextField";
 import type { NumberFieldProps } from "./NumberField.types";
 import {
@@ -78,8 +78,11 @@ export const NumberField = React.forwardRef<HTMLInputElement, NumberFieldProps>(
     const [caretTick, setCaretTick] = React.useState(0);
     const textRef = React.useRef(text);
     textRef.current = text;
+    // Tras confirmar, el padre puede dejar `value` igual que antes (recortó al mismo número): se concilia igualmente.
+    const [commitCheck, setCommitCheck] = React.useState(0);
 
     const focusedRef = React.useRef(false);
+    /** Último número válido o externo: el texto puede estar a medias o no poder representarlo. */
     const numberRef = React.useRef<number | null>(value ?? defaultValue ?? null);
     const lastCommitRef = React.useRef<number | null | typeof NOT_COMMITTED>(NOT_COMMITTED);
     const pendingSelectionRef = React.useRef<{ start: number; end: number } | null>(null);
@@ -94,12 +97,19 @@ export const NumberField = React.forwardRef<HTMLInputElement, NumberFieldProps>(
       if (value === undefined) return;
       const external = value ?? null;
       numberRef.current = external;
+      // Un valor que no es el eco de lo confirmado reabre la confirmación: repetir el número sí debe avisar.
+      if (lastCommitRef.current !== external) lastCommitRef.current = NOT_COMMITTED;
       if (readNumber(textRef.current) === external) return;
       const display = formatNumber(external, opts);
       setText(focusedRef.current ? stripAffixes(display) : display);
-    }, [value]);
+    }, [value, commitCheck]);
 
-    React.useLayoutEffect(() => {
+    // Con foco el texto es el que se está escribiendo; al salir ya se formatea con las opciones nuevas.
+    React.useEffect(() => {
+      if (!focusedRef.current) setText(formatNumber(numberRef.current, opts));
+    }, [opts]);
+
+    useClientLayoutEffect(() => {
       const pending = pendingSelectionRef.current;
       if (!pending) return;
       pendingSelectionRef.current = null;
@@ -141,10 +151,11 @@ export const NumberField = React.forwardRef<HTMLInputElement, NumberFieldProps>(
     };
 
     const commit = () => {
-      const current = readNumber(textRef.current);
+      const current = numberRef.current;
       if (lastCommitRef.current === current) return;
       lastCommitRef.current = current;
       onCommit?.(current);
+      setCommitCheck((check) => check + 1);
     };
 
     const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
@@ -164,8 +175,7 @@ export const NumberField = React.forwardRef<HTMLInputElement, NumberFieldProps>(
     const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
       onBlur?.(event);
       focusedRef.current = false;
-      const current = readNumber(textRef.current);
-      setText(formatNumber(current, opts));
+      setText(formatNumber(numberRef.current, opts));
       commit();
     };
 
