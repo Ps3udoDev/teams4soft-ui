@@ -115,6 +115,118 @@ describe("LookupDialog", () => {
     expect(props.onConfirm).not.toHaveBeenCalled();
   });
 
+  describe("clic en una fila y Enter", () => {
+    const cell = (index: number) => within(bodyRows()[index]!).getByText("Nombre " + (index + 1));
+
+    it("confirma la fila clicada una vez, con el foco en el contenedor del diálogo", async () => {
+      const { props, user } = setup();
+      await user.click(cell(1));
+      expect(document.activeElement).toBe(screen.getByRole("dialog", { name: "Seleccionar elemento" }));
+      await user.keyboard("{Enter}");
+      expect(props.onConfirm).toHaveBeenCalledTimes(1);
+      expect(props.onConfirm).toHaveBeenCalledWith(item(2));
+    });
+
+    it("confirma también si el foco queda en body", async () => {
+      const { props, user } = setup();
+      await user.click(cell(2));
+      (document.activeElement as HTMLElement).blur();
+      expect(document.activeElement).toBe(document.body);
+      await user.keyboard("{Enter}");
+      expect(props.onConfirm).toHaveBeenCalledTimes(1);
+      expect(props.onConfirm).toHaveBeenCalledWith(item(3));
+    });
+
+    it("confirma la fila preseleccionada al clicarla de nuevo", async () => {
+      const { props, user } = setup({ preselectedId: "i-2" });
+      await user.click(cell(1));
+      await user.keyboard("{Enter}");
+      expect(props.onConfirm).toHaveBeenCalledWith(item(2));
+    });
+
+    it("sin clic en una fila no confirma, aunque haya una preseleccionada", async () => {
+      const { props, user } = setup({ preselectedId: "i-2" });
+      await user.click(screen.getByRole("heading", { name: "Seleccionar elemento" }));
+      expect(document.activeElement).toBe(screen.getByRole("dialog", { name: "Seleccionar elemento" }));
+      await user.keyboard("{Enter}");
+      expect(props.onConfirm).not.toHaveBeenCalled();
+    });
+
+    it("un clic fuera de las filas anula el clic anterior", async () => {
+      const { props, user } = setup();
+      await user.click(cell(0));
+      await user.click(screen.getByRole("heading", { name: "Seleccionar elemento" }));
+      await user.keyboard("{Enter}");
+      expect(props.onConfirm).not.toHaveBeenCalled();
+    });
+
+    it("no confirma si la fila seleccionada ya no está en la página actual", async () => {
+      const { props, rerender, user } = setup({ remote: true, total: 25, pageSize: 3 });
+      await user.click(cell(0));
+      rerender({ remote: true, total: 25, pageSize: 3, page: 2, rows: makeItems(4, 3) });
+      await user.keyboard("{Enter}");
+      expect(props.onConfirm).not.toHaveBeenCalled();
+    });
+
+    it("no confirma mientras carga", async () => {
+      const { props, rerender, user } = setup();
+      await user.click(cell(0));
+      rerender({ loading: true });
+      await user.keyboard("{Enter}");
+      expect(props.onConfirm).not.toHaveBeenCalled();
+    });
+
+    it("Enter en un botón del pie activa el botón y no confirma", async () => {
+      const onExtra = vi.fn();
+      const { props, user } = setup({ footerExtra: <button type="button" onClick={onExtra}>Extra</button> });
+      await user.click(cell(0));
+      screen.getByRole("button", { name: "Extra" }).focus();
+      await user.keyboard("{Enter}");
+      expect(onExtra).toHaveBeenCalledTimes(1);
+      expect(props.onConfirm).not.toHaveBeenCalled();
+    });
+
+    it("si el foco pasó a otro control, Enter en body ya no confirma", async () => {
+      const { props, user } = setup();
+      await user.click(cell(0));
+      await user.tab();
+      (document.activeElement as HTMLElement).blur();
+      expect(document.activeElement).toBe(document.body);
+      await user.keyboard("{Enter}");
+      expect(props.onConfirm).not.toHaveBeenCalled();
+    });
+
+    it("Enter en el paginador no confirma", async () => {
+      const { props, user } = setup({ remote: true, total: 25, pageSize: 3 });
+      await user.click(cell(0));
+      screen.getByRole("button", { name: "Página siguiente" }).focus();
+      await user.keyboard("{Enter}");
+      expect(props.onConfirm).not.toHaveBeenCalled();
+    });
+
+    it("Enter en el menú de filtro no confirma", async () => {
+      const { props, user } = setup();
+      await user.click(cell(0));
+      await user.click(screen.getByRole("button", { name: "Filtrar Nombre" }));
+      const menu = await screen.findByRole("dialog", { name: "Filtrar Nombre" });
+      await user.type(within(menu).getByRole("textbox", { name: "Filtrar Nombre" }), "2{Enter}");
+      expect(props.onConfirm).not.toHaveBeenCalled();
+    });
+
+    it("Enter en un botón o enlace de una fila no confirma, tampoco tras clicar la fila", async () => {
+      const withActions: DataGridColumn<Item>[] = [...columns, {
+        field: "id", header: "Acciones", type: "custom", render: () => <><button type="button">Ver</button><a href="#detalle">Detalle</a></>,
+      }];
+      const { props, user } = setup({ columns: withActions });
+      await user.click(cell(0));
+      within(bodyRows()[0]!).getByRole("button", { name: "Ver" }).focus();
+      await user.keyboard("{Enter}");
+      await user.click(within(bodyRows()[0]!).getByRole("link", { name: "Detalle" }));
+      await user.keyboard("{Enter}");
+      expect(props.onConfirm).not.toHaveBeenCalled();
+    });
+  });
+
   it("footerExtra se pinta antes de Aceptar", () => {
     setup({ footerExtra: <button type="button">Cancelar</button> });
     const buttons = screen.getAllByRole("button").map(b => b.textContent);

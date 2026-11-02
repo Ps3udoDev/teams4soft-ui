@@ -45,12 +45,15 @@ export function LookupDialog<T>({
 }: LookupDialogProps<T>) {
   const [selectedId, setSelectedId] = React.useState<string | null>(preselectedId ?? null);
   const selectedRef = React.useRef(selectedId);
+  // True after a mouse click on a row, until the next click elsewhere or focus reaches another control of the dialog.
+  const rowClickedRef = React.useRef(false);
   const [wasOpen, setWasOpen] = React.useState(open);
   if (wasOpen !== open) {
     setWasOpen(open);
     if (open) {
       const next = preselectedId ?? null;
       selectedRef.current = next;
+      rowClickedRef.current = false;
       setSelectedId(next);
     }
   }
@@ -64,8 +67,8 @@ export function LookupDialog<T>({
 
   const { grid: gridClassName, ...dialogClassNames } = classNames ?? {};
 
-  const latest = React.useRef({ rows, getItemId, onConfirm, onPageChange, page, pageSize });
-  latest.current = { rows, getItemId, onConfirm, onPageChange, page, pageSize };
+  const latest = React.useRef({ rows, getItemId, onConfirm, onPageChange, page, pageSize, loading });
+  latest.current = { rows, getItemId, onConfirm, onPageChange, page, pageSize, loading };
 
   const gridColumns = React.useMemo(
     () => remote ? columns.map(column => ({ ...column, sortable: false, filter: false })) : columns,
@@ -103,8 +106,41 @@ export function LookupDialog<T>({
     confirmId(selectedRef.current);
   };
 
+  const confirmClickedRow = (event: { key: string; defaultPrevented: boolean; preventDefault: () => void }) => {
+    if (event.key !== "Enter" || event.defaultPrevented || latest.current.loading || !rowClickedRef.current) return;
+    event.preventDefault();
+    confirmId(selectedRef.current);
+  };
+
+  // A click on a cell focuses the nearest focusable ancestor, the dialog content. Every other target keeps its own Enter.
+  const onContentKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) confirmClickedRow(event);
+  };
+
+  const onContentClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target;
+    rowClickedRef.current = !loading && target instanceof Element && event.currentTarget.contains(target)
+      && target.closest(rowSelector) !== null && target.closest(interactiveInRow) === null;
+  };
+
+  const onContentFocusCapture = (event: React.FocusEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) rowClickedRef.current = false;
+  };
+
+  // With focus on body the key never reaches the React handlers of the dialog.
+  React.useEffect(() => {
+    if (!open) return;
+    const onDocumentKeyDown = (event: KeyboardEvent) => {
+      if (event.target === document.body) confirmClickedRow(event);
+    };
+    document.addEventListener("keydown", onDocumentKeyDown);
+    return () => document.removeEventListener("keydown", onDocumentKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the handler only reads refs
+  }, [open]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title={title ?? messages.dialogTitle} size={size}
+      onKeyDown={onContentKeyDown} onClickCapture={onContentClickCapture} onFocusCapture={onContentFocusCapture}
       classNames={{ ...dialogClassNames, body: cn("p-0", dialogClassNames.body) }}
       footer={<>
         {typeof footerExtra === "function" ? footerExtra({ selectedItem }) : footerExtra}

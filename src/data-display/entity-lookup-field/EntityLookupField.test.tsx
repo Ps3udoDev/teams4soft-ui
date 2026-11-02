@@ -225,6 +225,17 @@ describe("EntityLookupField teclado y foco", () => {
     expect(document.activeElement).toBe(input());
   });
 
+  it("clic en una fila y Enter seleccionan y devuelven el foco al input", async () => {
+    const { user } = setup({ search: remote(() => provs(1, 3)) });
+    await user.click(trigger());
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    await user.click(within(bodyRows()[1]!).getByText("Proveedor 2"));
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(input()).toHaveValue("Proveedor 2");
+    expect(document.activeElement).toBe(input());
+  });
+
   it("al cerrar el modal con Escape el foco vuelve al input", async () => {
     const { user } = setup({ search: remote(() => provs(1, 3)) });
     await user.click(trigger());

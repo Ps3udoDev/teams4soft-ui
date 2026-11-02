@@ -125,6 +125,21 @@ describe("DataGrid: celda lookup, confirmación", () => {
 });
 
 describe("DataGrid: celda lookup, foco y modal", () => {
+  it("clic en una fila del modal y Enter escribe una vez, en su fila, y el foco vuelve a la celda", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DataGrid columns={[column({ loadOptions: makeLoader() })]} defaultValue={twoEmpty} getRowId={rowId} onChange={onChange} />);
+    await user.type(inputs()[0]!, "ramo");
+    await user.keyboard("{Enter}");
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    await user.click(within(dialog()).getByText("Ramo 2"));
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(queryDialog()).not.toBeInTheDocument());
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(lastRows(onChange)[0]!.ramo).toBe(20);
+    await waitFor(() => expect(inputs()[0]).toHaveFocus());
+  });
+
   it("con el modal abierto no hay confirmación; aceptar escribe una vez y devuelve el foco al input", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
