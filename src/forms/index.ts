@@ -17,6 +17,11 @@ export type {
   TextFieldSize,
 } from "./text-field/TextField.types";
 
+export { NumberField } from "./number-field/NumberField";
+export type { NumberFieldProps } from "./number-field/NumberField.types";
+export type { NumberFieldMode } from "./number-field/number-utils";
+export { parseNumber, formatNumber } from "./number-field/number-utils";
+
 export { CheckboxField } from "./checkbox-field/CheckboxField";
 export type {
   CheckboxFieldProps,
