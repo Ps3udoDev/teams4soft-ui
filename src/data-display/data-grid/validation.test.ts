@@ -72,12 +72,17 @@ describe("validateRows", () => {
 
   it("agrupa errores por id de fila y campo", () => {
     const columns = [
-      col({ field: "name", required: true }),
-      col({ field: "qty", validate: (v) => (Number(v) < 0 ? "Debe ser positivo" : null) }),
+      col({ field: "name", required: true, editable: true }),
+      col({ field: "qty", editable: true, validate: (v) => (Number(v) < 0 ? "Debe ser positivo" : null) }),
     ];
     expect(validateRows(rows, columns, getRowId, dataGridMessagesEs)).toEqual({
       "r-1": { name: "Requerido", qty: "Debe ser positivo" },
     });
+  });
+
+  it("no valida columnas sin editable (por defecto no editable)", () => {
+    const columns = [col({ field: "name", required: true })];
+    expect(validateRows(rows, columns, getRowId, dataGridMessagesEs)).toEqual({});
   });
 
   it("omite columnas no editables para esa fila", () => {

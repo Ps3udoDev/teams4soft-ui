@@ -17,7 +17,7 @@ export function validateRows<T>(rows: T[], columns: DataGridColumn<T>[], getRowI
   for (const row of rows) {
     const rowErrors: Record<string, string> = {};
     for (const column of columns) {
-      const editable = typeof column.editable === "function" ? column.editable(row) : column.editable !== false;
+      const editable = typeof column.editable === "function" ? column.editable(row) : column.editable === true;
       if (!editable) continue;
       const message = validateCell(column, (row as Record<string, unknown>)[column.field], row, messages);
       if (message) rowErrors[column.field] = message;
