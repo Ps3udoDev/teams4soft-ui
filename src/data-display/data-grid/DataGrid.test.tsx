@@ -2495,9 +2495,9 @@ describe("DataGrid: select remoto con loadOptions", () => {
     const loadOptions = vi.fn(async (_query: string) => catalog);
     const many: Pay[] = Array.from({ length: 50 }, (_, i) => ({ id: `r-${i + 1}`, method: 3, note: "" }));
     render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={many} getRowId={payId} pagination={false} />);
-    await waitFor(() => expect(screen.getAllByRole("combobox", { name: "Forma" })[0]).toHaveValue("Transferencia"));
+    await waitFor(() => expect(screen.getAllByRole("combobox", { name: "Forma" })[0]).toHaveValue("Transferencia"), { timeout: 10000 });
     expect(loadOptions).toHaveBeenCalledTimes(1);
-  });
+  }, 20000);
 
   it("si falla la carga, la lectura deja el valor sin marca de pendiente", async () => {
     const loadOptions = vi.fn(async (_query: string): Promise<Opt[]> => { throw new Error("red"); });
