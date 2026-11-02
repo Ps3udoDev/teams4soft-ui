@@ -164,8 +164,10 @@ export interface DataGridProps<T> {
    * (exige `value`). Emite `onQueryChange` al montar y cada vez que cambia la consulta; un cambio de orden o filtro
    * vuelve a `pageIndex: 0` en una sola llamada. `totalRecords` fija el número de páginas y el total del rango.
    * Con `pagination={false}` la consulta lleva `pageIndex: 0` y el tamaño por defecto.
-   * Cada `value` externo se adopta como base nueva y sin `onChange`: `dirtyIds`, `addedIds` y `removedIds` describen
-   * solo la página actual y las ediciones sin guardar dejan de contar al cambiar de página; guarda por celda o antes de paginar.
+   * Un `value` externo con otro conjunto de ids (otra página, resultados filtrados) es la base nueva y no emite `onChange`:
+   * las ediciones sin guardar salen del diff (`dirtyIds`, `addedIds`, `removedIds` describen solo la página actual).
+   * Un refresco con las mismas filas (mismo conjunto de ids, aunque cambie el orden o los valores) conserva el diff,
+   * los borradores y el foco. Tras guardar, llama a `ref.reset(rows)` para marcarlas como guardadas.
    * La selección conserva los ids de otras páginas.
    */
   serverSide?: { totalRecords: number; onQueryChange: (query: DataGridQuery) => void };

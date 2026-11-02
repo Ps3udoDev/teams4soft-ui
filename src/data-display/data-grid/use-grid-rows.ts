@@ -95,17 +95,30 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
   // Carga asíncrona: mientras la base esté vacía y no se haya emitido nada, un value nuevo es la base.
   const awaitingFirstLoad = React.useRef((args.value ?? args.defaultValue ?? []).length === 0);
   // Un value nuevo se pinta ya; el store lo adopta justo después, antes de que el navegador pinte.
-  const rows = value !== undefined && value !== seenValue.current && value !== lastEmittedRows.current && !emittedRows.current.has(value) ? value : snapshot;
+  const isExternal = value !== undefined && value !== seenValue.current && value !== lastEmittedRows.current && !emittedRows.current.has(value);
+  const rows = isExternal ? value : snapshot;
+  const sameIds = (next: T[], current: T[]) => {
+    const ids = new Set(current.map(row => latest.current.getRowId(row)));
+    return ids.size === next.length && next.every(row => ids.has(latest.current.getRowId(row)));
+  };
+  // Con servidor, otro conjunto de ids es otra página: sus celdas se remontan para soltar los borradores. Se decide
+  // durante el render, no en el efecto: un re-render síncrono posterior remontaría celdas ya enfocadas por focusCell.
+  const [revisionFor, setRevisionFor] = React.useState(value);
+  if (args.serverSide && value !== revisionFor) {
+    setRevisionFor(value);
+    if (isExternal && !sameIds(value, snapshot)) setRevision(current => current + 1);
+  }
   useClientLayoutEffect(() => {
     seenValue.current = value;
     if (value === undefined || value === lastEmittedRows.current || emittedRows.current.has(value)) return;
     lastEmittedRows.current = value;
-    if (latest.current.serverSide) {
+    if (latest.current.serverSide && !sameIds(value, store.getRows())) {
       store.reset(value);
       awaitingFirstLoad.current = false;
-      // Los borradores abiertos son de la página anterior.
-      setRevision(current => current + 1);
-    } else {
+      // Un arreglo emitido de otra página ya no es el estado actual: volver a él debe adoptarse.
+      emittedRows.current = new WeakSet();
+    } else if (latest.current.serverSide) store.replaceCurrent(value);
+    else {
       const kept = new Set(value.map(row => latest.current.getRowId(row)));
       const gone = new Set(store.getRows().map(row => latest.current.getRowId(row)).filter(id => !kept.has(id)));
       if (awaitingFirstLoad.current) {

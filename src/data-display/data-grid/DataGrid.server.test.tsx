@@ -177,6 +177,7 @@ describe("DataGrid: serverSide", () => {
       const { unmount } = render(<DataGrid columns={columns} getRowId={getRowId} value={[]} serverSide={{ totalRecords: total, onQueryChange: vi.fn() }} />);
       expect(screen.getByText("Sin registros")).toBeInTheDocument();
       expect(screen.getByText("Mostrando 0 al 0 de 0 registros")).toBeInTheDocument();
+      expect(screen.getByText("Página 1 de 1")).toBeInTheDocument();
       for (const name of ["Primera página", "Página anterior", "Página siguiente", "Última página"]) expect(screen.getByRole("button", { name })).toBeDisabled();
       unmount();
     }
@@ -419,5 +420,90 @@ describe("DataGrid: serverSide", () => {
       await user.click(check(0));
       expect(onSelectionChange).toHaveBeenLastCalledWith(["r-1", "r-11"]);
     });
+  });
+});
+
+describe("DataGrid: serverSide, refresco con las mismas filas", () => {
+  type R = { id: string; a: string; b: string };
+  const initial: R[] = [{ id: "1", a: "a1", b: "b1" }, { id: "2", a: "a2", b: "b2" }];
+  const cols: DataGridColumn<R>[] = [{ field: "a", header: "A", editable: true }, { field: "b", header: "B", editable: true }];
+  const rid = (row: R) => row.id;
+  const input = (row: number, name: string) => within(bodyRows()[row]!).getByRole("textbox", { name }) as HTMLInputElement;
+  const noop = () => {};
+  const mapping = (ref?: React.Ref<DataGridHandle<R>>) => function Parent() {
+    const [list, setList] = React.useState(initial);
+    return <DataGrid ref={ref} columns={cols} getRowId={rid} value={list} serverSide={{ totalRecords: 2, onQueryChange: noop }}
+      onChange={(_data, change) => setList(prev => prev.map(row => row.id === change.rowId && change.field ? { ...row, [change.field]: change.next } : row))} />;
+  };
+
+  it("un padre que mapea las filas en onChange conserva diff y foco con Tab, y se sigue escribiendo", async () => {
+    const user = userEvent.setup();
+    const ref = React.createRef<DataGridHandle<R>>();
+    const Parent = mapping(ref);
+    render(<Parent />);
+    await user.click(input(0, "A"));
+    await user.type(input(0, "A"), "X");
+    await user.tab();
+    expect(document.activeElement).toBe(input(0, "B"));
+    expect(ref.current?.getData().dirtyIds).toEqual(["1"]);
+    await user.keyboard("zz");
+    expect(input(0, "B").value).toBe("zz");
+  });
+
+  it("con Enter el foco pasa a la fila siguiente", async () => {
+    const user = userEvent.setup();
+    const Parent = mapping();
+    render(<Parent />);
+    await user.click(input(0, "A"));
+    await user.type(input(0, "A"), "X{Enter}");
+    expect(document.activeElement).toBe(input(1, "A"));
+  });
+
+  it("un refresco con otro arreglo y los mismos ids no pierde el borrador ni el foco", async () => {
+    const user = userEvent.setup();
+    let refetch!: () => void;
+    function Parent() {
+      const [list, setList] = React.useState(initial);
+      refetch = () => setList(prev => prev.map(row => ({ ...row })));
+      return <DataGrid columns={cols} getRowId={rid} value={list} serverSide={{ totalRecords: 2, onQueryChange: noop }} />;
+    }
+    render(<Parent />);
+    await user.click(input(1, "B"));
+    await user.type(input(1, "B"), "draft");
+    act(() => refetch());
+    expect(input(1, "B").value).toBe("b2draft");
+    expect(document.activeElement).toBe(input(1, "B"));
+  });
+
+  it("añadir una fila a value y enfocarla en el mismo manejador deja el foco en la celda nueva", () => {
+    const ref = React.createRef<DataGridHandle<R>>();
+    let add!: () => void;
+    function Parent() {
+      const [list, setList] = React.useState(initial);
+      add = () => { setList(prev => [...prev, { id: "3", a: "", b: "" }]); ref.current?.focusCell("3", "a"); };
+      return <DataGrid ref={ref} columns={cols} getRowId={rid} value={list} serverSide={{ totalRecords: 3, onQueryChange: noop }} />;
+    }
+    render(<Parent />);
+    act(() => add());
+    expect(document.activeElement).toBe(input(2, "A"));
+  });
+
+  it("volver a una página cuyo arreglo la grilla emitió antes muestra esa página, no la adoptada después", async () => {
+    const user = userEvent.setup();
+    function Parent() {
+      const [page, setPage] = React.useState(0);
+      const [pages, setPages] = React.useState<Record<number, Premium[]>>({ 0: pageRows(0), 1: pageRows(1) });
+      return <DataGrid columns={editableColumns} getRowId={getRowId} value={pages[page]} onChange={data => setPages(current => ({ ...current, [page]: data.rows }))}
+        serverSide={{ totalRecords: 20, onQueryChange: query => setPage(query.pageIndex) }} />;
+    }
+    render(<Parent />);
+    const first = () => within(bodyRows()[0]!).getByRole("textbox", { name: "Póliza" });
+    await user.clear(first());
+    await user.type(first(), "Editada");
+    await user.tab();
+    await next(user);
+    expect(first()).toHaveValue("Pol 11");
+    await click(user, "Página anterior");
+    expect(first()).toHaveValue("Editada");
   });
 });
