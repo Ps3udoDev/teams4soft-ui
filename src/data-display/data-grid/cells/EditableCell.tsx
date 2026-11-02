@@ -62,7 +62,12 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, editor:
     setEditorKey(key => key + 1);
   };
 
-  return <td {...cellProps} ref={cellRef} data-editable="" data-draft-dirty={draftDirty || undefined} onInputCapture={markDirty} onPasteCapture={markDirty} onKeyDown={revert}>
+  // NumberField omite onCommit si el número ya se confirmó: salir de la celda cierra el borrador igualmente.
+  const leave = (event: React.FocusEvent<HTMLTableCellElement>) => {
+    if (comesFromCell(event) && !event.currentTarget.contains(event.relatedTarget)) setDraftDirty(false);
+  };
+
+  return <td {...cellProps} ref={cellRef} data-editable="" data-draft-dirty={draftDirty || undefined} onInputCapture={markDirty} onPasteCapture={markDirty} onKeyDown={revert} onBlur={leave}>
     {/* El Tooltip siempre montado: que aparezca un error no debe remontar el editor ni quitarle el foco. */}
     <Tooltip content={error} open={Boolean(error) && tooltipOpen} onOpenChange={setTooltipOpen} unstyled={unstyled}>
       <div data-slot="editor">

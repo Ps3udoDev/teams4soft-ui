@@ -107,6 +107,11 @@ export type DataGridEmptyState = { icon?: React.ReactNode; title?: React.ReactNo
 export interface DataGridProps<T> {
   columns: DataGridColumn<T>[];
   getRowId: (row: T) => string;
+  /**
+   * Filas en modo controlado. Mientras la base esté vacía y no se haya emitido ningún cambio,
+   * un `value` nuevo se adopta como base sin emitir `onChange` (carga asíncrona: `[]` y luego las filas).
+   * Después, un `value` nuevo no toca la base: para recargar desde el back, usar `ref.reset(rows)`.
+   */
   value?: T[];
   defaultValue?: T[];
   onChange?: (data: DataGridData<T>, change: GridChange) => void;

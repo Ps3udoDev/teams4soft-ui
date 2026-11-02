@@ -1082,6 +1082,86 @@ describe("DataGrid: celdas editables", () => {
     expect(bodyRows()[0]).toHaveAttribute("data-selected");
   });
 
+  it("tras una edición, un value externo de mayor precisión no se redondea al recorrerlo con Tab", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const ref = React.createRef<DataGridHandle<Editable>>();
+    const grid = (value: Editable[]) => <DataGrid ref={ref} columns={editableColumns} value={value} getRowId={rowId} onChange={onChange} />;
+    const { rerender } = render(grid(editableRows));
+    await retype(user, amountInput(0), "5");
+    await user.tab();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const precise = editableRows.map(row => row.id === "r-1" ? { ...row, collectedAmount: 1.23456 } : row);
+    rerender(grid(precise));
+    await user.click(amountInput(0));
+    await user.tab();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(ref.current?.getData().rows[0]?.collectedAmount).toBe(1.23456);
+  });
+
+  it("un patchRow de mayor precisión sobre un borrador abierto no se redondea al salir", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const ref = React.createRef<DataGridHandle<Editable>>();
+    render(<DataGrid ref={ref} columns={editableColumns} defaultValue={editableRows} getRowId={rowId} onChange={onChange} />);
+    await retype(user, amountInput(0), "7");
+    act(() => ref.current?.patchRow("r-1", { collectedAmount: 1.23456 }));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    await user.tab();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(ref.current?.getData().rows[0]?.collectedAmount).toBe(1.23456);
+  });
+
+  it("la carga asíncrona inicial adopta la base sin emitir y una edición posterior solo marca esa fila", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const ref = React.createRef<DataGridHandle<Editable>>();
+    const grid = (value: Editable[]) => <DataGrid ref={ref} columns={editableColumns} value={value} getRowId={rowId} onChange={onChange} />;
+    const { rerender } = render(grid([]));
+    rerender(grid([]));
+    rerender(grid(editableRows));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(policyInput(0)).toHaveValue("Pérez");
+    expect(bodyRows()[0]).not.toHaveAttribute("data-dirty");
+    expect(ref.current?.getData()).toMatchObject({ rows: editableRows, addedIds: [], dirtyIds: [], removedIds: [] });
+    await retype(user, amountInput(1), "21");
+    await user.tab();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(ref.current?.getData()).toMatchObject({ addedIds: [], dirtyIds: ["r-2"], removedIds: [] });
+  });
+
+  it("tras la carga inicial, otro value usa replaceCurrent y conserva la base", () => {
+    const ref = React.createRef<DataGridHandle<Editable>>();
+    const grid = (value: Editable[]) => <DataGrid ref={ref} columns={editableColumns} value={value} getRowId={rowId} />;
+    const { rerender } = render(grid([]));
+    rerender(grid(editableRows));
+    rerender(grid([{ id: "r-1", policy: "Recargada", collectedAmount: 10 }, { id: "r-9", policy: "Nueva", collectedAmount: 9 }]));
+    expect(ref.current?.getData()).toMatchObject({ dirtyIds: ["r-1"], addedIds: ["r-9"], removedIds: ["r-2", "r-3"] });
+  });
+
+  it("con un cambio ya emitido sobre la tabla vacía, un value nuevo no se adopta como base", () => {
+    const onChange = vi.fn();
+    const ref = React.createRef<DataGridHandle<Editable>>();
+    const grid = (value: Editable[]) => <DataGrid ref={ref} columns={editableColumns} value={value} getRowId={rowId} onChange={onChange} />;
+    const { rerender } = render(grid([]));
+    act(() => ref.current?.reset([]));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    rerender(grid(editableRows));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(ref.current?.getData().addedIds).toEqual(["r-1", "r-2", "r-3"]);
+  });
+
+  it("data-draft-dirty se limpia al salir de la celda aunque NumberField no confirme", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={editableColumns} defaultValue={editableRows} getRowId={rowId} />);
+    await retype(user, amountInput(0), "5");
+    await user.keyboard("{Enter}");
+    await retype(user, amountInput(0), "5");
+    expect(amountInput(0).closest("td")).toHaveAttribute("data-draft-dirty");
+    await user.tab();
+    expect(amountInput(0).closest("td")).not.toHaveAttribute("data-draft-dirty");
+  });
+
   it("los editores llevan fractionDigits, modo y slot editor de la columna", () => {
     const fx: DataGridColumn<Editable>[] = [
       { field: "collectedAmount", header: "Tipo de cambio", type: "number", fractionDigits: 4, editable: true },

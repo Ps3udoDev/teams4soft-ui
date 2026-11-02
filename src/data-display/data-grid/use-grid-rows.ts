@@ -59,12 +59,19 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
 
   const lastEmittedRows = React.useRef(value);
   const seenValue = React.useRef(value);
+  // Carga asíncrona: mientras la base esté vacía y no se haya emitido nada, un value nuevo es la base.
+  const awaitingFirstLoad = React.useRef((args.value ?? args.defaultValue ?? []).length === 0);
   // Un value nuevo se pinta ya; el store lo adopta justo después, antes de que el navegador pinte.
   const rows = value !== undefined && value !== seenValue.current && value !== lastEmittedRows.current ? value : snapshot;
   useClientLayoutEffect(() => {
     seenValue.current = value;
     if (value === undefined || value === lastEmittedRows.current) return;
     lastEmittedRows.current = value;
+    if (awaitingFirstLoad.current) {
+      awaitingFirstLoad.current = value.length === 0;
+      store.reset(value);
+      return;
+    }
     store.replaceCurrent(value);
     const live = Object.fromEntries(Object.entries(errorsRef.current).filter(([id]) => store.getRow(id) !== undefined));
     if (Object.keys(live).length !== Object.keys(errorsRef.current).length) setErrors(live);
@@ -79,6 +86,7 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
   }), [store]);
 
   const emit = React.useCallback((change: GridChange) => {
+    awaitingFirstLoad.current = false;
     lastEmittedRows.current = store.getRows();
     latest.current.onChange?.(getData(), change);
   }, [store, getData]);
