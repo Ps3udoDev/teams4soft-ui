@@ -11,6 +11,7 @@ import { gridFeatures, type GridFeatures } from "./table-features";
 import { useGridColumns } from "./use-grid-columns";
 import { useClientLayoutEffect, useGridRows } from "./use-grid-rows";
 import { definition, frozenSide, GridRow, type GridRowView } from "./GridRow";
+import { settleCellFocus, type CellFocusPlan } from "./cells/EditableCell";
 import { ReadCellStyleContext } from "./cells/read-cells";
 import { resolveFilterKind } from "./filters/filter-fns";
 import { FilterMenu } from "./filters/FilterMenu";
@@ -103,6 +104,20 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   React.useImperativeHandle(ref, () => grid, [grid]);
   const radioName = React.useId();
   const contentRef = React.useRef<HTMLDivElement>(null);
+  const tableRef = React.useRef<HTMLTableElement>(null);
+  // El contador entra en el mismo lote que la confirmación: el efecto ve las filas ya movidas o filtradas,
+  // también si la confirmación no cambió nada y no habría otro render.
+  const focusPlan = React.useRef<CellFocusPlan | undefined>(undefined);
+  const [focusRequest, setFocusRequest] = React.useState(0);
+  const focusAfterEnter = React.useCallback((plan: CellFocusPlan) => {
+    focusPlan.current = plan;
+    setFocusRequest(current => current + 1);
+  }, []);
+  useClientLayoutEffect(() => {
+    if (!focusPlan.current || !tableRef.current) return;
+    settleCellFocus(tableRef.current, focusPlan.current);
+    focusPlan.current = undefined;
+  }, [focusRequest]);
   const headerElements = React.useRef(new Map<string, HTMLTableCellElement>());
   const [measuredWidths, setMeasuredWidths] = React.useState<Record<string, number>>({});
   React.useEffect(() => {
@@ -177,13 +192,13 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   const pinnedIds = new Set<string>([...columnPinning.start, ...columnPinning.end]);
   const pinnedWidths = Object.entries(measuredWidths).filter(([id]) => pinnedIds.has(id));
   const presentationKey = JSON.stringify([columnSizing, pinnedWidths, density, loading, readOnly, unstyled, selectionMode, revision, messages.selectRow, classNames?.row, classNames?.cell, classNames?.editor, styles?.row, styles?.cell, styles?.editor]);
-  const rowView: GridRowView<T> = { store, grid, density, loading, readOnly, unstyled, revision, selectionMode, classNames, styles, cellStyle, renderSelection: rowSelectionControl, commitCell, ...rowEvents };
+  const rowView: GridRowView<T> = { store, grid, density, loading, readOnly, unstyled, revision, selectionMode, classNames, styles, cellStyle, renderSelection: rowSelectionControl, commitCell, focusAfterEnter, ...rowEvents };
   return <ReadCellStyleContext.Provider value={unstyled}><TooltipProvider><div data-slot="root" data-density={density} data-loading={loading || undefined} aria-busy={loading || undefined}
     className={cn(!unstyled && "relative font-(family-name:--ui-grid-font) text-ui-foreground", className, classNames?.root)} style={{ ...styles?.root, ...style }}>
     <div ref={contentRef}>
       <GridToolbar className={classNames?.toolbar} style={styles?.toolbar} unstyled={unstyled} toggler={columnToggler ? <ColumnToggler columns={columns} visibility={visibility} onToggle={(field, visible) => setVisibility(previous => ({ ...previous, [field]: visible }))} messages={messages} className={classNames?.columnToggler} style={styles?.columnToggler} unstyled={unstyled} disabled={loading} /> : undefined}>{toolbar}</GridToolbar>
       <div className={cn(!unstyled && "overflow-auto")} style={{ maxHeight, overflow: unstyled ? undefined : "auto" }}>
-        <table data-slot="table" role={editing ? "grid" : undefined} className={cn(!unstyled && "w-full border-separate border-spacing-0 text-sm", classNames?.table)} style={styles?.table}>
+        <table ref={tableRef} data-slot="table" role={editing ? "grid" : undefined} tabIndex={editing ? -1 : undefined} className={cn(!unstyled && "w-full border-separate border-spacing-0 text-sm", classNames?.table)} style={styles?.table}>
           <thead className={cn(!unstyled && "sticky top-0 z-10")}>
             {table.getHeaderGroups().map(group => <tr key={group.id} data-slot="headerRow" className={cn(!unstyled && "bg-(--ui-grid-header-bg) text-(--ui-grid-header-fg)", classNames?.headerRow)} style={styles?.headerRow}>
               {group.headers.map(header => {

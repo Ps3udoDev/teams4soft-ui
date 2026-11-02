@@ -1,7 +1,7 @@
 import * as React from "react";
 import type { Column, ColumnPinningPosition, Row, RowData } from "@tanstack/react-table";
 import { cn } from "../../lib";
-import { EditableCell } from "./cells/EditableCell";
+import { EditableCell, type CellFocusPlan } from "./cells/EditableCell";
 import { editCellRegistry } from "./cells/edit-cells";
 import { readCellRegistry } from "./cells/read-cells";
 import { isCellEditable } from "./validation";
@@ -44,6 +44,7 @@ export interface GridRowView<T extends RowData> {
   onRowClick: (row: T, event: React.MouseEvent<HTMLTableRowElement>) => void;
   onRowDoubleClick: (row: T, event: React.MouseEvent<HTMLTableRowElement>) => void;
   commitCell: (rowId: string, column: DataGridColumn<T>, value: unknown, grid: DataGridHandle<T>) => void;
+  focusAfterEnter: (plan: CellFocusPlan) => void;
 }
 
 export interface GridRowProps<T extends RowData> {
@@ -60,7 +61,7 @@ export interface GridRowProps<T extends RowData> {
 }
 
 function GridRowInner<T extends RowData>({ row, isSelected, isDirty, errorsForRow, rowClassName, cellTypes, view }: GridRowProps<T>) {
-  const { store, grid, density, loading, readOnly, unstyled, revision, selectionMode, classNames, styles, cellStyle, renderSelection, selectRow, onRowClick, onRowDoubleClick, commitCell } = view;
+  const { store, grid, density, loading, readOnly, unstyled, revision, selectionMode, classNames, styles, cellStyle, renderSelection, selectRow, onRowClick, onRowDoubleClick, commitCell, focusAfterEnter } = view;
   const baseRow = store.getBaseRow(row.id);
   const rowHeight = density === "compact" ? "h-(--ui-grid-row-height-compact)" : "h-(--ui-grid-row-height)";
   const editorDensity = density === "compact" ? "py-0.5 [--ui-control-height:var(--ui-grid-editor-height-compact)]" : "py-1 [--ui-control-height:var(--ui-grid-editor-height)]";
@@ -86,7 +87,7 @@ function GridRowInner<T extends RowData>({ row, isSelected, isDirty, errorsForRo
         style: { ...cellStyle(cell.column), ...(!unstyled && pinned ? { backgroundImage: "linear-gradient(var(--ui-grid-current-row-bg), var(--ui-grid-current-row-bg))" } : {}), ...styles?.cell },
       };
       if (col && Editor) return <EditableCell key={`${cell.id}:${revision}`} rowId={row.id} column={col} value={value} error={error} editor={Editor} cellProps={cellProps}
-        onCommit={next => commitCell(row.id, col, next, grid)} disabled={loading} unstyled={unstyled} editorClassName={classNames?.editor} editorStyle={styles?.editor} />;
+        onCommit={next => commitCell(row.id, col, next, grid)} onEnterCommit={focusAfterEnter} disabled={loading} unstyled={unstyled} editorClassName={classNames?.editor} editorStyle={styles?.editor} />;
       return <td key={cell.id} {...cellProps}>
         {cell.column.id === "__select" ? renderSelection(row.id) : col && <Cell column={col} row={row.original} value={value} rowId={row.id} grid={grid}
           editable={!readOnly && isCellEditable(col, row.original)} onCommit={next => commitCell(row.id, col, next, grid)} />}

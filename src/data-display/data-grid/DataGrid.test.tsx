@@ -1349,3 +1349,288 @@ describe("DataGrid: editores date, select, checkbox, radio y custom", () => {
     expect(onRowDoubleClick).not.toHaveBeenCalled();
   });
 });
+
+describe("DataGrid: teclado de captura", () => {
+  type Line = { id: string; policy: string | null; amount: number | null; due: string | null; method: number | null; locked?: boolean };
+  const lines: Line[] = [
+    { id: "r-1", policy: "Pérez", amount: 10, due: "2026-10-01", method: null },
+    { id: "r-2", policy: "Bravo", amount: 20, due: null, method: null },
+    { id: "r-3", policy: "Alfa", amount: 30, due: null, method: null },
+  ];
+  const methods = [{ value: 1, label: "Efectivo" }, { value: 2, label: "Tarjeta" }];
+  const lineColumns: DataGridColumn<Line>[] = [
+    { field: "policy", header: "Póliza", editable: true },
+    { field: "amount", header: "Importe", type: "currency", editable: true },
+  ];
+  const idOf = (row: Line) => row.id;
+  const policy = (index: number) => within(bodyRows()[index]!).getByRole("textbox", { name: "Póliza" }) as HTMLInputElement;
+  const amount = (index: number) => within(bodyRows()[index]!).getByRole("textbox", { name: "Importe" }) as HTMLInputElement;
+  const retype = async (user: User, input: HTMLInputElement, text: string) => {
+    await user.clear(input);
+    await user.type(input, text);
+  };
+  const policies = () => bodyRows().map((_, index) => policy(index).value);
+
+  it("cada celda editable lleva data-row-id y data-field", () => {
+    render(<DataGrid columns={lineColumns} value={lines} getRowId={idOf} />);
+    const td = amount(1).closest("td")!;
+    expect(td).toHaveAttribute("data-row-id", "r-2");
+    expect(td).toHaveAttribute("data-field", "amount");
+  });
+
+  it("Enter confirma y enfoca la misma columna en la fila siguiente", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DataGrid columns={lineColumns} defaultValue={lines} getRowId={idOf} onChange={onChange} />);
+    await retype(user, amount(0), "99");
+    await user.keyboard("{Enter}");
+    expect(amount(1)).toHaveFocus();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0]![1]).toMatchObject({ rowId: "r-1", field: "amount", next: 99 });
+    expect(amount(0).closest("td")).not.toHaveAttribute("data-draft-dirty");
+  });
+
+  it("con un padre controlado Enter también baja y emite una sola vez", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    function Parent() {
+      const [current, setCurrent] = React.useState(lines);
+      return <DataGrid columns={lineColumns} value={current} getRowId={idOf} onChange={(data, change) => { onChange(change); setCurrent(data.rows as Line[]); }} />;
+    }
+    render(<Parent />);
+    await retype(user, policy(0), "Nuevo");
+    await user.keyboard("{Enter}");
+    expect(policy(1)).toHaveFocus();
+    expect(policy(0)).toHaveValue("Nuevo");
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("Enter no envía el formulario que contiene al grid", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    render(<form onSubmit={onSubmit}><DataGrid columns={lineColumns} defaultValue={lines} getRowId={idOf} /><button type="submit">Enviar</button></form>);
+    await retype(user, policy(0), "Nuevo");
+    await user.keyboard("{Enter}");
+    expect(policy(1)).toHaveFocus();
+    await retype(user, amount(1), "5");
+    await user.keyboard("{Enter}");
+    expect(amount(2)).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(amount(2)).toHaveFocus();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("con orden descendente, la siguiente es la fila visible y no la del array", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={lineColumns} defaultValue={lines} getRowId={idOf} initialSort={{ field: "amount", direction: "desc" }} />);
+    expect(policies()).toEqual(["Alfa", "Bravo", "Pérez"]);
+    await user.click(amount(1));
+    await user.keyboard("{Enter}");
+    expect(amount(2)).toHaveFocus();
+    expect(amount(2).closest("td")).toHaveAttribute("data-row-id", "r-1");
+  });
+
+  it("una edición que reordena lleva el foco a la fila calculada antes de confirmar", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={lineColumns} defaultValue={lines} getRowId={idOf} initialSort={{ field: "amount", direction: "asc" }} />);
+    await retype(user, amount(0), "25");
+    await user.keyboard("{Enter}");
+    expect(policies()).toEqual(["Bravo", "Pérez", "Alfa"]);
+    expect(document.activeElement?.closest("td")).toHaveAttribute("data-row-id", "r-2");
+    expect(amount(0)).toHaveFocus();
+  });
+
+  it("en la última fila una edición que la reordena confirma y conserva el foco en esa fila", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={lineColumns} defaultValue={lines} getRowId={idOf} initialSort={{ field: "amount", direction: "asc" }} />);
+    await retype(user, amount(2), "1");
+    await user.keyboard("{Enter}");
+    expect(policies()).toEqual(["Alfa", "Pérez", "Bravo"]);
+    expect(amount(0)).toHaveFocus();
+  });
+
+  it("con filtro activo, una edición que oculta la fila pasa el foco a la siguiente", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={lineColumns} defaultValue={lines} getRowId={idOf} />);
+    await applyFilter(user, "Póliza", "a");
+    expect(policies()).toEqual(["Bravo", "Alfa"]);
+    await retype(user, policy(0), "zzz");
+    await user.keyboard("{Enter}");
+    expect(policies()).toEqual(["Alfa"]);
+    expect(policy(0)).toHaveFocus();
+  });
+
+  it("si la fila editada desaparece y no hay siguiente, el foco va a la anterior", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={lineColumns} defaultValue={lines} getRowId={idOf} />);
+    await applyFilter(user, "Póliza", "a");
+    await retype(user, policy(1), "zzz");
+    await user.keyboard("{Enter}");
+    expect(policies()).toEqual(["Bravo"]);
+    expect(policy(0)).toHaveFocus();
+  });
+
+  it("si no quedan filas, el foco va a la raíz de la tabla y no a body", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={lineColumns} defaultValue={lines} getRowId={idOf} />);
+    await applyFilter(user, "Póliza", "alfa");
+    await retype(user, policy(0), "zzz");
+    await user.keyboard("{Enter}");
+    expect(within(screen.getAllByRole("rowgroup")[1]!).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("grid")).toHaveFocus();
+  });
+
+  it("Enter en la última fila de la página confirma y conserva el foco", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DataGrid columns={lineColumns} defaultValue={lines} getRowId={idOf} onChange={onChange} pagination={{ pageSize: 2 }} />);
+    await retype(user, amount(1), "77");
+    await user.keyboard("{Enter}");
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(policies()).toEqual(["Pérez", "Bravo"]);
+    expect(amount(1)).toHaveFocus();
+  });
+
+  it("salta las filas cuya celda está bloqueada", async () => {
+    const user = userEvent.setup();
+    const columnsWithLock: DataGridColumn<Line>[] = [{ field: "amount", header: "Importe", type: "currency", editable: row => row.locked !== true }];
+    const withLocked = lines.map(line => line.id === "r-2" ? { ...line, locked: true } : line);
+    render(<DataGrid columns={columnsWithLock} defaultValue={withLocked} getRowId={idOf} />);
+    await user.click(amount(0));
+    await user.keyboard("{Enter}");
+    expect(amount(2)).toHaveFocus();
+  });
+
+  it("con un error de validación, Enter no abandona la celda", async () => {
+    const user = userEvent.setup();
+    const required: DataGridColumn<Line>[] = [{ ...lineColumns[0]!, required: true }, lineColumns[1]!];
+    render(<DataGrid columns={required} defaultValue={lines} getRowId={idOf} />);
+    await user.clear(policy(0));
+    await user.keyboard("{Enter}");
+    expect(policy(0)).toHaveFocus();
+    expect(policy(0).closest("td")).toHaveAttribute("data-invalid");
+    await user.type(policy(0), "Corregido{Enter}");
+    expect(policy(1)).toHaveFocus();
+  });
+
+  it("una fecha irresoluble tampoco abandona la celda con Enter", async () => {
+    const user = userEvent.setup();
+    const dates: DataGridColumn<Line>[] = [{ field: "due", header: "Vence", type: "date", editable: true }];
+    render(<DataGrid columns={dates} defaultValue={lines} getRowId={idOf} />);
+    const input = within(bodyRows()[1]!).getByLabelText("Vence");
+    await user.type(input, "99/99/2026{Enter}");
+    expect(input).toHaveFocus();
+    await user.clear(input);
+    await user.type(input, "29/10/2026{Enter}");
+    expect(within(bodyRows()[2]!).getByLabelText("Vence")).toHaveFocus();
+  });
+
+  it("Enter con el listado del select abierto elige la opción y no salta de fila", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const selects: DataGridColumn<Line>[] = [{ field: "method", header: "Forma", type: "select", options: methods, editable: true }];
+    render(<DataGrid columns={selects} defaultValue={lines} getRowId={idOf} onChange={onChange} />);
+    const combobox = (index: number) => within(bodyRows()[index]!).getByRole("combobox", { name: "Forma" });
+    await user.type(combobox(0), "Ta");
+    await screen.findByRole("listbox");
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(onChange.mock.lastCall![1]).toMatchObject({ rowId: "r-1", field: "method", next: 2 });
+    expect(combobox(0)).toHaveFocus();
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    await user.keyboard("{Enter}");
+    expect(combobox(1)).toHaveFocus();
+  });
+
+  it("Enter dentro del calendario de la fecha, en su portal, no salta de fila", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const dates: DataGridColumn<Line>[] = [{ field: "due", header: "Vence", type: "date", editable: true }];
+    render(<DataGrid columns={dates} defaultValue={lines} getRowId={idOf} onChange={onChange} />);
+    await user.click(within(bodyRows()[1]!).getByLabelText("Vence"));
+    await user.keyboard("{ArrowDown}");
+    await screen.findByRole("dialog");
+    await waitFor(() => expect(document.activeElement?.closest("[role=dialog]")).not.toBeNull());
+    await user.keyboard("{Enter}");
+    expect(onChange.mock.lastCall![1]).toMatchObject({ rowId: "r-2", field: "due" });
+    expect(within(bodyRows()[2]!).getByLabelText("Vence")).not.toHaveFocus();
+  });
+
+  it("Enter sobre un botón de acción del editor no salta de fila", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const dates: DataGridColumn<Line>[] = [{ field: "due", header: "Vence", type: "date", editable: true }];
+    render(<DataGrid columns={dates} defaultValue={lines} getRowId={idOf} onChange={onChange} />);
+    const clear = within(bodyRows()[0]!).getByRole("button", { name: "Limpiar fecha" });
+    act(() => clear.focus());
+    await user.keyboard("{Enter}");
+    expect(onChange.mock.lastCall![1]).toMatchObject({ rowId: "r-1", field: "due", next: null });
+    expect(within(bodyRows()[0]!).getByLabelText("Vence")).toHaveFocus();
+  });
+
+  it("Enter en una casilla baja de fila sin cambiar su valor", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    type Check = Line & { paid: boolean };
+    const checks: DataGridColumn<Check>[] = [{ field: "paid", header: "Pagado", type: "checkbox", editable: true }];
+    render(<DataGrid columns={checks} defaultValue={lines.map(line => ({ ...line, paid: false }))} getRowId={row => row.id} onChange={onChange} />);
+    const box = (index: number) => within(bodyRows()[index]!).getByRole("checkbox", { name: "Pagado" });
+    act(() => box(0).focus());
+    await user.keyboard("{Enter}");
+    expect(box(1)).toHaveFocus();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("Tab va de una celda editable a la siguiente en orden visual", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={lineColumns} defaultValue={lines} getRowId={idOf} />);
+    await user.click(policy(0));
+    await user.tab();
+    expect(amount(0)).toHaveFocus();
+    await user.tab();
+    expect(policy(1)).toHaveFocus();
+  });
+
+  it("dentro de un Dialog, Esc con borrador lo revierte y el diálogo sigue abierto; el segundo Esc lo cierra", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const onOpenChange = vi.fn();
+    function Parent() {
+      const [open, setOpen] = React.useState(true);
+      return <Dialog open={open} title="Editar" onOpenChange={next => { onOpenChange(next); setOpen(next); }}><DataGrid columns={lineColumns} defaultValue={lines} getRowId={idOf} onChange={onChange} /></Dialog>;
+    }
+    render(<Parent />);
+    await retype(user, policy(0), "Borrador");
+    expect(policy(0).closest("td")).toHaveAttribute("data-draft-dirty");
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog", { name: "Editar" })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(policy(0)).toHaveValue("Pérez");
+    expect(policy(0)).toHaveFocus();
+    expect(policy(0).closest("td")).not.toHaveAttribute("data-draft-dirty");
+    await user.keyboard("{Escape}");
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Editar" })).not.toBeInTheDocument());
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("el menú de filtro sigue funcionando: Enter aplica sin mover el foco a una celda", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={lineColumns} defaultValue={lines} getRowId={idOf} />);
+    const menu = await openFilter(user, "Póliza");
+    await user.type(within(menu).getByRole("textbox", { name: "Filtrar Póliza" }), "alfa{Enter}");
+    expect(policies()).toEqual(["Alfa"]);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filtrar Póliza" })).not.toBeInTheDocument());
+    expect(document.activeElement?.closest("td[data-editable]")).toBeNull();
+  });
+
+  it("con columnas editables la raíz es role grid y los encabezados conservan aria-sort", async () => {
+    const user = userEvent.setup();
+    render(<DataGrid columns={lineColumns} defaultValue={lines} getRowId={idOf} />);
+    expect(screen.getByRole("grid")).toBeInTheDocument();
+    const sort = screen.getByRole("button", { name: "Ordenar por Importe" });
+    await user.click(sort);
+    expect(sort.closest("th")).toHaveAttribute("aria-sort", "ascending");
+    await user.click(sort);
+    expect(sort.closest("th")).toHaveAttribute("aria-sort", "descending");
+  });
+});

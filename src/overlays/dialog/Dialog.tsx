@@ -20,6 +20,12 @@ function focusIfAvailable(target: HTMLElement | null | undefined): boolean {
   return document.activeElement === target;
 }
 
+// Radix handles Escape on document before the event reaches the element: a
+// marked ancestor (a grid cell with a pending draft) consumes this Escape itself.
+function belongsToPendingDraft(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest("[data-draft-dirty]") !== null;
+}
+
 /** Controlled dialog. Radix owns the layer stack, focus trap and portal. */
 export const Dialog = React.forwardRef<HTMLDivElement, DialogProps>(function Dialog({
   open, onOpenChange, onHide, title, description, icon, footer, children,
@@ -130,7 +136,7 @@ export const Dialog = React.forwardRef<HTMLDivElement, DialogProps>(function Dia
               returnFocus.current.focus();
             }
           }}
-          onEscapeKeyDown={(event) => { if (!closable) event.preventDefault(); }}
+          onEscapeKeyDown={(event) => { if (!closable || belongsToPendingDraft(event.target)) event.preventDefault(); }}
           onPointerDownOutside={(event) => {
             if (!closeOnOverlayClick || !closable) event.preventDefault();
           }}
