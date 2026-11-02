@@ -154,7 +154,7 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
     if (!latest.current.resolveOnBlur || disabled || readOnly || onTriggerClick || withinControl) return;
     if (menuOpenRef.current || openRef.current || noticeOpenRef.current) return;
     const value = textRef.current.trim();
-    if (!dirtyRef.current || value === "") return;
+    if (!dirtyRef.current || !isDirtyText()) return;
     dirtyRef.current = false;
 
     if (latest.current.search) {

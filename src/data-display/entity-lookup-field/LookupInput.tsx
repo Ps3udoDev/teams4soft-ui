@@ -110,7 +110,11 @@ export const LookupInput = React.forwardRef<HTMLInputElement, LookupInputProps>(
         value={value}
         onValueChange={onValueChange}
         onKeyDown={onKeyDown}
-        onBlur={(event) => onBlur?.(event, rootRef.current?.contains(event.relatedTarget as Node | null) ?? false)}
+        onBlur={(event) => {
+          const next = event.relatedTarget as Element | null;
+          // Consumer trailing actions are inside the root but are not part of the lookup.
+          onBlur?.(event, Boolean(next && rootRef.current?.contains(next) && !next.closest("[data-slot=trailingActions]")));
+        }}
         disabled={disabled}
         readOnly={readOnly}
         invalid={invalid}
@@ -165,7 +169,7 @@ export const LookupInput = React.forwardRef<HTMLInputElement, LookupInputProps>(
           </Popover.Portal>
         </Popover.Root>
       ) : triggerButton}
-      {trailingActions}
+      {trailingActions ? <span data-slot="trailingActions" className="contents">{trailingActions}</span> : null}
     </div>
   );
 });

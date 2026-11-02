@@ -1,6 +1,6 @@
 import * as React from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EntityLookupField } from "./EntityLookupField";
 import type { EntityLookupFieldProps } from "./EntityLookupField.types";
@@ -696,11 +696,31 @@ describe("EntityLookupField resolveOnBlur", () => {
   it("Tab con texto y el blur siguiente hacen una sola búsqueda", async () => {
     const search = remote(() => provs(1, 3));
     const user = userEvent.setup();
-    render(<Harness search={search} resolveOnBlur trailingActions={outside} />);
+    render(<>{outside}<Harness search={search} resolveOnBlur /></>);
     await user.type(input(), "prov");
-    await user.tab();
+    fireEvent.keyDown(input(), { key: "Tab" });
+    fireEvent.blur(input(), { relatedTarget: screen.getByRole("button", { name: "Fuera" }) });
     await screen.findByRole("dialog", { name: "Seleccionar elemento" });
     expect(search).toHaveBeenCalledTimes(1);
+  });
+
+  it("escribir y volver a la etiqueta exacta de la selección no resuelve al salir", async () => {
+    const search = remote(() => provs(1, 3));
+    const user = userEvent.setup();
+    render(<>{outside}<Harness search={search} resolveOnBlur initial={prov(1)} /></>);
+    await user.type(input(), "x{Backspace}");
+    expect(input()).toHaveValue("Proveedor 1");
+    await leave(user);
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it("el foco hacia un trailingAction ajeno sí resuelve", async () => {
+    const search = remote(() => [prov(1)]);
+    const user = userEvent.setup();
+    render(<Harness search={search} resolveOnBlur trailingActions={outside} />);
+    await user.type(input(), "prov");
+    await leave(user);
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(1));
   });
 
   it("un blur genuino posterior a un Tab sí resuelve", async () => {
