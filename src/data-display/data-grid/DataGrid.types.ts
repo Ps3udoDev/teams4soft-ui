@@ -8,7 +8,15 @@ export type DataGridSelectionMode = "none" | "single" | "multiple";
 export type DataGridDensity = "compact" | "normal";
 export type DataGridSort = { field: string; direction: "asc" | "desc" };
 export type DataGridPagination = { pageSize?: number; pageSizeOptions?: number[] } | false;
-export type DataGridData<T> = { rows: T[]; selectedIds: string[] };
+export type DataGridData<T> = {
+  rows: T[];
+  selectedIds: string[];
+  dirtyIds: string[];
+  addedIds: string[];
+  removedIds: string[];
+  errors: Record<string, Record<string, string>>;
+  isValid: boolean;
+};
 export type DataGridHandle<T> = { getData(): DataGridData<T> };
 export type DataGridCellContext<T> = { row: T; value: unknown; rowId: string; grid: DataGridHandle<T> };
 export type DataGridCellComponent<T> = React.ComponentType<DataGridCellContext<T> & { column: DataGridColumn<T> }>;
@@ -36,6 +44,10 @@ export interface DataGridColumn<T, TOption = unknown> {
   getOptionValue?(option: TOption): unknown;
   getOptionLabel?(option: TOption): string;
   render?: (ctx: DataGridCellContext<T>) => React.ReactNode;
+  editable?: boolean | ((row: T) => boolean);
+  required?: boolean;
+  validate?: (value: unknown, row: T) => string | null;
+  onCommit?: (ctx: { row: T; value: unknown; prev: unknown; grid: DataGridHandle<T> }) => void;
 }
 
 export interface DataGridClassNames {
@@ -82,6 +94,7 @@ export interface DataGridMessages {
   yes: string;
   no: string;
   addRow: string;
+  required: string;
 }
 
 export type DataGridEmptyState = { icon?: React.ReactNode; title?: React.ReactNode; hint?: React.ReactNode };

@@ -282,7 +282,7 @@ describe("DataGrid: selección y carga", () => {
     expect(screen.getByRole("checkbox", { name: "Seleccionar todas las filas de la página" })).toBePartiallyChecked();
     await user.click(screen.getAllByRole("checkbox", { name: "Seleccionar fila" })[1]!);
     expect(change).toHaveBeenLastCalledWith(["r-1", "r-2"]);
-    expect(ref.current?.getData()).toEqual({ rows, selectedIds: ["r-1", "r-2"] });
+    expect(ref.current?.getData()).toEqual({ rows, selectedIds: ["r-1", "r-2"], dirtyIds: [], addedIds: [], removedIds: [], errors: {}, isValid: true });
     await applyFilter(user, "Póliza", "Bravo");
     await waitFor(() => expect(bodyRows()).toHaveLength(1));
     await user.click(screen.getByRole("checkbox", { name: "Seleccionar todas las filas de la página" }));

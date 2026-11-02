@@ -111,7 +111,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
 
   const dataRef = React.useRef({ rows, selectedIds });
   dataRef.current = { rows, selectedIds };
-  const grid = React.useMemo<DataGridHandle<T>>(() => ({ getData: () => ({ rows: dataRef.current.rows, selectedIds: [...dataRef.current.selectedIds] }) }), []);
+  const grid = React.useMemo<DataGridHandle<T>>(() => ({ getData: () => ({ rows: dataRef.current.rows, selectedIds: [...dataRef.current.selectedIds], dirtyIds: [], addedIds: [], removedIds: [], errors: {}, isValid: true }) }), []);
   React.useImperativeHandle(ref, () => grid, [grid]);
   const radioName = React.useId();
   const contentRef = React.useRef<HTMLDivElement>(null);
