@@ -6,6 +6,7 @@ import { EntityLookupField } from "./EntityLookupField";
 import type { EntityLookupFieldProps } from "./EntityLookupField.types";
 import type { DataGridColumn } from "../data-grid/DataGrid.types";
 import type { LookupSearchResponse } from "../lookup-core/lookup-core.types";
+import { Dialog } from "../../overlays/dialog/Dialog";
 
 beforeAll(() => {
   const proto = Element.prototype as unknown as Record<string, unknown>;
@@ -522,6 +523,336 @@ describe("EntityLookupField ajustes de revisión", () => {
   it("messages.clear etiqueta el botón de limpiar", () => {
     setup({ initial: prov(1), clearable: true, messages: { clear: "Borrar selección" } });
     expect(screen.getByRole("button", { name: "Borrar selección" })).toBeInTheDocument();
+  });
+});
+
+const criteria = [{ value: "code", label: "Por código" }, { value: "lastName", label: "Por primer apellido" }];
+const menuTrigger = () => screen.getByRole("button", { name: "Buscar" });
+const menuItem = (name: string) => screen.getByRole("menuitemradio", { name });
+
+describe("EntityLookupField criterios", () => {
+  it("el botón abre un menú con menuitemradio y marca el primer criterio", async () => {
+    const { user } = setup({ search: remote(() => provs(1, 3)), criteria });
+    expect(menuTrigger()).toHaveAttribute("aria-haspopup", "menu");
+    expect(menuTrigger()).toHaveAttribute("aria-expanded", "false");
+    await user.click(menuTrigger());
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(menuTrigger()).toHaveAttribute("aria-expanded", "true");
+    expect(menuItem("Por código")).toHaveAttribute("aria-checked", "true");
+    expect(menuItem("Por primer apellido")).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("elegir un criterio con texto busca con ese criterio y lo conserva en Enter y en la paginación", async () => {
+    const search = remote((_q, page) => ({ items: provs((page - 1) * 10 + 1, 10), total: 25 }));
+    const { user } = setup({ search, criteria, pageSize: 10 });
+    await user.type(input(), "prov");
+    await user.click(menuTrigger());
+    await user.click(menuItem("Por primer apellido"));
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(search).toHaveBeenLastCalledWith("prov", expect.objectContaining({ criterion: "lastName", page: 1, pageSize: 10 }));
+    await user.click(screen.getByRole("button", { name: "Página siguiente" }));
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+    expect(search).toHaveBeenLastCalledWith("prov", expect.objectContaining({ criterion: "lastName", page: 2 }));
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await user.click(input());
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(3));
+    expect(search).toHaveBeenLastCalledWith("prov", expect.objectContaining({ criterion: "lastName", page: 1 }));
+  });
+
+  it("sin texto elegir un criterio lista todo con ese criterio", async () => {
+    const search = remote(() => provs(1, 3));
+    const { user } = setup({ search, criteria });
+    await user.click(menuTrigger());
+    await user.click(menuItem("Por primer apellido"));
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    expect(search).toHaveBeenCalledWith("", expect.objectContaining({ criterion: "lastName", page: 1 }));
+  });
+
+  it("criterion controlado: onCriterionChange y la búsqueda usa el valor elegido sin esperar al padre", async () => {
+    const search = remote(() => provs(1, 3));
+    const onCriterionChange = vi.fn();
+    const { user } = setup({ search, criteria, criterion: "code", onCriterionChange });
+    await user.type(input(), "prov");
+    await user.click(menuTrigger());
+    await user.click(menuItem("Por primer apellido"));
+    expect(onCriterionChange).toHaveBeenCalledWith("lastName");
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(1));
+    expect(search).toHaveBeenCalledWith("prov", expect.objectContaining({ criterion: "lastName" }));
+  });
+
+  it("defaultCriterion arranca marcado y viaja en Enter", async () => {
+    const search = remote(() => provs(1, 3));
+    const { user } = setup({ search, criteria, defaultCriterion: "lastName" });
+    await user.click(menuTrigger());
+    expect(menuItem("Por primer apellido")).toHaveAttribute("aria-checked", "true");
+    await user.keyboard("{Escape}");
+    await user.type(input(), "prov{Enter}");
+    await waitFor(() => expect(search).toHaveBeenCalledWith("prov", expect.objectContaining({ criterion: "lastName" })));
+  });
+
+  it("flechas y Enter eligen; Escape cierra y devuelve el foco al botón", async () => {
+    const search = remote(() => provs(1, 3));
+    const { user } = setup({ search, criteria });
+    await user.type(input(), "prov");
+    await user.click(menuTrigger());
+    await waitFor(() => expect(menuItem("Por código")).toHaveFocus());
+    await user.keyboard("{ArrowDown}");
+    expect(menuItem("Por primer apellido")).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(menuItem("Por código")).toHaveFocus();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    expect(menuTrigger()).toHaveFocus();
+    expect(search).not.toHaveBeenCalled();
+    await user.click(menuTrigger());
+    await user.keyboard("{ArrowDown}{Enter}");
+    await waitFor(() => expect(search).toHaveBeenCalledWith("prov", expect.objectContaining({ criterion: "lastName" })));
+  });
+
+  it("local: elegir un criterio abre el mismo flujo y no filtra por criterio", async () => {
+    const { user } = setup({ items: [prov(1), prov(2), prov(3)], criteria });
+    await user.type(input(), "Proveedor 2");
+    await user.click(menuTrigger());
+    await user.click(menuItem("Por primer apellido"));
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    expect(bodyRows()).toHaveLength(1);
+  });
+
+  it("onTriggerClick gana: sin menú", async () => {
+    const onTriggerClick = vi.fn();
+    const { user } = setup({ search: remote(() => []), criteria, onTriggerClick });
+    expect(menuTrigger()).not.toHaveAttribute("aria-haspopup");
+    await user.click(menuTrigger());
+    expect(onTriggerClick).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("disabled: el botón del menú está deshabilitado", () => {
+    setup({ search: remote(() => []), criteria, disabled: true });
+    expect(menuTrigger()).toBeDisabled();
+  });
+
+  it("dentro de un Dialog el menú abre y es operable", async () => {
+    const search = remote(() => provs(1, 3));
+    const user = userEvent.setup();
+    render(
+      <Dialog open title="Contenedor">
+        <Harness search={search} criteria={criteria} />
+      </Dialog>,
+    );
+    await user.type(input(), "prov");
+    await user.click(menuTrigger());
+    await user.click(menuItem("Por primer apellido"));
+    await waitFor(() => expect(search).toHaveBeenCalledWith("prov", expect.objectContaining({ criterion: "lastName" })));
+  });
+});
+
+describe("EntityLookupField resolveOnBlur", () => {
+  const outside = <button type="button">Fuera</button>;
+  const leave = (user: ReturnType<typeof userEvent.setup>) => user.click(screen.getByRole("button", { name: "Fuera" }));
+  const localItems = [
+    { id: 1, name: "Ana", code: "A1" },
+    { id: 2, name: "Ana María", code: "A2" },
+    { id: 3, name: "Beto", code: "B3" },
+    { id: 4, name: "Beta", code: "B4" },
+  ];
+
+  it("sin resolveOnBlur el blur no busca", async () => {
+    const search = remote(() => [prov(1)]);
+    const user = userEvent.setup();
+    render(<>{outside}<Harness search={search} /></>);
+    await user.type(input(), "prov");
+    await leave(user);
+    expect(search).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("remoto: un resultado se selecciona al salir", async () => {
+    const search = remote(() => [prov(1)]);
+    const user = userEvent.setup();
+    const onSelectionChange = vi.fn();
+    render(<>{outside}<Harness search={search} resolveOnBlur onSelectionChange={onSelectionChange} /></>);
+    await user.type(input(), "prov");
+    await leave(user);
+    await waitFor(() => expect(onSelectionChange).toHaveBeenCalledWith(prov(1)));
+    expect(search).toHaveBeenCalledTimes(1);
+  });
+
+  it("remoto: 0 resultados avisa y el texto sigue mientras el aviso está abierto", async () => {
+    const search = remote(() => []);
+    const user = userEvent.setup();
+    const onSelectionChange = vi.fn();
+    render(<>{outside}<Harness search={search} resolveOnBlur onSelectionChange={onSelectionChange} /></>);
+    await user.type(input(), "zz");
+    await leave(user);
+    expect(await screen.findByText("No se encontró «zz»")).toBeInTheDocument();
+    expect(input()).toHaveValue("zz");
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it("Tab con texto y el blur siguiente hacen una sola búsqueda", async () => {
+    const search = remote(() => provs(1, 3));
+    const user = userEvent.setup();
+    render(<Harness search={search} resolveOnBlur trailingActions={outside} />);
+    await user.type(input(), "prov");
+    await user.tab();
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    expect(search).toHaveBeenCalledTimes(1);
+  });
+
+  it("un blur genuino posterior a un Tab sí resuelve", async () => {
+    const search = remote(() => provs(1, 3));
+    const user = userEvent.setup();
+    render(<>{outside}<Harness search={search} resolveOnBlur /></>);
+    await user.type(input(), "prov");
+    await user.tab();
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await user.click(input());
+    await user.type(input(), "x");
+    await leave(user);
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+  });
+
+  it("no repite la búsqueda con el mismo texto tras un intento sin resolver", async () => {
+    const search = remote(() => []);
+    const user = userEvent.setup();
+    render(<>{outside}<Harness search={search} resolveOnBlur /></>);
+    await user.type(input(), "zz");
+    await leave(user);
+    await user.click(await screen.findByRole("button", { name: "Aceptar" }));
+    await waitFor(() => expect(input()).toHaveValue(""));
+    await user.type(input(), "yy");
+    await leave(user);
+    await user.click(await screen.findByRole("button", { name: "Aceptar" }));
+    expect(search).toHaveBeenCalledTimes(2);
+    await user.click(input());
+    await leave(user);
+    expect(search).toHaveBeenCalledTimes(2);
+  });
+
+  it("un aviso que mantiene el texto no se repite al volver a salir", async () => {
+    const search = remote(() => []);
+    const user = userEvent.setup();
+    render(<>{outside}<Harness search={search} resolveOnBlur onCreateRequest={() => {}} /></>);
+    await user.type(input(), "zz");
+    await leave(user);
+    await user.click(await screen.findByRole("button", { name: "No" }));
+    expect(input()).toHaveValue("zz");
+    await user.click(input());
+    await leave(user);
+    expect(search).toHaveBeenCalledTimes(1);
+  });
+
+  it("texto que vino de fuera y nunca se escribió no resuelve", async () => {
+    const search = remote(() => provs(1, 3));
+    const user = userEvent.setup();
+    render(<>{outside}<Harness search={search} resolveOnBlur defaultInputValue="externo" /></>);
+    await user.click(input());
+    await leave(user);
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it("texto igual a la selección no resuelve", async () => {
+    const search = remote(() => provs(1, 3));
+    const user = userEvent.setup();
+    render(<>{outside}<Harness search={search} resolveOnBlur initial={prov(1)} /></>);
+    await user.click(input());
+    await leave(user);
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it("el foco hacia el \"…\" no resuelve: solo busca el botón", async () => {
+    const search = remote(() => provs(1, 3));
+    const { user } = setup({ search, resolveOnBlur: true });
+    await user.type(input(), "prov");
+    await user.click(trigger());
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    expect(search).toHaveBeenCalledTimes(1);
+  });
+
+  it("el foco hacia el botón de limpiar no resuelve", async () => {
+    const search = remote(() => provs(1, 3));
+    const { user } = setup({ search, resolveOnBlur: true, clearable: true });
+    await user.type(input(), "prov");
+    await user.click(screen.getByRole("button", { name: "Limpiar" }));
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it("el foco hacia el botón del menú de criterios no resuelve", async () => {
+    const search = remote(() => provs(1, 3));
+    const { user } = setup({ search, resolveOnBlur: true, criteria });
+    await user.type(input(), "prov");
+    await user.click(menuTrigger());
+    await screen.findByRole("menu");
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it("readOnly y onTriggerClick no resuelven", async () => {
+    const search = remote(() => provs(1, 3));
+    const user = userEvent.setup();
+    render(<>{outside}<Harness search={search} resolveOnBlur onTriggerClick={() => {}} /></>);
+    await user.type(input(), "prov");
+    await leave(user);
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it("local: coincidencia exacta gana a las que contienen", async () => {
+    const user = userEvent.setup();
+    const onSelectionChange = vi.fn();
+    render(<>{outside}<Harness items={localItems} resolveOnBlur onSelectionChange={onSelectionChange} /></>);
+    await user.type(input(), "ana");
+    await leave(user);
+    expect(onSelectionChange).toHaveBeenCalledWith(localItems[0]);
+    expect(input()).toHaveValue("Ana");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("local: varias coincidencias abren el modal solo con ellas", async () => {
+    const user = userEvent.setup();
+    render(<>{outside}<Harness items={localItems} resolveOnBlur /></>);
+    await user.type(input(), "bet");
+    await leave(user);
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    expect(bodyRows()).toHaveLength(2);
+  });
+
+  it("local: matchItem(text, item) decide las coincidencias", async () => {
+    const user = userEvent.setup();
+    const onSelectionChange = vi.fn();
+    render(<>{outside}<Harness items={localItems} resolveOnBlur matchItem={(text, item) => item.code === text.toUpperCase()} onSelectionChange={onSelectionChange} /></>);
+    await user.type(input(), "b4");
+    await leave(user);
+    expect(onSelectionChange).toHaveBeenCalledWith(localItems[3]);
+  });
+
+  it("local: 0 coincidencias limpia y llama onResolveNotFound sin selección previa", async () => {
+    const user = userEvent.setup();
+    const onSelectionChange = vi.fn();
+    const onResolveNotFound = vi.fn();
+    render(<>{outside}<Harness items={localItems} resolveOnBlur onResolveNotFound={onResolveNotFound} onSelectionChange={onSelectionChange} /></>);
+    await user.type(input(), "zzz");
+    await leave(user);
+    expect(input()).toHaveValue("");
+    expect(onResolveNotFound).toHaveBeenCalledWith("zzz");
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it("local: 0 coincidencias con selección vigente emite null una vez", async () => {
+    const user = userEvent.setup();
+    const onSelectionChange = vi.fn();
+    const onResolveNotFound = vi.fn();
+    render(<>{outside}<Harness items={localItems} initial={localItems[0]} resolveOnBlur onResolveNotFound={onResolveNotFound} onSelectionChange={onSelectionChange} /></>);
+    await user.type(input(), "zzz");
+    await leave(user);
+    expect(onResolveNotFound).toHaveBeenCalledWith("Anazzz");
+    expect(onSelectionChange).toHaveBeenCalledTimes(1);
+    expect(onSelectionChange).toHaveBeenCalledWith(null);
+    expect(input()).toHaveValue("");
   });
 });
 

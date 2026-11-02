@@ -3,7 +3,7 @@ import { FormField } from "../../forms/form-field/FormField";
 import { cn, mergeRefs } from "../../lib";
 import { LookupDialog } from "../lookup-core/LookupDialog";
 import { entityLookupMessagesEs, type EntityLookupMessages } from "../lookup-core/lookup-core.types";
-import { filterLocalItems } from "../lookup-core/lookup-utils";
+import { filterLocalItems, matchLocalItems } from "../lookup-core/lookup-utils";
 import { useLookupController, type LookupOutcome } from "../lookup-core/use-lookup-controller";
 import { useLookupNotices } from "../lookup-core/use-lookup-notices";
 import type { EntityLookupFieldProps } from "./EntityLookupField.types";
@@ -57,10 +57,16 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
   };
 
   const searchKeys = props.searchKeys ?? columns.map((column) => column.field);
+  // Blur matches (exact first) differ from the Enter filter; the next local search shows exactly these rows.
+  const forcedRowsRef = React.useRef<T[] | null>(null);
   const controller = useLookupController<T, string>({
     search,
     items,
-    localMatch: (query) => filterLocalItems(latest.current.items ?? [], query, searchKeys),
+    localMatch: (query) => {
+      const forced = forcedRowsRef.current;
+      forcedRowsRef.current = null;
+      return forced ?? filterLocalItems(latest.current.items ?? [], query, searchKeys);
+    },
     pageSize,
     autoSelectSingle,
     onSearchError,
@@ -68,9 +74,17 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
   const { state, close: closeController } = controller;
   const { noticesElement, showNotFound, showQueryRequired } = useLookupNotices({ messages, notFoundMessage, onCreateRequest });
 
-  const activeCriterion = criterion ?? defaultCriterion ?? criteria?.[0]?.value;
+  const noticeOpenRef = React.useRef(false);
+  noticeOpenRef.current = noticesElement !== null;
+  const menuOpenRef = React.useRef(false);
+  // Typed or pasted since the last selection or search; text that came from outside never sets it.
+  const dirtyRef = React.useRef(false);
+
+  const [innerCriterion, setInnerCriterion] = React.useState(() => defaultCriterion ?? criteria?.[0]?.value);
+  const activeCriterion = criterion ?? innerCriterion;
 
   const applySelection = (item: T) => {
+    dirtyRef.current = false;
     setText(latest.current.getItemLabel(item));
     latest.current.onSelectionChange(item);
   };
@@ -113,19 +127,54 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
     }
   };
 
-  const runLookup = async (query: string, intent: "commit" | "browse", preselect: string | null = null) => {
-    const outcome = await controller.runSearch(query, { intent, criterion: activeCriterion });
+  // `chosen` is the criterion just picked in the menu, which a controlling parent may not have echoed back yet.
+  const runLookup = async (query: string, intent: "commit" | "browse", preselect: string | null = null, chosen = activeCriterion) => {
+    dirtyRef.current = false;
+    const outcome = await controller.runSearch(query, { intent, criterion: chosen });
     await settle(outcome, preselect);
     return outcome;
   };
 
-  const runTrigger = () => {
+  const runTrigger = (chosen = activeCriterion) => {
     const query = textRef.current.trim();
     const current = latest.current.selectedItem;
     if (current && textRef.current === latest.current.getItemLabel(current)) {
-      return runLookup("", "browse", String(latest.current.getItemId(current)));
+      return runLookup("", "browse", String(latest.current.getItemId(current)), chosen);
     }
-    return query ? runLookup(query, "commit") : runLookup("", "browse");
+    return query ? runLookup(query, "commit", null, chosen) : runLookup("", "browse", null, chosen);
+  };
+
+  const onCriterionSelect = (value: string) => {
+    if (latest.current.criterion === undefined) setInnerCriterion(value);
+    latest.current.onCriterionChange?.(value);
+    void runTrigger(value);
+  };
+
+  const handleBlur = (_event: React.FocusEvent<HTMLInputElement>, withinControl: boolean) => {
+    if (!latest.current.resolveOnBlur || disabled || readOnly || onTriggerClick || withinControl) return;
+    if (menuOpenRef.current || openRef.current || noticeOpenRef.current) return;
+    const value = textRef.current.trim();
+    if (!dirtyRef.current || value === "") return;
+    dirtyRef.current = false;
+
+    if (latest.current.search) {
+      void runLookup(value, "commit");
+      return;
+    }
+    const matchItem = latest.current.matchItem;
+    const matches = matchLocalItems(
+      latest.current.items ?? [], value, searchKeys, labelOf, matchItem && ((item, text) => matchItem(text, item)),
+    );
+    const [only] = matches;
+    if (matches.length === 1 && only !== undefined) applySelection(only);
+    else if (matches.length > 1) {
+      forcedRowsRef.current = matches;
+      void runLookup(value, "commit");
+    } else {
+      setText("");
+      if (latest.current.selectedItem) latest.current.onSelectionChange(null);
+      latest.current.onResolveNotFound?.(value);
+    }
   };
 
   // A parent that opens the dialog itself (`open`, `defaultOpen`) gets the same listing as the trigger button.
@@ -157,7 +206,10 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
     previousRef.current = { id: selectedId, label: selectedLabel ?? "" };
     if (previous.id === selectedId) return;
     // Internal transitions already left the text equal to the new label, so this only writes for outside changes.
-    if (textRef.current !== (selectedLabel ?? "")) setText(selectedLabel ?? "");
+    if (textRef.current !== (selectedLabel ?? "")) {
+      dirtyRef.current = false;
+      setText(selectedLabel ?? "");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
@@ -181,6 +233,7 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
   };
 
   const onTextChange = (next: string) => {
+    dirtyRef.current = true;
     setText(next);
     if (next === "" && latest.current.selectedItem) latest.current.onSelectionChange(null);
   };
@@ -227,6 +280,7 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
             value={text}
             onValueChange={onTextChange}
             onKeyDown={onKeyDown}
+            onBlur={handleBlur}
             inert={inert}
             readOnly={readOnly}
             clearable={props.clearable}
@@ -235,6 +289,11 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
             triggerLabel={messages.trigger}
             triggerIcon={props.triggerIcon}
             onTrigger={onTrigger}
+            criteria={onTriggerClick ? undefined : criteria}
+            activeCriterion={activeCriterion}
+            criteriaLabel={messages.criteria}
+            onCriterionSelect={onCriterionSelect}
+            onCriteriaOpenChange={(next) => { menuOpenRef.current = next; }}
             trailingActions={props.trailingActions}
             unstyled={unstyled}
             classNames={classNames}
