@@ -32,6 +32,7 @@ export interface GridRowView<T extends RowData> {
   density: DataGridDensity;
   loading: boolean;
   readOnly: boolean;
+  editing: boolean;
   unstyled: boolean;
   revision: number;
   selectionMode: DataGridSelectionMode;
@@ -61,7 +62,7 @@ export interface GridRowProps<T extends RowData> {
 }
 
 function GridRowInner<T extends RowData>({ row, isSelected, isDirty, errorsForRow, rowClassName, cellTypes, view }: GridRowProps<T>) {
-  const { store, grid, density, loading, readOnly, unstyled, revision, selectionMode, classNames, styles, cellStyle, renderSelection, selectRow, onRowClick, onRowDoubleClick, commitCell, focusAfterEnter } = view;
+  const { store, grid, density, loading, readOnly, editing, unstyled, revision, selectionMode, classNames, styles, cellStyle, renderSelection, selectRow, onRowClick, onRowDoubleClick, commitCell, focusAfterEnter } = view;
   const baseRow = store.getBaseRow(row.id);
   const rowHeight = density === "compact" ? "h-(--ui-grid-row-height-compact)" : "h-(--ui-grid-row-height)";
   const editorDensity = density === "compact" ? "py-0.5 [--ui-control-height:var(--ui-grid-editor-height-compact)]" : "py-1 [--ui-control-height:var(--ui-grid-editor-height)]";
@@ -81,7 +82,7 @@ function GridRowInner<T extends RowData>({ row, isSelected, isDirty, errorsForRo
       const error = col && errorsForRow?.[col.field];
       const cellProps = {
         "data-slot": "cell", "data-align": align, "data-frozen": frozenSide(pinned),
-        "data-dirty": (col && baseRow !== undefined && !Object.is(baseRow[col.field], value)) || undefined,
+        "data-dirty": (editing && col && baseRow !== undefined && !Object.is(baseRow[col.field], value)) || undefined,
         "data-invalid": error ? true : undefined,
         className: cn(!unstyled && "border-b border-ui-border px-3 py-2", !unstyled && Editor && editorDensity, !unstyled && pinned && "bg-ui-background", classNames?.cell),
         style: { ...cellStyle(cell.column), ...(!unstyled && pinned ? { backgroundImage: "linear-gradient(var(--ui-grid-current-row-bg), var(--ui-grid-current-row-bg))" } : {}), ...styles?.cell },

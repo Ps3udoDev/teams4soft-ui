@@ -1931,13 +1931,13 @@ describe("DataGrid: ref completo, onChange y toolbar Agregar", () => {
   it("confirmar el mismo valor revalida una celda que ya muestra un error", async () => {
     const user = userEvent.setup();
     const ref = React.createRef<DataGridHandle<Line>>();
-    const crossField: DataGridColumn<Line>[] = [{ ...lineColumns[0]!, validate: (_value, row) => row.collectedAmount === 0 ? "No cero" : null }, lineColumns[1]!];
-    render(<DataGrid ref={ref} columns={crossField} defaultValue={[{ id: "r-1", policy: "Pérez", collectedAmount: 0 }]} getRowId={lineId} />);
+    let rejected = true;
+    const external: DataGridColumn<Line>[] = [{ ...lineColumns[0]!, validate: () => rejected ? "Rechazado" : null }, lineColumns[1]!];
+    render(<DataGrid ref={ref} columns={external} defaultValue={[{ id: "r-1", policy: "Pérez", collectedAmount: 0 }]} getRowId={lineId} />);
     await retype(user, policyInput(0), "Nuevo");
     await user.tab();
     expect(cellOf("r-1", "policy")).toHaveAttribute("data-invalid");
-    act(() => ref.current?.patchRow("r-1", { collectedAmount: 5 }));
-    expect(cellOf("r-1", "policy")).toHaveAttribute("data-invalid");
+    rejected = false;
     await retype(user, policyInput(0), "Nuevo");
     await user.tab();
     expect(cellOf("r-1", "policy")).not.toHaveAttribute("data-invalid");
@@ -2005,6 +2005,120 @@ describe("DataGrid: revisión final de G2", () => {
     return warn;
   };
 
+  describe("la selección sigue a las filas", () => {
+    function Controlled({ gridRef, initial, onChange, onSelectionChange }: { gridRef: React.Ref<DataGridHandle<Line>>; initial: string[]; onChange?: (data: DataGridData<Line>) => void; onSelectionChange?: (ids: string[]) => void }) {
+      const [selection, setSelection] = React.useState(initial);
+      return <DataGrid ref={gridRef} columns={lineColumns} defaultValue={lineRows} getRowId={lineId} selectionMode="multiple" selection={selection} onChange={onChange} onSelectionChange={ids => { onSelectionChange?.(ids); setSelection(ids); }} />;
+    }
+
+    it("removeRow avisa al padre controlado y onChange ya ve la selección sin la fila", () => {
+      const ref = React.createRef<DataGridHandle<Line>>();
+      const onChange = vi.fn();
+      const onSelectionChange = vi.fn();
+      render(<Controlled gridRef={ref} initial={["r-1", "r-2"]} onChange={onChange} onSelectionChange={onSelectionChange} />);
+      act(() => ref.current?.removeRow("r-2"));
+      expect(onSelectionChange).toHaveBeenCalledTimes(1);
+      expect(onSelectionChange).toHaveBeenCalledWith(["r-1"]);
+      expect(onChange.mock.calls[0]![0].selectedIds).toEqual(["r-1"]);
+      expect(ref.current?.getData()).toMatchObject({ selectedIds: ["r-1"], removedIds: ["r-2"] });
+    });
+
+    it("sin control, el siguiente cambio no arrastra la fila quitada y volver a añadirla no la selecciona", async () => {
+      const user = userEvent.setup();
+      const ref = React.createRef<DataGridHandle<Line>>();
+      const onSelectionChange = vi.fn();
+      render(<DataGrid ref={ref} columns={lineColumns} defaultValue={lineRows} getRowId={lineId} selectionMode="multiple" onSelectionChange={onSelectionChange} />);
+      await user.click(within(bodyRows()[1]!).getByRole("checkbox", { name: "Seleccionar fila" }));
+      expect(ref.current?.getData().selectedIds).toEqual(["r-2"]);
+      act(() => ref.current?.removeRow("r-2"));
+      expect(ref.current?.getData()).toMatchObject({ selectedIds: [], removedIds: ["r-2"] });
+      await user.click(within(bodyRows()[0]!).getByRole("checkbox", { name: "Seleccionar fila" }));
+      expect(onSelectionChange).toHaveBeenLastCalledWith(["r-1"]);
+      act(() => ref.current?.addRow(lineRows[1]));
+      expect(ref.current?.getData().selectedIds).toEqual(["r-1"]);
+      expect(within(bodyRows()[2]!).getByRole("checkbox", { name: "Seleccionar fila" })).not.toBeChecked();
+    });
+
+    it("reset quita las filas que desaparecen y conserva las que siguen y las que la grilla no conoce", () => {
+      const ref = React.createRef<DataGridHandle<Line>>();
+      const onChange = vi.fn();
+      const onSelectionChange = vi.fn();
+      render(<Controlled gridRef={ref} initial={["r-1", "r-2", "otra-pagina"]} onChange={onChange} onSelectionChange={onSelectionChange} />);
+      act(() => ref.current?.reset([lineRows[0]!]));
+      expect(onSelectionChange).toHaveBeenCalledWith(["r-1", "otra-pagina"]);
+      expect(onChange.mock.lastCall![0].selectedIds).toEqual(["r-1", "otra-pagina"]);
+      expect(ref.current?.getData().selectedIds).toEqual(["r-1", "otra-pagina"]);
+    });
+
+    it("una fila seleccionada oculta por un filtro sigue seleccionada y lo que no toca la selección no la emite", async () => {
+      const user = userEvent.setup();
+      const ref = React.createRef<DataGridHandle<Line>>();
+      const onSelectionChange = vi.fn();
+      render(<Controlled gridRef={ref} initial={["r-1"]} onSelectionChange={onSelectionChange} />);
+      await applyFilter(user, "Póliza", "Alfa");
+      expect(bodyRows()).toHaveLength(1);
+      act(() => ref.current?.removeRow("r-2"));
+      act(() => ref.current?.removeRow("no-existe"));
+      act(() => ref.current?.reset(ref.current.getData().rows));
+      expect(onSelectionChange).not.toHaveBeenCalled();
+      expect(ref.current?.getData().selectedIds).toEqual(["r-1"]);
+    });
+  });
+
+  describe("los errores de la fila se revalidan al cambiarla", () => {
+    it("una celda con error que deja de ser editable pierde el error al confirmar otra celda", async () => {
+      const user = userEvent.setup();
+      const ref = React.createRef<DataGridHandle<Line>>();
+      const columns: DataGridColumn<Line>[] = [
+        { field: "kind", header: "Tipo", editable: true },
+        { field: "collectedAmount", header: "Imp. cobrado", type: "currency", required: true, editable: row => row.kind === "A" },
+      ];
+      render(<DataGrid ref={ref} columns={columns} defaultValue={[{ id: "r-1", kind: "A", policy: null, collectedAmount: null }]} getRowId={lineId} />);
+      act(() => { ref.current?.validate(); });
+      expect(cellOf("r-1", "collectedAmount")).toHaveAttribute("data-invalid");
+      await retype(user, within(bodyRows()[0]!).getByRole("textbox", { name: "Tipo" }) as HTMLInputElement, "B");
+      await user.tab();
+      expect(bodyRows()[0]).not.toHaveAttribute("data-invalid");
+      expect(ref.current?.getData()).toMatchObject({ errors: {}, isValid: true });
+    });
+
+    const crossField: DataGridColumn<Line>[] = [
+      { field: "total", header: "Importe", type: "currency", editable: true },
+      { field: "collectedAmount", header: "Imp. cobrado", type: "currency", editable: true, validate: (value, row) => (value as number) > (row.total as number) ? "Mayor que el importe" : null },
+    ];
+    const overdrawn: Line[] = [{ id: "r-1", policy: null, total: 100, collectedAmount: 150 }, { id: "r-2", policy: null, total: 100, collectedAmount: 150 }];
+
+    it("corregir el importe limpia el error de cobrado en la misma fila y no en otra", async () => {
+      const user = userEvent.setup();
+      const ref = React.createRef<DataGridHandle<Line>>();
+      render(<DataGrid ref={ref} columns={crossField} defaultValue={overdrawn} getRowId={lineId} />);
+      act(() => { ref.current?.validate(); });
+      await retype(user, within(bodyRows()[0]!).getByRole("textbox", { name: "Importe" }) as HTMLInputElement, "500");
+      await user.tab();
+      expect(cellOf("r-1", "collectedAmount")).not.toHaveAttribute("data-invalid");
+      expect(cellOf("r-2", "collectedAmount")).toHaveAttribute("data-invalid");
+    });
+
+    it("patchRow sobre otro campo también revalida los errores mostrados", () => {
+      const ref = React.createRef<DataGridHandle<Line>>();
+      render(<DataGrid ref={ref} columns={crossField} defaultValue={overdrawn} getRowId={lineId} />);
+      act(() => { ref.current?.validate(); });
+      act(() => ref.current?.patchRow("r-1", { total: 500 }));
+      expect(cellOf("r-1", "collectedAmount")).not.toHaveAttribute("data-invalid");
+      expect(ref.current?.getData().errors).toEqual({ "r-2": { collectedAmount: "Mayor que el importe" } });
+    });
+
+    it("no valida celdas de la fila que aún no muestran error", async () => {
+      const user = userEvent.setup();
+      const ref = React.createRef<DataGridHandle<Line>>();
+      const columns: DataGridColumn<Line>[] = [{ field: "policy", header: "Póliza", editable: true, required: true }, lineColumns[1]!];
+      render(<DataGrid ref={ref} columns={columns} defaultValue={[{ id: "r-1", policy: null, collectedAmount: 1 }]} getRowId={lineId} />);
+      await retype(user, amountInput(0), "2");
+      await user.tab();
+      expect(ref.current?.getData().isValid).toBe(true);
+    });
+  });
+
   describe("NumberField dentro de la celda", () => {
     it("un negativo sin allowNegative se muestra y se conserva al recorrerlo con Tab", async () => {
       const user = userEvent.setup();
@@ -2045,5 +2159,94 @@ describe("DataGrid: revisión final de G2", () => {
         await user.click(amountInput(0));
       }
     });
+  });
+
+  describe("onAddRow y la base del diff", () => {
+    function AddingParent({ gridRef }: { gridRef: React.Ref<DataGridHandle<Line>> }) {
+      const [current, setCurrent] = React.useState<Line[]>([]);
+      return <DataGrid ref={gridRef} columns={lineColumns} value={current} getRowId={lineId} onAddRow={() => setCurrent(previous => [...previous, { id: `n-${previous.length + 1}`, policy: null, collectedAmount: null }])} />;
+    }
+
+    it("la primera fila creada desde el botón Agregar cuenta como añadida", async () => {
+      const user = userEvent.setup();
+      const ref = React.createRef<DataGridHandle<Line>>();
+      render(<AddingParent gridRef={ref} />);
+      await user.click(screen.getByRole("button", { name: "Agregar" }));
+      expect(ref.current?.getData()).toMatchObject({ addedIds: ["n-1"], dirtyIds: [], removedIds: [] });
+    });
+
+    it("también si se crea con addRow() sin argumento", () => {
+      const ref = React.createRef<DataGridHandle<Line>>();
+      render(<AddingParent gridRef={ref} />);
+      act(() => ref.current?.addRow());
+      expect(ref.current?.getData()).toMatchObject({ addedIds: ["n-1"], dirtyIds: [], removedIds: [] });
+    });
+
+    it("la primera carga asíncrona sin pasar por onAddRow sigue siendo la base", () => {
+      const ref = React.createRef<DataGridHandle<Line>>();
+      const grid = (value: Line[]) => <DataGrid ref={ref} columns={lineColumns} value={value} getRowId={lineId} onAddRow={() => {}} />;
+      const { rerender } = render(grid([]));
+      rerender(grid(lineRows));
+      expect(ref.current?.getData()).toMatchObject({ addedIds: [], dirtyIds: [], removedIds: [] });
+    });
+  });
+
+  describe("grillas de consulta", () => {
+    const refreshed = lineRows.map(row => row.id === "r-1" ? { ...row, policy: "Refrescada" } : row);
+
+    it.each([
+      ["sin columnas editables", { field: "policy", header: "Póliza" } as DataGridColumn<Line>, false],
+      ["con readOnly", lineColumns[0]!, true],
+    ] as const)("%s, un value nuevo no marca dirty y getData no reporta diff", (_name, column, readOnly) => {
+      const ref = React.createRef<DataGridHandle<Line>>();
+      const grid = (value: Line[]) => <DataGrid ref={ref} columns={[column]} value={value} getRowId={lineId} readOnly={readOnly} />;
+      const { rerender, container } = render(grid(lineRows));
+      rerender(grid(refreshed));
+      expect(screen.getByText("Refrescada")).toBeInTheDocument();
+      expect(container.querySelector("[data-dirty]")).toBeNull();
+      expect(ref.current?.getData()).toMatchObject({ rows: refreshed, dirtyIds: [], addedIds: [], removedIds: [] });
+    });
+  });
+
+  it.each(["value controlado", "removeRow"] as const)("el ajuste de página llega antes de pintar: al vaciar la última página (%s) nunca queda el estado vacío", async via => {
+    const user = userEvent.setup();
+    const ref = React.createRef<DataGridHandle<Line>>();
+    const many = Array.from({ length: 11 }, (_, i): Line => ({ id: `r-${i + 1}`, policy: `P${i + 1}`, collectedAmount: i }));
+    let setCurrent: (rows: Line[]) => void = () => {};
+    function Parent() {
+      const [current, set] = React.useState(many);
+      setCurrent = set;
+      return <DataGrid ref={ref} columns={lineColumns} value={current} getRowId={lineId} pagination={{ pageSize: 10 }} />;
+    }
+    render(<Parent />);
+    await user.click(screen.getByRole("button", { name: "Página siguiente" }));
+    expect(bodyRows()).toHaveLength(1);
+    // El observador corre al terminar la tarea que confirmó el render, justo antes de que el navegador pueda pintar.
+    const atPaint: boolean[] = [];
+    const observer = new MutationObserver(() => atPaint.push(document.querySelector('[data-slot="empty"]') !== null));
+    observer.observe(document.body, { childList: true, subtree: true });
+    const environment = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    const previous = environment.IS_REACT_ACT_ENVIRONMENT;
+    environment.IS_REACT_ACT_ENVIRONMENT = false;
+    onTestFinished(() => { environment.IS_REACT_ACT_ENVIRONMENT = previous; observer.disconnect(); });
+    if (via === "removeRow") ref.current?.removeRow("r-11");
+    else setCurrent(many.slice(0, 10));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(atPaint.length).toBeGreaterThan(0);
+    expect(atPaint).not.toContain(true);
+    expect(screen.getByText("Página 1 de 1")).toBeInTheDocument();
+  });
+
+  it("onChange de la edición llega antes que el patchRow que hace column.onCommit", async () => {
+    const user = userEvent.setup();
+    const seen: Array<[string | null, number]> = [];
+    const columns: DataGridColumn<Line>[] = [
+      { ...lineColumns[1]!, onCommit: ({ row, value, grid }) => { expect(row.collectedAmount).toBe(value); grid.patchRow(row.id, { total: 1 }); } },
+      { field: "total", header: "Neto", type: "currency" },
+    ];
+    render(<DataGrid columns={columns} defaultValue={lineRows} getRowId={lineId} onChange={(data, change) => seen.push([change.field, data.rows[0]!.collectedAmount!])} />);
+    await retype(user, amountInput(0), "5");
+    await user.tab();
+    expect(seen).toEqual([["collectedAmount", 5], ["total", 5]]);
   });
 });

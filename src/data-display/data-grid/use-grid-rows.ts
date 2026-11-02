@@ -20,6 +20,8 @@ interface UseGridRowsArgs<T> {
   getRowId: (row: T) => string;
   onChange?: (data: DataGridData<T>, change: GridChange) => void;
   columns: DataGridColumn<T>[];
+  /** Sin edición no hay diff: un `value` refrescado no es un cambio del usuario. */
+  editing: boolean;
   messages: DataGridMessages;
   getSelectedIds: () => string[];
 }
@@ -39,6 +41,8 @@ export interface GridRowsApi<T> {
   addRow: (row: T) => boolean;
   removeRow: (id: string) => void;
   validate: () => boolean;
+  /** La grilla pide una fila a `onAddRow`: el siguiente `value` ya no es una carga inicial, sino esa fila. */
+  disarmFirstLoad: () => void;
   commitCell: (rowId: string, column: DataGridColumn<T>, value: unknown, grid: DataGridHandle<T>) => void;
 }
 
@@ -67,15 +71,18 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
     setErrors(withCellError(errorsRef.current, rowId, column.field, message));
   }, [store, setErrors]);
 
-  // Un value externo solo revalida lo que ya muestra un error: el resto se valida al confirmar o con validate().
-  const revalidateShown = React.useCallback(() => {
-    for (const [rowId, fields] of Object.entries(errorsRef.current)) {
-      for (const field of Object.keys(fields)) {
-        const column = latest.current.columns.find(item => item.field === field);
-        if (column) revalidate(rowId, column);
-      }
+  // `validate` y `editable` reciben la fila entera: cambiar un campo puede resolver el error de otro.
+  const revalidateRowErrors = React.useCallback((rowId: string) => {
+    for (const field of Object.keys(errorsRef.current[rowId] ?? {})) {
+      const column = latest.current.columns.find(item => item.field === field);
+      if (column) revalidate(rowId, column);
     }
   }, [revalidate]);
+
+  // Un value externo solo revalida lo que ya muestra un error: el resto se valida al confirmar o con validate().
+  const revalidateShown = React.useCallback(() => {
+    for (const rowId of Object.keys(errorsRef.current)) revalidateRowErrors(rowId);
+  }, [revalidateRowErrors]);
 
   const lastEmittedRows = React.useRef(value);
   // Todo array emitido: un padre asíncrono puede devolver uno anterior al último; ya está en el store y se ignora.
@@ -101,7 +108,7 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
   const getData = React.useCallback((): DataGridData<T> => ({
     rows: store.getRows(),
     selectedIds: [...latest.current.getSelectedIds()],
-    ...store.getDiff(),
+    ...(latest.current.editing ? store.getDiff() : { dirtyIds: [], addedIds: [], removedIds: [] }),
     errors: errorsRef.current,
     isValid: Object.keys(errorsRef.current).length === 0,
   }), [store]);
@@ -120,17 +127,21 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
       return;
     }
     revalidate(rowId, column);
-    column.onCommit?.({ row: store.getRow(rowId)!, value: next, prev: change.prev, grid });
+    revalidateRowErrors(rowId);
+    const row = store.getRow(rowId)!;
+    // Primero la edición: un patchRow dentro de onCommit no debe llegar a onChange antes que su causa.
     emit(change);
-  }, [store, revalidate, emit]);
+    column.onCommit?.({ row, value: next, prev: change.prev, grid });
+  }, [store, revalidate, revalidateRowErrors, emit]);
 
   const patchRow = React.useCallback((id: string, partial: Partial<T>) => {
     const changes = store.patch(id, partial);
     for (const column of latest.current.columns) {
       if (changes.some(change => change.field === column.field)) revalidate(id, column);
     }
+    if (changes.length > 0) revalidateRowErrors(id);
     changes.forEach(emit);
-  }, [store, revalidate, emit]);
+  }, [store, revalidate, revalidateRowErrors, emit]);
 
   const addRow = React.useCallback((row: T) => {
     if (store.getRow(latest.current.getRowId(row)) !== undefined) {
@@ -164,5 +175,7 @@ export function useGridRows<T>(args: UseGridRowsArgs<T>): GridRowsApi<T> {
     emit(change);
   }, [store, setErrors, emit]);
 
-  return { store, rows, errors, setErrors, emit, revision, getData, reset, patchRow, addRow, removeRow, validate, commitCell };
+  const disarmFirstLoad = React.useCallback(() => { awaitingFirstLoad.current = false; }, []);
+
+  return { store, rows, errors, setErrors, emit, revision, getData, reset, patchRow, addRow, removeRow, validate, disarmFirstLoad, commitCell };
 }
