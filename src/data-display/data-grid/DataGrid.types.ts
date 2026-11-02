@@ -128,7 +128,10 @@ export interface DataGridProps<T> {
   value?: T[];
   defaultValue?: T[];
   onChange?: (data: DataGridData<T>, change: GridChange) => void;
-  /** Botón de la barra y destino de `ref.addRow()` sin argumento: crea la fila quien lo recibe. */
+  /**
+   * Botón de la barra y destino de `ref.addRow()` sin argumento: crea la fila quien lo recibe, con `ref.addRow(row)`
+   * (salta a su página y la enfoca) o añadiéndola a `value`. En ambos casos cuenta en `addedIds`.
+   */
   onAddRow?: () => void;
   /** `true` fuerza consulta aunque haya columnas editables. */
   readOnly?: boolean;

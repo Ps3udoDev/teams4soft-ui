@@ -221,7 +221,7 @@ El orden sigue las reglas del español, usa la etiqueta en `select`/`radio` y de
 celdas vacías al final.
 `pagination={false}` muestra todas las filas. `selection` y
 `columnVisibility` permiten controlar esos estados desde la página; `ref.getData()`
-devuelve las filas originales y los ids seleccionados, incluso si el filtro los oculta.
+devuelve las filas actuales y los ids seleccionados, incluso si el filtro los oculta.
 
 `loading` muestra cinco filas skeleton en la primera carga y una capa que bloquea
 la interacción cuando ya hay datos. `density="compact"`, `maxHeight`, los tokens
@@ -267,20 +267,47 @@ if (ref.current?.validate()) save(ref.current.getData());
 
 El handle ofrece además `reset(rows)`, `patchRow(id, partial)`, `addRow(row?)`, `removeRow(id)`,
 `validate()` (pinta los errores de todas las celdas y devuelve `isValid`) y `focusCell(id, field)`.
-`onChange(data, change)` se dispara con cada edición; `column.onCommit({ row, value, prev, grid })`
-permite recalcular otras celdas con `grid.patchRow`. `onAddRow` muestra el botón de la barra y es
-quien crea la fila.
+`onChange(data, change)` se dispara con cada edición; después, `column.onCommit({ row, value, prev, grid })`
+permite recalcular otras celdas con `grid.patchRow`.
+
+`errors` e `isValid` solo reflejan las celdas ya validadas (al confirmarlas o con `validate()`), así que
+llama a `validate()` antes de guardar, como en el ejemplo. `validate()` tampoco puede señalar en pantalla una
+columna oculta: declara las columnas `required` con `hideable: false`.
+
+`onAddRow` muestra el botón de la barra y es quien crea la fila; `ref.addRow()` sin argumento también lo llama:
+
+```tsx
+// Recomendado: salta a la página de la fila y enfoca su primera celda editable.
+<DataGrid ref={ref} columns={columns} defaultValue={rows} getRowId={(row) => row.id}
+  onAddRow={() => ref.current?.addRow(blankRow())} />;
+
+// Controlado: también cuenta en addedIds, pero no salta de página ni mueve el foco.
+<DataGrid columns={columns} value={rows} getRowId={(row) => row.id}
+  onAddRow={() => setRows((current) => [...current, blankRow()])} />;
+```
 
 - **Modo controlado.** El primer `value` no vacío, mientras la grilla está intacta y vacía, se adopta como
   base: una carga asíncrona empieza con el diff vacío. Para recargas posteriores usa `ref.reset(rows)`.
   Un arreglo antiguo que la grilla ya emitió se ignora; para revertir, usa `ref.reset(rows)`. Un padre
   que ignora `onChange` conserva la edición hasta que `value` cambie de identidad.
 - **Estabilidad.** `columns` y `cellTypes` deben ser estables (constante de módulo o `useMemo`); si no,
-  se re-renderizan todas las filas.
+  se re-renderizan todas las filas. Las filas están memorizadas: las closures de `render` y `format` solo se
+  refrescan cuando cambia `columns`, así que inclúyelas en las dependencias de ese `useMemo`.
+- **Consulta.** Con `readOnly` o sin columnas editables, `getData()` devuelve `dirtyIds`, `addedIds` y
+  `removedIds` vacíos y no se marca `data-dirty`. `readOnly` oculta el botón Agregar, pero los métodos de `ref`
+  siguen actuando: `addRow` añade la fila (o llama a `onAddRow`) y `removeRow` la quita, sin reflejarse en el diff.
+- **Selección.** `removeRow` y `reset` quitan de la selección las filas que desaparecen y lo avisan por
+  `onSelectionChange`; las filas ocultas por un filtro siguen seleccionadas.
+- **Celdas propias.** Una celda de `cellTypes` en una columna editable recibe `editable`, `onCommit` y `error`, y es
+  destino de `focusCell` si contiene un control enfocable. El tipo `lookup` no tiene editor propio: sin `cellTypes`
+  se muestra en lectura.
+- **`editorProps`.** `className` y `classNames` se suman a los de la celda; `onBlur` y `onKeyDown` se componen con la
+  confirmación. La celda conserva `value`, `onCommit`/`onValueChange` y `aria-label`.
 - **Teclado.** Enter confirma y baja; en una celda inválida, Enter se queda. Tab confirma y avanza, y
   puede salir de una celda inválida. Escape descarta el borrador.
 - **Dentro de un `Dialog`.** El primer Escape revierte un borrador pendiente y el segundo cierra el diálogo.
-- **Negativos.** Los números rechazan negativos por defecto: usa `editorProps: { allowNegative: true }`.
+- **Negativos.** Los números no dejan teclear negativos por defecto: usa `editorProps: { allowNegative: true }`.
+  Un negativo que ya está en los datos se muestra y se conserva.
 
 `NumberField` (en `forms`) es el editor numérico: separador de miles mientras se escribe, valor público
 `number | null` y `onCommit` al salir o con Enter.
