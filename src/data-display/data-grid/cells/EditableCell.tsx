@@ -80,17 +80,25 @@ function comesFromCell(event: React.SyntheticEvent<HTMLTableCellElement>) {
 
 export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnterCommit, editor: Editor, disabled, unstyled, editorClassName, editorStyle, cellProps }: EditableCellProps<T>) {
   const [draft, setDraft] = React.useState(value);
-  const [draftDirty, setDraftDirty] = React.useState(false);
   const [editorKey, setEditorKey] = React.useState(0);
   const [tooltipOpen, setTooltipOpen] = React.useState(false);
+  const clearDirtyOnCommit = React.useRef(false);
   const [committed, setCommitted] = React.useState(value);
   if (!Object.is(committed, value)) {
     setCommitted(value);
     setDraft(value);
-    setDraftDirty(false);
+    clearDirtyOnCommit.current = true;
   }
 
   const cellRef = React.useRef<HTMLTableCellElement>(null);
+  // El borrador pendiente vive en el DOM (data-draft-dirty), no en estado: marcarlo no debe re-renderizar el editor,
+  // porque un render entre el evento de entrada y su onChange restaura el valor controlado y pierde el primer carácter.
+  const draftDirty = React.useRef(false);
+  const setDirty = (dirty: boolean) => {
+    draftDirty.current = dirty;
+    if (dirty) cellRef.current?.setAttribute("data-draft-dirty", "");
+    else cellRef.current?.removeAttribute("data-draft-dirty");
+  };
   const reverting = React.useRef(false);
   // Estado abierto del popover del propio editor. Radix lo cierra con un listener de documento que corre antes
   // de que el Escape llegue a la celda: se anota el evento que provocó el cierre para no tratarlo también como revertir.
@@ -102,6 +110,9 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnter
   };
   React.useEffect(trackKeydown, []);
   useClientLayoutEffect(() => {
+    if (clearDirtyOnCommit.current) { clearDirtyOnCommit.current = false; setDirty(false); }
+  });
+  useClientLayoutEffect(() => {
     if (!reverting.current) return;
     reverting.current = false;
     cellRef.current?.querySelector<HTMLElement>(focusableSelector)?.focus();
@@ -109,17 +120,17 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnter
 
   const commit = (next: unknown) => {
     if (reverting.current) return;
-    setDraftDirty(false);
+    setDirty(false);
     onCommit(next);
   };
   const markDirty = (event: React.SyntheticEvent<HTMLTableCellElement>) => {
-    if (comesFromCell(event)) setDraftDirty(true);
+    if (comesFromCell(event)) setDirty(true);
   };
   const revert = (event: React.KeyboardEvent<HTMLTableCellElement>) => {
-    if (event.key !== "Escape" || popoverOpen.current || event.nativeEvent === closedByEvent.current || !draftDirty || !comesFromCell(event)) return;
+    if (event.key !== "Escape" || popoverOpen.current || event.nativeEvent === closedByEvent.current || !draftDirty.current || !comesFromCell(event)) return;
     reverting.current = true;
     setDraft(value);
-    setDraftDirty(false);
+    setDirty(false);
     setEditorKey(key => key + 1);
   };
 
@@ -145,10 +156,10 @@ export function EditableCell<T>({ rowId, column, value, error, onCommit, onEnter
   const leave = (event: React.FocusEvent<HTMLTableCellElement>) => {
     // Con el popover del editor abierto, el foco puede estar en su portal: no es salir de la celda.
     if (popoverOpen.current) return;
-    if (comesFromCell(event) && !event.currentTarget.contains(event.relatedTarget)) setDraftDirty(false);
+    if (comesFromCell(event) && !event.currentTarget.contains(event.relatedTarget)) setDirty(false);
   };
 
-  return <td {...cellProps} ref={cellRef} data-editable="" data-row-id={rowId} data-field={column.field} data-draft-dirty={draftDirty || undefined} onInput={markDirty} onPasteCapture={markDirty} onKeyDownCapture={planEnter} onKeyDown={handleKeyDown} onBlur={leave}>
+  return <td {...cellProps} ref={cellRef} data-editable="" data-row-id={rowId} data-field={column.field} onInputCapture={markDirty} onPasteCapture={markDirty} onKeyDownCapture={planEnter} onKeyDown={handleKeyDown} onBlur={leave}>
     {/* El Tooltip siempre montado: que aparezca un error no debe remontar el editor ni quitarle el foco. */}
     <Tooltip content={error} open={Boolean(error) && tooltipOpen} onOpenChange={setTooltipOpen} unstyled={unstyled}>
       <div data-slot="editor">

@@ -754,18 +754,22 @@ describe("DataGrid: celdas editables", () => {
     expect(data.dirtyIds).toEqual(["r-3"]);
   });
 
-  it("el primer carácter que reemplaza un texto seleccionado no se pierde", async () => {
+  it("teclear en un editor numérico no lo re-renderiza y marca el borrador en el DOM", async () => {
     const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<DataGrid columns={editableColumns} defaultValue={editableRows} getRowId={rowId} onChange={onChange} />);
-    await user.click(policyInput(0));
-    await user.keyboard("{Control>}a{/Control}Hola");
-    expect(policyInput(0)).toHaveValue("Hola");
-    await user.click(amountInput(1));
+    let editorRenders = 0;
+    // Cada render del editor vuelve a copiar editorProps: el getter cuenta esos renders.
+    const editorProps = { get "data-renders"() { editorRenders += 1; return "x"; } };
+    const countedColumns: DataGridColumn<Editable>[] = [{ field: "collectedAmount", header: "Imp. cobrado", type: "currency", editable: true, editorProps }];
+    render(<DataGrid columns={countedColumns} defaultValue={editableRows} getRowId={rowId} />);
+    await user.click(amountInput(0));
+    const rendersBefore = editorRenders;
     await user.keyboard("{Control>}a{/Control}7");
-    expect(amountInput(1)).toHaveValue("7");
+    await user.keyboard("5");
+    expect(amountInput(0)).toHaveValue("75");
+    expect(amountInput(0).closest("td")).toHaveAttribute("data-draft-dirty");
+    expect(editorRenders).toBe(rendersBefore);
     await user.tab();
-    expect(onChange).toHaveBeenLastCalledWith(expect.anything(), { type: "edit", rowId: "r-2", field: "collectedAmount", prev: 20, next: 7 });
+    expect(amountInput(0).closest("td")).not.toHaveAttribute("data-draft-dirty");
   });
 
   it("confirmar re-renderiza una sola fila y teclear ninguna (spec §12)", async () => {
