@@ -179,7 +179,7 @@ El `toast` importable es **API de cliente**: requiere un `<ToastProvider global 
 
 ### Fase 4: DataGrid (consulta)
 
-La beta `0.5.0-beta.2` incluye `DataGrid` en el subpath
+La beta `0.5.0-beta.3` incluye `DataGrid` en el subpath
 `./data-display`. Tras publicarse se instalará con `@teams4soft/teams4soft-ui@next`.
 Instala también `@tanstack/react-table@9` (la v8 no es compatible) y los peers
 Radix de Popover, Checkbox, Slot y Tooltip.
@@ -253,6 +253,8 @@ Escape. `notify` resuelve al cerrar. Las solicitudes esperan en una cola FIFO;
 sin un `<FeedbackDialogProvider global />` montado, ambas funciones lanzan un error.
 Esta API es de cliente; no debe invocarse durante renderizado en servidor.
 
+El cuerpo de `Dialog` trae padding; para contenido a todo el ancho, como un `DataGrid`, usa `classNames={{ body: "p-0" }}`. Cerrar con clic fuera es opcional: actívalo con `closeOnOverlayClick`.
+
 `Dialog` mide 400px por defecto; `width` tiene prioridad sobre `size`. En móvil
 ocupa la ventana o se presenta como panel inferior con `mobileVariant="sheet"`.
 `loading` bloquea el cuerpo. `onHide` y `onOpenChange(false)` se disparan solo
@@ -318,10 +320,11 @@ Si falta un provider global se emite un aviso de desarrollo, como con `toast`.
 
 ## Estado
 
-En construcción por fases. Versión preparada: **0.5.0-beta.2** (canal `next`).
+En construcción por fases. Versión preparada: **0.5.0-beta.3** (canal `next`).
 
 | Versión | Fase | Contenido |
 | --- | --- | --- |
+| 0.5.0-beta.3 | Correcciones | El cuerpo de `Dialog` trae padding por defecto (`classNames={{ body: "p-0" }}` lo quita) y su pie alinea a la derecha. `RadioGroup` alinea sus opciones al inicio. `FeedbackDialog` avisa en desarrollo si `rejectLabel` llega sin `showReject`. |
 | 0.5.0-beta.2 | G1 — TanStack v9 | Migra `DataGrid` a `@tanstack/react-table@^9.3.1`, con la API nativa de esa mayor. La API pública de `DataGrid` no cambia; el peer pasa de la v8 a la v9. |
 | 0.5.0-beta.1 | G1 — Corrección | Limita el peer a `@tanstack/react-table@^8.21.3`: con `0.5.0-beta.0`, una instalación limpia resolvía la v9 y el paquete no cargaba. Todos los peers pasan de `>=` a `^`, con Radix y React actualizados; sube los mínimos de Radix. |
 | 0.5.0-beta.0 | G1 — Consulta | `DataGrid`, factorías, filtros, selección, paginación y tokens; subpath `./data-display`. |

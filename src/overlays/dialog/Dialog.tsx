@@ -148,11 +148,11 @@ export const Dialog = React.forwardRef<HTMLDivElement, DialogProps>(function Dia
             </DialogPrimitive.Close>}
           </div>
           {description != null && <DialogPrimitive.Description className={unstyled ? undefined : "px-4 pt-3 text-sm text-ui-foreground/75"}>{description}</DialogPrimitive.Description>}
-          <div ref={bodyRef} className={slot("body", "relative min-h-0 flex-1 overflow-auto")} style={{ position: "relative", ...styles?.body }}>
+          <div ref={bodyRef} className={slot("body", "relative min-h-0 flex-1 overflow-auto p-4")} style={{ position: "relative", ...styles?.body }}>
             {children}
             <LoadingOverlay open={loading} blocking target="container" message={loadingMessage} unstyled={unstyled} />
           </div>
-          {footer != null && <div className={slot("footer", "shrink-0 border-t border-ui-border p-4")} style={styles?.footer}>{footer}</div>}
+          {footer != null && <div className={slot("footer", "flex shrink-0 justify-end gap-2 border-t border-ui-border p-4")} style={styles?.footer}>{footer}</div>}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { cn } from "../../lib";
+import { cn, devWarn } from "../../lib";
 import { Button } from "../../primitives/button/Button";
 import { Dialog } from "../dialog/Dialog";
 import type { FeedbackDialogProps, FeedbackSeverity } from "./FeedbackDialog.types";
@@ -35,6 +35,11 @@ export const FeedbackDialog = React.forwardRef<HTMLDivElement, FeedbackDialogPro
     const messageId = React.useId();
     const tone = severity === "error" ? "danger" : severity;
     const hasReject = variant === "confirm" && showReject;
+    const ignoredRejectLabel = rejectLabel !== undefined && !hasReject;
+
+    React.useEffect(() => {
+      if (ignoredRejectLabel) devWarn('FeedbackDialog: rejectLabel se ignora sin showReject en variant="confirm".');
+    }, [ignoredRejectLabel]);
 
     React.useEffect(() => {
       session.current += 1;
@@ -80,6 +85,7 @@ export const FeedbackDialog = React.forwardRef<HTMLDivElement, FeedbackDialogPro
         width={variant === "notice" ? "36rem" : "30rem"}
         initialFocusRef={tone === "danger" && hasReject ? rejectRef : acceptRef}
         unstyled={unstyled}
+        classNames={unstyled ? undefined : { body: "p-0" }}
         className={cn(className, classNames?.root)}
         style={{ ...styles?.root, ...style }}
         data-variant={variant}

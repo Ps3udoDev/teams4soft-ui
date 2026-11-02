@@ -110,3 +110,10 @@ describe("RadioGroup", () => {
     expect(screen.getAllByRole("radio").length).toBe(3);
   });
 });
+
+describe("RadioGroup: alineación", () => {
+  it("alinea el texto de la opción al inicio, aunque el botón centre por defecto", () => {
+    render(<RadioGroup label="Plan" options={options} />);
+    expect(screen.getByRole("radio", { name: "Opción A" })).toHaveClass("text-start");
+  });
+});

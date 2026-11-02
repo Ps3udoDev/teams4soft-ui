@@ -222,3 +222,23 @@ describe("Dialog", () => {
     expect(screen.getByRole("button", { name: "Cerrar" })).toHaveFocus();
   });
 });
+
+describe("Dialog: espaciado", () => {
+  it("el cuerpo trae padding por defecto y classNames.body puede quitarlo", () => {
+    const { rerender } = render(<Dialog open title="Cuerpo"><p>Contenido</p></Dialog>);
+    expect(screen.getByText("Contenido").parentElement).toHaveClass("p-4");
+    rerender(<Dialog open title="Cuerpo" classNames={{ body: "p-0" }}><p>Contenido</p></Dialog>);
+    expect(screen.getByText("Contenido").parentElement).toHaveClass("p-0");
+    expect(screen.getByText("Contenido").parentElement).not.toHaveClass("p-4");
+  });
+
+  it("unstyled no agrega padding al cuerpo", () => {
+    render(<Dialog open title="Cuerpo" unstyled><p>Contenido</p></Dialog>);
+    expect(screen.getByText("Contenido").parentElement).not.toHaveClass("p-4");
+  });
+
+  it("alinea los botones del pie a la derecha", () => {
+    render(<Dialog open title="Pie" footer={<button>Guardar</button>} />);
+    expect(screen.getByRole("button", { name: "Guardar" }).parentElement).toHaveClass("flex", "justify-end");
+  });
+});
