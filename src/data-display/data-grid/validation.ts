@@ -7,6 +7,10 @@ export function isEmptyValue(v: unknown): boolean {
   return false;
 }
 
+export function isCellEditable<T>(column: DataGridColumn<T>, row: T): boolean {
+  return typeof column.editable === "function" ? column.editable(row) : column.editable === true;
+}
+
 export function validateCell<T>(column: DataGridColumn<T>, value: unknown, row: T, messages: DataGridMessages): string | null {
   if (column.required && isEmptyValue(value)) return messages.required;
   return column.validate?.(value, row) ?? null;
@@ -17,8 +21,7 @@ export function validateRows<T>(rows: T[], columns: DataGridColumn<T>[], getRowI
   for (const row of rows) {
     const rowErrors: Record<string, string> = {};
     for (const column of columns) {
-      const editable = typeof column.editable === "function" ? column.editable(row) : column.editable === true;
-      if (!editable) continue;
+      if (!isCellEditable(column, row)) continue;
       const message = validateCell(column, (row as Record<string, unknown>)[column.field], row, messages);
       if (message) rowErrors[column.field] = message;
     }

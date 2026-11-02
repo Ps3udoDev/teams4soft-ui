@@ -17,6 +17,8 @@ export type GridRowsDiff = {
 export type GridRowsStore<T> = {
   getRows(): T[];
   getRow(id: string): T | undefined;
+  /** Row as of the last baseline (creation or reset). */
+  getBaseRow(id: string): T | undefined;
   edit(id: string, field: string, value: unknown): GridChange | null;
   patch(id: string, partial: Partial<T>): GridChange[];
   add(row: T): GridChange;
@@ -80,6 +82,7 @@ export function createGridRowsStore<T>(opts: {
       const i = index.get(id);
       return i === undefined ? undefined : rows[i];
     },
+    getBaseRow: (id) => base.get(id),
     edit(id, field, value) {
       const i = index.get(id);
       if (i === undefined) return null;

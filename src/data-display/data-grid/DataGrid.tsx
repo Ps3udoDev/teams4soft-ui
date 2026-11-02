@@ -1,52 +1,46 @@
 import * as React from "react";
 import {
-  useTable, type Column, type ColumnDef, type ColumnFiltersState, type ColumnPinningPosition,
+  useTable, type Column, type ColumnDef, type ColumnFiltersState,
   type ColumnSizingState, type RowData, type RowSelectionState, type SortingState, type Updater,
 } from "@tanstack/react-table";
 import { cn, devWarn } from "../../lib";
 import { CheckboxField } from "../../forms";
 import { LoadingOverlay, Progress, Skeleton } from "../../feedback";
+import { TooltipProvider } from "../../primitives";
 import { gridFeatures, type GridFeatures } from "./table-features";
 import { useGridColumns } from "./use-grid-columns";
-import { readCellRegistry, ReadCellStyleContext } from "./cells/read-cells";
+import { useClientLayoutEffect, useGridRows } from "./use-grid-rows";
+import { definition, frozenSide, GridRow, type GridRowView } from "./GridRow";
+import { ReadCellStyleContext } from "./cells/read-cells";
 import { resolveFilterKind } from "./filters/filter-fns";
 import { FilterMenu } from "./filters/FilterMenu";
 import { GridPaginator } from "./pagination/GridPaginator";
 import { ColumnToggler } from "./toolbar/ColumnToggler";
 import { GridToolbar } from "./toolbar/GridToolbar";
 import { dataGridMessagesEs } from "./messages";
-import type { DataGridColumn, DataGridFilterValue, DataGridHandle, DataGridProps } from "./DataGrid.types";
+import type { DataGridFilterValue, DataGridHandle, DataGridProps } from "./DataGrid.types";
 
-const interactiveSelector = "button, input, select, textarea, a, [role=checkbox], [role=radio]";
-function isInteractive(event: React.MouseEvent<HTMLTableRowElement>) {
-  return event.target instanceof Element && Boolean(event.target.closest(interactiveSelector));
-}
-
-function definition<T extends RowData>(column: Column<GridFeatures, T, unknown>): DataGridColumn<T> | undefined {
-  return (column.columnDef.meta as { column?: DataGridColumn<T> } | undefined)?.column;
-}
+const noColumns: never[] = [];
 
 function toRowSelection(ids: string[]): RowSelectionState {
   return Object.fromEntries(ids.map(id => [id, true as const]));
 }
 
-// TanStack v9 fija por inicio y fin; la API y los estilos del grid siguen siendo físicos.
-function frozenSide(position: ColumnPinningPosition): "left" | "right" | undefined {
-  return position === "start" ? "left" : position === "end" ? "right" : undefined;
-}
-
 function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.ForwardedRef<DataGridHandle<T>>) {
   const {
     columns, getRowId, value, defaultValue, columnVisibility, onColumnVisibilityChange,
-    persistKey, columnToggler = true, selectionMode = "none", selection, onSelectionChange,
+    onChange, readOnly = false, persistKey, columnToggler = true, selectionMode = "none", selection, onSelectionChange,
     pagination, loading = false, toolbar, initialSort, density = "normal", maxHeight,
     emptyState, cellTypes, className, classNames, styles, style, unstyled = false,
   } = props;
   const messages = React.useMemo(() => ({ ...dataGridMessagesEs, ...props.messages }), [props.messages]);
-  const [initialRows] = React.useState(() => defaultValue ?? []);
-  const rows = value ?? initialRows;
+  const [internalSelection, setInternalSelection] = React.useState<string[]>([]);
+  const selectedIds = selection ?? internalSelection;
+  const selectionRef = React.useRef(selectedIds);
+  selectionRef.current = selectedIds;
+  const { store, rows, errors, revision, getData, reset, patchRow, commitCell } = useGridRows<T>({ value, defaultValue, getRowId, onChange, columns: readOnly ? noColumns : columns, messages, getSelectedIds: () => selectionRef.current });
   const latest = React.useRef(props);
-  latest.current = props;
+  useClientLayoutEffect(() => { latest.current = props; });
   const warnedIds = React.useRef(new Set<string>());
   React.useMemo(() => {
     const ids = new Set<string>();
@@ -82,11 +76,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
     pageIndex: 0,
     pageSize: pagination === false ? 10 : Math.max(1, pagination?.pageSize ?? 10),
   }));
-  const [internalSelection, setInternalSelection] = React.useState<string[]>([]);
-  const selectedIds = selection ?? internalSelection;
   const rowSelection = React.useMemo(() => toRowSelection(selectedIds), [selectedIds]);
-  const selectionRef = React.useRef(selectedIds);
-  selectionRef.current = selectedIds;
   const updateSelection = React.useCallback((updater: Updater<RowSelectionState>) => {
     const next = typeof updater === "function" ? updater(toRowSelection(selectionRef.current)) : updater;
     const ids = Object.keys(next).filter(id => next[id]);
@@ -109,9 +99,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
     setPagination(current => current.pageIndex >= pageCount ? { ...current, pageIndex: pageCount - 1 } : current);
   }, [pageCount]);
 
-  const dataRef = React.useRef({ rows, selectedIds });
-  dataRef.current = { rows, selectedIds };
-  const grid = React.useMemo<DataGridHandle<T>>(() => ({ getData: () => ({ rows: dataRef.current.rows, selectedIds: [...dataRef.current.selectedIds], dirtyIds: [], addedIds: [], removedIds: [], errors: {}, isValid: true }) }), []);
+  const grid = React.useMemo<DataGridHandle<T>>(() => ({ getData, reset, patchRow }), [getData, reset, patchRow]);
   React.useImperativeHandle(ref, () => grid, [grid]);
   const radioName = React.useId();
   const contentRef = React.useRef<HTMLDivElement>(null);
@@ -147,6 +135,13 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   const hasFilters = columnFilters.some(f => f.value !== "" && f.value != null);
   const totalRows = table.getFilteredRowModel().rows.length;
   const rowHeight = density === "compact" ? "h-(--ui-grid-row-height-compact)" : "h-(--ui-grid-row-height)";
+  const editing = !readOnly && columns.some(column => column.editable === true || typeof column.editable === "function");
+  const dirtyIds = React.useMemo(() => new Set(store.getDiff().dirtyIds), [store, rows, revision]);
+  const rowEvents = React.useMemo(() => ({
+    selectRow: (id: string) => updateSelection({ [id]: true }),
+    onRowClick: (row: T, event: React.MouseEvent<HTMLTableRowElement>) => latest.current.onRowClick?.(row, event),
+    onRowDoubleClick: (row: T, event: React.MouseEvent<HTMLTableRowElement>) => latest.current.onRowDoubleClick?.(row, event),
+  }), [updateSelection]);
   function columnWidth(column: Column<GridFeatures, T, unknown>): number | string {
     const col = definition(column);
     return typeof col?.width === "string" && columnSizing[column.id] === undefined ? col.width : column.getSize();
@@ -178,12 +173,17 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
       return toRowSelection(next === true ? [...others, id] : others);
     })} />;
   }
-  return <ReadCellStyleContext.Provider value={unstyled}><div data-slot="root" data-density={density} data-loading={loading || undefined} aria-busy={loading || undefined}
+  const columnsKey = visibleColumns.map(column => column.id).join("|");
+  const pinnedIds = new Set<string>([...columnPinning.start, ...columnPinning.end]);
+  const pinnedWidths = Object.entries(measuredWidths).filter(([id]) => pinnedIds.has(id));
+  const presentationKey = JSON.stringify([columnSizing, pinnedWidths, density, loading, readOnly, unstyled, selectionMode, revision, messages.selectRow, classNames?.row, classNames?.cell, classNames?.editor, styles?.row, styles?.cell, styles?.editor]);
+  const rowView: GridRowView<T> = { store, grid, density, loading, readOnly, unstyled, revision, selectionMode, classNames, styles, cellStyle, renderSelection: rowSelectionControl, commitCell, ...rowEvents };
+  return <ReadCellStyleContext.Provider value={unstyled}><TooltipProvider><div data-slot="root" data-density={density} data-loading={loading || undefined} aria-busy={loading || undefined}
     className={cn(!unstyled && "relative font-(family-name:--ui-grid-font) text-ui-foreground", className, classNames?.root)} style={{ ...styles?.root, ...style }}>
     <div ref={contentRef}>
       <GridToolbar className={classNames?.toolbar} style={styles?.toolbar} unstyled={unstyled} toggler={columnToggler ? <ColumnToggler columns={columns} visibility={visibility} onToggle={(field, visible) => setVisibility(previous => ({ ...previous, [field]: visible }))} messages={messages} className={classNames?.columnToggler} style={styles?.columnToggler} unstyled={unstyled} disabled={loading} /> : undefined}>{toolbar}</GridToolbar>
       <div className={cn(!unstyled && "overflow-auto")} style={{ maxHeight, overflow: unstyled ? undefined : "auto" }}>
-        <table data-slot="table" className={cn(!unstyled && "w-full border-separate border-spacing-0 text-sm", classNames?.table)} style={styles?.table}>
+        <table data-slot="table" role={editing ? "grid" : undefined} className={cn(!unstyled && "w-full border-separate border-spacing-0 text-sm", classNames?.table)} style={styles?.table}>
           <thead className={cn(!unstyled && "sticky top-0 z-10")}>
             {table.getHeaderGroups().map(group => <tr key={group.id} data-slot="headerRow" className={cn(!unstyled && "bg-(--ui-grid-header-bg) text-(--ui-grid-header-fg)", classNames?.headerRow)} style={styles?.headerRow}>
               {group.headers.map(header => {
@@ -208,21 +208,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
               {visibleColumns.map(column => <td key={column.id} className={cn(!unstyled && "px-3 py-2")} style={cellStyle(column)}><Skeleton unstyled={unstyled} /></td>)}
             </tr>) : displayedRows.length === 0 ? <tr><td colSpan={Math.max(1, visibleColumns.length)} data-slot="empty" className={cn(!unstyled && "p-8 text-center", classNames?.empty)} style={styles?.empty}>
               {hasFilters ? messages.noResults : <>{emptyState?.icon}<div>{emptyState?.title ?? messages.emptyTitle}</div>{emptyState?.hint && <div>{emptyState.hint}</div>}</>}
-            </td></tr> : displayedRows.map(row => <tr key={`${row.id}:${row.index}`} data-slot="row" data-selected={row.getIsSelected() || undefined} aria-selected={selectionMode === "none" ? undefined : row.getIsSelected() || undefined}
-              className={cn(!unstyled && rowHeight, !unstyled && "[--ui-grid-current-row-bg:var(--ui-background)] even:[--ui-grid-current-row-bg:var(--ui-grid-row-alt)] hover:[--ui-grid-current-row-bg:var(--ui-grid-row-hover)] data-selected:[--ui-grid-current-row-bg:var(--ui-grid-row-selected)] bg-(--ui-grid-current-row-bg)", latest.current.getRowClassName?.(row.original), classNames?.row)} style={styles?.row}
-              onClick={event => { if (loading || isInteractive(event)) return; if (selectionMode === "single") updateSelection({ [row.id]: true }); latest.current.onRowClick?.(row.original, event); }}
-              onDoubleClick={event => { if (!loading && !isInteractive(event)) latest.current.onRowDoubleClick?.(row.original, event); }}>
-              {row.getVisibleCells().map(cell => {
-                const col = definition(cell.column);
-                const type = col?.type ?? "text";
-                const Cell = cellTypes?.[type] ?? readCellRegistry[type as keyof typeof readCellRegistry] ?? readCellRegistry.text;
-                const align = col?.align ?? (["number", "currency", "percent"].includes(type) ? "right" : "left");
-                return <td key={cell.id} data-slot="cell" data-align={align} data-frozen={frozenSide(cell.column.getIsPinned())}
-                  className={cn(!unstyled && "border-b border-ui-border px-3 py-2", !unstyled && cell.column.getIsPinned() && "bg-ui-background", classNames?.cell)} style={{ ...cellStyle(cell.column), ...(!unstyled && cell.column.getIsPinned() ? { backgroundImage: "linear-gradient(var(--ui-grid-current-row-bg), var(--ui-grid-current-row-bg))" } : {}), ...styles?.cell }}>
-                  {cell.column.id === "__select" ? rowSelectionControl(row.id) : col && <Cell column={col} row={row.original} value={row.original[col.field]} rowId={row.id} grid={grid} />}
-                </td>;
-              })}
-            </tr>)}
+            </td></tr> : displayedRows.map(row => <GridRow key={`${row.id}:${row.index}`} row={row} isSelected={row.getIsSelected()} isDirty={dirtyIds.has(row.id)} errorsForRow={errors[row.id]} rowClassName={props.getRowClassName?.(row.original)} columnsKey={columnsKey} presentationKey={presentationKey} columns={columns} cellTypes={cellTypes} view={rowView} />)}
           </tbody>
         </table>
       </div>
@@ -234,7 +220,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
       <Progress label={messages.loading} size="sm" className={cn(!unstyled && "absolute inset-x-0 top-0 z-50")} unstyled={unstyled} />
       <LoadingOverlay open blocking target="container" message={messages.loading} indicator={null} unstyled={unstyled} />
     </div>}
-  </div></ReadCellStyleContext.Provider>;
+  </div></TooltipProvider></ReadCellStyleContext.Provider>;
 }
 
 export const DataGrid = React.forwardRef(DataGridInner) as <T>(props: DataGridProps<T> & { ref?: React.Ref<DataGridHandle<T>> }) => React.ReactElement;

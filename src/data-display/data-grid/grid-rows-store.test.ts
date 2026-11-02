@@ -139,4 +139,17 @@ describe("createGridRowsStore", () => {
     store.edit("r-1", "name", "x");
     expect(store.getRows()).not.toBe(first);
   });
+
+  it("getBaseRow expone la fila base, que solo cambia con reset", () => {
+    const store = make();
+    const original = store.getBaseRow("r-1");
+    store.edit("r-1", "name", "x");
+    expect(store.getBaseRow("r-1")).toBe(original);
+    store.replaceCurrent([{ id: "r-1", name: "externo", qty: 3 }]);
+    expect(store.getBaseRow("r-1")).toBe(original);
+    const next = { id: "r-1", name: "nuevo", qty: 4 };
+    store.reset([next]);
+    expect(store.getBaseRow("r-1")).toBe(next);
+    expect(store.getBaseRow("no-existe")).toBeUndefined();
+  });
 });

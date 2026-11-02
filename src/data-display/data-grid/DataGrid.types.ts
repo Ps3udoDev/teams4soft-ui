@@ -1,4 +1,5 @@
 import type * as React from "react";
+import type { GridChange } from "./grid-rows-store";
 
 export type DataGridColumnType = "text" | "number" | "currency" | "percent" | "date" | "select" | "lookup" | "checkbox" | "radio" | "custom";
 export type DataGridFilterKind = "text" | "select" | "number" | "date";
@@ -17,7 +18,11 @@ export type DataGridData<T> = {
   errors: Record<string, Record<string, string>>;
   isValid: boolean;
 };
-export type DataGridHandle<T> = { getData(): DataGridData<T> };
+export type DataGridHandle<T> = {
+  getData(): DataGridData<T>;
+  reset(rows: T[]): void;
+  patchRow(id: string, partial: Partial<T>): void;
+};
 export type DataGridCellContext<T> = { row: T; value: unknown; rowId: string; grid: DataGridHandle<T> };
 export type DataGridCellComponent<T> = React.ComponentType<DataGridCellContext<T> & { column: DataGridColumn<T> }>;
 
@@ -104,6 +109,9 @@ export interface DataGridProps<T> {
   getRowId: (row: T) => string;
   value?: T[];
   defaultValue?: T[];
+  onChange?: (data: DataGridData<T>, change: GridChange) => void;
+  /** `true` fuerza consulta aunque haya columnas editables. */
+  readOnly?: boolean;
   columnVisibility?: Record<string, boolean>;
   onColumnVisibilityChange?: (visibility: Record<string, boolean>) => void;
   columnToggler?: boolean;
