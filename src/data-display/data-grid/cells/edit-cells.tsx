@@ -1,5 +1,6 @@
 import * as React from "react";
 import { CheckboxField, DateField, NumberField, RadioGroup, SearchableSelectField, TextField } from "../../../forms";
+import { cn } from "../../../lib";
 import type { DataGridColumn, DataGridColumnType } from "../DataGrid.types";
 
 export interface EditCellProps<T> {
@@ -58,13 +59,13 @@ const defaultLabelOf = (option: unknown) => String((option as { label: unknown }
 
 // DateField confirma solo (blur y Enter): su texto es estado interno y el borrador de la celda no interviene.
 function DateEditor<T>({ column, value, onCommit, onPopoverOpenChange, label, disabled, invalid, unstyled, className, style }: EditCellProps<T>) {
-  return <DateField classNames={{ label: hiddenLabel, root: className }} style={style} clearable disabled={disabled} invalid={invalid} unstyled={unstyled}
+  return <DateField classNames={{ label: hiddenLabel, root: cn(!unstyled && "min-w-40", className) }} style={style} clearable disabled={disabled} invalid={invalid} unstyled={unstyled}
     {...column.editorProps} label={label} value={typeof value === "string" ? value : null} onValueChange={onCommit} onOpenChange={open => { onPopoverOpenChange?.(open); (column.editorProps?.onOpenChange as ((open: boolean) => void) | undefined)?.(open); }} />;
 }
 
 function SelectEditor<T>({ column, value, onCommit, onPopoverOpenChange, label, disabled, invalid, unstyled, className, style }: EditCellProps<T>) {
   const options = React.useMemo(() => [...(column.options ?? [])], [column.options]);
-  return <SearchableSelectField classNames={{ label: hiddenLabel, root: className }} style={style} clearable disabled={disabled} invalid={invalid} unstyled={unstyled}
+  return <SearchableSelectField classNames={{ label: hiddenLabel, root: cn(!unstyled && "min-w-36", className) }} style={style} clearable disabled={disabled} invalid={invalid} unstyled={unstyled}
     options={options} getOptionValue={column.getOptionValue ?? defaultValueOf} getOptionLabel={column.getOptionLabel ?? defaultLabelOf}
     {...column.editorProps} label={label} value={value ?? null} onValueChange={next => onCommit(next ?? null)} onOpenChange={open => { onPopoverOpenChange?.(open); (column.editorProps?.onOpenChange as ((open: boolean) => void) | undefined)?.(open); }} />;
 }
@@ -79,7 +80,7 @@ function RadioEditor<T>({ column, value, onCommit, label, disabled, invalid, uns
   const getValue = column.getOptionValue ?? defaultValueOf;
   const getLabel = column.getOptionLabel ?? defaultLabelOf;
   const radios = options.map(option => ({ value: String(getValue(option)), label: getLabel(option) }));
-  return <RadioGroup orientation="horizontal" classNames={{ label: hiddenLabel, root: className }} style={style} disabled={disabled} invalid={invalid} unstyled={unstyled}
+  return <RadioGroup orientation="horizontal" classNames={{ label: hiddenLabel, root: className, options: cn(!unstyled && "flex-nowrap whitespace-nowrap") }} style={style} disabled={disabled} invalid={invalid} unstyled={unstyled}
     options={radios} {...column.editorProps} label={label} value={value == null ? undefined : String(value)}
     onValueChange={next => {
       const index = radios.findIndex(radio => radio.value === next);

@@ -1244,6 +1244,16 @@ describe("DataGrid: editores date, select, checkbox, radio y custom", () => {
     expect(screen.getByText("Crédito")).toBeInTheDocument();
   });
 
+  it("los editores de fecha y select reservan ancho y el de radio no se parte en líneas", () => {
+    render(<DataGrid columns={[{ editable: true, field: "due", header: "Vence", type: "date" }, { editable: true, field: "side", header: "D/C", type: "radio", options: sides }, { editable: true, field: "method", header: "Forma", type: "select", options: methods }] as DataGridColumn<Item>[]} defaultValue={items} getRowId={idOf} />);
+    expect(screen.getByLabelText("Vence").closest(".min-w-40")).not.toBeNull();
+    expect(screen.getByRole("combobox", { name: "Forma" }).closest(".min-w-36")).not.toBeNull();
+    const options = screen.getByRole("radio", { name: "Débito" }).closest(".flex-nowrap");
+    expect(options).not.toBeNull();
+    expect(options).toHaveClass("whitespace-nowrap");
+    expect(options).not.toHaveClass("flex-wrap");
+  });
+
   it("custom: la celda escribe con grid.patchRow", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
