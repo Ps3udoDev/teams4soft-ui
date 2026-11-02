@@ -464,6 +464,67 @@ describe("EntityLookupField modal controlado", () => {
   });
 });
 
+describe("EntityLookupField ajustes de revisión", () => {
+  it("disabled con open y search remoto no busca y abre sin filas", async () => {
+    const search = remote(() => provs(1, 3));
+    render(<Harness search={search} disabled open />);
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    expect(search).not.toHaveBeenCalled();
+    expect(within(dialog()).queryAllByRole("radio")).toHaveLength(0);
+  });
+
+  it("readOnly con items locales abierto por el padre sí lista los items", async () => {
+    render(<Harness items={provs(1, 3)} readOnly defaultOpen />);
+    await waitFor(() => expect(bodyRows()).toHaveLength(3));
+  });
+
+  it("abierto por el padre con un resultado no-choose cierra con onOpenChange(false)", async () => {
+    const onOpenChange = vi.fn();
+    render(<Harness search={remote(() => [])} open onOpenChange={onOpenChange} />);
+    expect(await screen.findByText("Ingrese un término de búsqueda para continuar.")).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Aceptar" }));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  const base = { onSelectionChange: () => {}, getItemId: (p: Prov) => p.id, getItemLabel: (p: Prov) => p.name, columns };
+
+  it("texto sucio y el padre fija B: el texto pasa a la etiqueta de B", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<EntityLookupField<Prov> selectedItem={prov(1)} {...base} />);
+    await user.type(input(), " extra");
+    rerender(<EntityLookupField<Prov> selectedItem={prov(2)} {...base} />);
+    expect(input()).toHaveValue("Proveedor 2");
+  });
+
+  it("texto sucio y el padre fija null: el texto se vacía", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<EntityLookupField<Prov> selectedItem={prov(1)} {...base} />);
+    await user.type(input(), " extra");
+    rerender(<EntityLookupField<Prov> selectedItem={null} {...base} />);
+    expect(input()).toHaveValue("");
+  });
+
+  it("mismo id con objeto nuevo y texto sucio: el texto se conserva", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<EntityLookupField<Prov> selectedItem={prov(1)} {...base} />);
+    await user.type(input(), " extra");
+    rerender(<EntityLookupField<Prov> selectedItem={{ ...prov(1), name: "Otro nombre" }} {...base} />);
+    expect(input()).toHaveValue("Proveedor 1 extra");
+  });
+
+  it("vaciar el campo no emite onInputValueChange extra al sincronizar", async () => {
+    const onInputValueChange = vi.fn();
+    const { user } = setup({ initial: prov(1), onInputValueChange });
+    await user.clear(input());
+    expect(onInputValueChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("messages.clear etiqueta el botón de limpiar", () => {
+    setup({ initial: prov(1), clearable: true, messages: { clear: "Borrar selección" } });
+    expect(screen.getByRole("button", { name: "Borrar selección" })).toBeInTheDocument();
+  });
+});
+
 describe("EntityLookupField importación", () => {
   it("importar el índice del subpath no falla y expone el componente", async () => {
     const mod = await import("../index");

@@ -96,6 +96,11 @@ describe("TextField", () => {
     expect(input).toHaveFocus();
   });
 
+  it("clearLabel personaliza el nombre accesible del botón de limpiar", () => {
+    render(<TextField value="a" onValueChange={() => {}} clearable clearLabel="Borrar" aria-label="Nombre" />);
+    expect(screen.getByRole("button", { name: "Borrar" })).toBeInTheDocument();
+  });
+
   it("clearable: el botón NO aparece cuando el campo está vacío", () => {
     render(<TextField value="" onValueChange={() => {}} clearable aria-label="Nombre" />);
     expect(screen.queryByRole("button", { name: /limpiar/i })).not.toBeInTheDocument();

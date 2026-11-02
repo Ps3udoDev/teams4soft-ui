@@ -16,6 +16,7 @@ export interface LookupInputProps {
   readOnly?: boolean;
   invalid?: boolean;
   clearable?: boolean;
+  clearLabel?: string;
   busy: boolean;
   triggerLabel: string;
   triggerIcon?: React.ReactNode;
@@ -42,7 +43,7 @@ function Spinner() {
 
 export const LookupInput = React.forwardRef<HTMLInputElement, LookupInputProps>(function LookupInput(
   {
-    id, name, placeholder, value, onValueChange, onKeyDown, inert, disabled, readOnly, invalid, clearable, busy, triggerLabel,
+    id, name, placeholder, value, onValueChange, onKeyDown, inert, disabled, readOnly, invalid, clearable, clearLabel, busy, triggerLabel,
     triggerIcon, onTrigger, trailingActions, unstyled, className, style, classNames, styles, ...aria
   },
   ref,
@@ -61,6 +62,7 @@ export const LookupInput = React.forwardRef<HTMLInputElement, LookupInputProps>(
         readOnly={readOnly}
         invalid={invalid}
         clearable={clearable}
+        clearLabel={clearLabel}
         unstyled={unstyled}
         classNames={{ input: classNames?.input, clearButton: classNames?.clearButton }}
         styles={{ input: styles?.input, clearButton: styles?.clearButton }}

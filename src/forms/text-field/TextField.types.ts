@@ -30,6 +30,8 @@ export interface TextFieldProps
   /** Muestra un botón para vaciar el valor cuando hay contenido. */
   clearable?: boolean;
   onClear?: () => void;
+  /** Nombre accesible del botón de limpiar. @default "Limpiar" */
+  clearLabel?: string;
   /** Habilita el toggle mostrar/ocultar cuando `type="password"`. */
   revealPassword?: boolean;
   /** Se combina (OR) con el `invalid` del `FormField` ancestro, si existe. */

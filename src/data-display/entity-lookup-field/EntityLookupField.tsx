@@ -132,6 +132,8 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
   React.useEffect(() => {
     if (!open || ownsOpenRef.current) return;
     ownsOpenRef.current = true;
+    // An inert remote field opens with no rows: it must not hit the back end.
+    if ((disabled || readOnly) && latest.current.search) return;
     void runTrigger().then((outcome) => {
       if (outcome.type !== "choose") closeDialog();
     });
@@ -154,9 +156,8 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
     const previous = previousRef.current;
     previousRef.current = { id: selectedId, label: selectedLabel ?? "" };
     if (previous.id === selectedId) return;
-    const current = textRef.current;
-    if (current !== previous.label && current !== "") return;
-    if (current !== (selectedLabel ?? "")) setText(selectedLabel ?? "");
+    // Internal transitions already left the text equal to the new label, so this only writes for outside changes.
+    if (textRef.current !== (selectedLabel ?? "")) setText(selectedLabel ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
@@ -229,6 +230,7 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
             inert={inert}
             readOnly={readOnly}
             clearable={props.clearable}
+            clearLabel={messages.clear}
             busy={busy}
             triggerLabel={messages.trigger}
             triggerIcon={props.triggerIcon}
