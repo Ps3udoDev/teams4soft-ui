@@ -1,6 +1,7 @@
 import * as React from "react";
 import { FormField } from "../../forms/form-field/FormField";
 import { cn, mergeRefs } from "../../lib";
+import { Button } from "../../primitives";
 import { LookupDialog } from "../lookup-core/LookupDialog";
 import { entityLookupMessagesEs, type EntityLookupMessages } from "../lookup-core/lookup-core.types";
 import { filterLocalItems, matchLocalItems } from "../lookup-core/lookup-utils";
@@ -92,6 +93,37 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
   const closeDialog = () => {
     ownsOpenRef.current = false;
     setOpen(false);
+  };
+
+  // Kept (closed) after the first open so the form can finish its exit; reset whenever the search dialog closes.
+  const [form, setForm] = React.useState<{ mode: "create" | "view"; item: T | null; open: boolean } | null>(null);
+  const openForm = (mode: "create" | "view", item: T | null) => setForm({ mode, item, open: true });
+  const closeForm = () => setForm((current) => (current ? { ...current, open: false } : null));
+  const onFormSaved = (item: T) => {
+    applySelection(item);
+    setForm(null);
+    closeDialog();
+    inputElRef.current?.focus();
+  };
+
+  const renderFooter = ({ selectedItem: rowItem }: { selectedItem: T | null }) => {
+    const { renderEntityForm, onCreateRequest: createRequest } = latest.current;
+    const cancel = <Button variant="outline" onClick={closeDialog}>{messages.cancel}</Button>;
+    if (renderEntityForm) {
+      const target = rowItem ?? latest.current.selectedItem;
+      return (
+        <>
+          {cancel}
+          {target
+            ? <Button variant="outline" onClick={() => openForm("view", target)}>{messages.view}</Button>
+            : <Button variant="outline" onClick={() => openForm("create", null)}>{messages.create}</Button>}
+        </>
+      );
+    }
+    if (createRequest) {
+      return <Button variant="outline" onClick={() => { closeDialog(); createRequest(textRef.current); }}>{messages.create}</Button>;
+    }
+    return cancel;
   };
 
   const openDialog = (preselect: string | null) => {
@@ -194,6 +226,7 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
     if (wasOpenRef.current && !open) {
       ownsOpenRef.current = false;
       setPreselectedId(null);
+      setForm(null);
       closeController();
     }
     wasOpenRef.current = open;
@@ -329,7 +362,11 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
         onPageChange={(page, size) => { setDialogPageSize(size); void controller.goToPage(page, size); }}
         messages={messages}
         classNames={{ content: classNames?.dialog }}
+        footerExtra={renderFooter}
       />
+      {form && props.renderEntityForm
+        ? props.renderEntityForm({ open: form.open, onClose: closeForm, onSaved: onFormSaved, mode: form.mode, item: form.item })
+        : null}
       {noticesElement}
     </>
   );

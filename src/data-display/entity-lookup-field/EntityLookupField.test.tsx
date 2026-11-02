@@ -3,7 +3,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EntityLookupField } from "./EntityLookupField";
-import type { EntityLookupFieldProps } from "./EntityLookupField.types";
+import type { EntityFormContext, EntityLookupFieldProps } from "./EntityLookupField.types";
 import type { DataGridColumn } from "../data-grid/DataGrid.types";
 import type { LookupSearchResponse } from "../lookup-core/lookup-core.types";
 import { Dialog } from "../../overlays/dialog/Dialog";
@@ -873,6 +873,161 @@ describe("EntityLookupField resolveOnBlur", () => {
     expect(onSelectionChange).toHaveBeenCalledTimes(1);
     expect(onSelectionChange).toHaveBeenCalledWith(null);
     expect(input()).toHaveValue("");
+  });
+});
+
+describe("EntityLookupField pie del modal y formulario", () => {
+  const items = provs(1, 3);
+  const footerButton = (name: string) => within(dialog()).queryByRole("button", { name });
+  const formDialog = () => screen.queryByRole("dialog", { name: "Formulario" });
+
+  function renderForm() {
+    return vi.fn((ctx: EntityFormContext<Prov>) => (
+      <Dialog open={ctx.open} onOpenChange={(next) => { if (!next) ctx.onClose(); }} title="Formulario"
+        footer={<button onClick={() => ctx.onSaved(prov(9))}>Guardar</button>}>
+        <input aria-label="Campo del formulario" />
+      </Dialog>
+    ));
+  }
+
+  it("sin fila seleccionada ofrece Nuevo y abre el formulario en modo create", async () => {
+    const renderEntityForm = renderForm();
+    const { user } = setup({ items, renderEntityForm });
+    await user.click(trigger());
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    expect(renderEntityForm).not.toHaveBeenCalled();
+    expect(footerButton("Consultar")).toBeNull();
+    await user.click(footerButton("Nuevo")!);
+    expect(await screen.findByRole("dialog", { name: "Formulario" })).toBeInTheDocument();
+    expect(renderEntityForm).toHaveBeenLastCalledWith(expect.objectContaining({ open: true, mode: "create", item: null }));
+    expect(screen.getAllByRole("dialog", { hidden: true })).toHaveLength(2);
+  });
+
+  it("con fila seleccionada ofrece Consultar con ese item", async () => {
+    const renderEntityForm = renderForm();
+    const { user } = setup({ items, renderEntityForm });
+    await user.click(trigger());
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    await user.click(within(bodyRows()[1]!).getByText("Proveedor 2"));
+    expect(footerButton("Nuevo")).toBeNull();
+    await user.click(footerButton("Consultar")!);
+    await screen.findByRole("dialog", { name: "Formulario" });
+    expect(renderEntityForm).toHaveBeenLastCalledWith(expect.objectContaining({ mode: "view", item: prov(2) }));
+  });
+
+  it("con selección previa y sin fila marcada Consultar usa la selección previa", async () => {
+    const renderEntityForm = renderForm();
+    const { user } = setup({ items: [prov(2), prov(3)], initial: prov(1), renderEntityForm });
+    await user.click(trigger());
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    await user.click(footerButton("Consultar")!);
+    await screen.findByRole("dialog", { name: "Formulario" });
+    expect(renderEntityForm).toHaveBeenLastCalledWith(expect.objectContaining({ mode: "view", item: prov(1) }));
+  });
+
+  it("onSaved selecciona el item una vez, cierra ambos diálogos y devuelve el foco al input", async () => {
+    const { user, onSelectionChange } = setup({ items, renderEntityForm: renderForm() });
+    await user.click(trigger());
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    await user.click(footerButton("Nuevo")!);
+    await user.click(await within(await screen.findByRole("dialog", { name: "Formulario" })).findByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(onSelectionChange).toHaveBeenCalledTimes(1);
+    expect(onSelectionChange).toHaveBeenCalledWith(prov(9));
+    expect(input()).toHaveValue("Proveedor 9");
+    await waitFor(() => expect(input()).toHaveFocus());
+  });
+
+  it("Escape con el formulario abierto cierra solo el formulario y el foco vuelve al buscador", async () => {
+    const { user } = setup({ items, renderEntityForm: renderForm() });
+    await user.click(trigger());
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    await user.click(footerButton("Nuevo")!);
+    await screen.findByRole("dialog", { name: "Formulario" });
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(formDialog()).toBeNull());
+    expect(dialog()).toBeInTheDocument();
+    await waitFor(() => expect(dialog().contains(document.activeElement)).toBe(true));
+  });
+
+  it("al reabrir el buscador el formulario empieza cerrado", async () => {
+    const { user } = setup({ items, renderEntityForm: renderForm() });
+    await user.click(trigger());
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    await user.click(footerButton("Nuevo")!);
+    await screen.findByRole("dialog", { name: "Formulario" });
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(formDialog()).toBeNull());
+    await user.click(footerButton("Cancelar")!);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await user.click(trigger());
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    expect(formDialog()).toBeNull();
+  });
+
+  it("si el padre cierra el buscador con el formulario abierto, se cierra también el formulario", async () => {
+    const renderEntityForm = renderForm();
+    function Controlled() {
+      const [open, setOpen] = React.useState(true);
+      return (
+        <>
+          <button onClick={() => setOpen(false)}>cerrar-padre</button>
+          <Harness items={items} open={open} onOpenChange={setOpen} renderEntityForm={renderEntityForm} />
+        </>
+      );
+    }
+    const user = userEvent.setup();
+    render(<Controlled />);
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    await user.click(footerButton("Nuevo")!);
+    await screen.findByRole("dialog", { name: "Formulario" });
+    act(() => { screen.getByText("cerrar-padre", { selector: "button" }).click(); });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("sin renderEntityForm, Nuevo con onCreateRequest cierra el modal y pasa el texto sin tocar la selección", async () => {
+    const onCreateRequest = vi.fn();
+    const { user, onSelectionChange } = setup({ items, onCreateRequest });
+    await user.type(input(), "prov{Enter}");
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    expect(footerButton("Cancelar")).toBeNull();
+    await user.click(footerButton("Nuevo")!);
+    expect(onCreateRequest).toHaveBeenCalledWith("prov");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(input()).toHaveValue("prov");
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it("sin formulario ni onCreateRequest el pie trae Cancelar, que cierra el modal", async () => {
+    const { user } = setup({ items });
+    await user.click(trigger());
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    expect(footerButton("Nuevo")).toBeNull();
+    await user.click(footerButton("Cancelar")!);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("con formulario y onCreateRequest gana el formulario y Cancelar sigue disponible", async () => {
+    const onCreateRequest = vi.fn();
+    const { user } = setup({ items, onCreateRequest, renderEntityForm: renderForm() });
+    await user.click(trigger());
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    expect(footerButton("Cancelar")).not.toBeNull();
+    await user.click(footerButton("Nuevo")!);
+    await screen.findByRole("dialog", { name: "Formulario" });
+    expect(onCreateRequest).not.toHaveBeenCalled();
+  });
+
+  it("una selección interna emite onInputValueChange una sola vez", async () => {
+    const onInputValueChange = vi.fn();
+    const { user } = setup({ items, onInputValueChange });
+    await user.click(trigger());
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    await user.click(within(bodyRows()[1]!).getByText("Proveedor 2"));
+    await user.click(accept());
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(onInputValueChange).toHaveBeenCalledTimes(1);
+    expect(onInputValueChange).toHaveBeenCalledWith("Proveedor 2");
   });
 });
 

@@ -30,8 +30,8 @@ export interface LookupDialogProps<T> {
   preselectedId?: string | null;
   onConfirm: (item: T) => void;
   onPageChange: (page: number, pageSize: number) => void;
-  /** Rendered before the Accept button. */
-  footerExtra?: React.ReactNode;
+  /** Rendered before the Accept button; the function form receives the row currently selected in the dialog. */
+  footerExtra?: React.ReactNode | ((ctx: { selectedItem: T | null }) => React.ReactNode);
   messages: Pick<EntityLookupMessages, "accept" | "dialogTitle">;
   classNames?: Partial<LookupDialogClassNames>;
 }
@@ -61,6 +61,8 @@ export function LookupDialog<T>({
 
   // A server selection can belong to another page: only an item in the current rows can be confirmed.
   const selectedItem = selectedId === null ? null : rows.find(row => getItemId(row) === selectedId) ?? null;
+
+  const { grid: gridClassName, ...dialogClassNames } = classNames ?? {};
 
   const latest = React.useRef({ rows, getItemId, onConfirm, onPageChange, page, pageSize });
   latest.current = { rows, getItemId, onConfirm, onPageChange, page, pageSize };
@@ -103,9 +105,9 @@ export function LookupDialog<T>({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title={title ?? messages.dialogTitle} size={size}
-      classNames={{ ...classNames, body: cn("p-0", classNames?.body) }}
+      classNames={{ ...dialogClassNames, body: cn("p-0", dialogClassNames.body) }}
       footer={<>
-        {footerExtra}
+        {typeof footerExtra === "function" ? footerExtra({ selectedItem }) : footerExtra}
         <Button disabled={selectedItem === null} onClick={() => confirmId(selectedId)}>{messages.accept}</Button>
       </>}>
       <div onKeyDown={onKeyDown}>
@@ -113,7 +115,7 @@ export function LookupDialog<T>({
           selection={selectedId === null ? [] : [selectedId]} onSelectionChange={ids => select(ids[0] ?? null)}
           pagination={{ pageSize }} serverSide={serverSide} loading={loading} maxHeight={tableMaxHeight}
           initialSort={remote ? undefined : initialSort} columnToggler={false}
-          onRowDoubleClick={row => confirmId(getItemId(row))} className={classNames?.grid} />
+          onRowDoubleClick={row => confirmId(getItemId(row))} className={gridClassName} />
       </div>
     </Dialog>
   );
