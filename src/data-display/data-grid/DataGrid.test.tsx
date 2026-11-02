@@ -2541,6 +2541,40 @@ describe("DataGrid: select remoto con loadOptions", () => {
     expect(await screen.findByRole("option", { name: "Tarjeta" })).toBeInTheDocument();
   });
 
+  it("una búsqueda tipeada que falla muestra el error de carga en la lista, no 'Sin resultados'", async () => {
+    const user = userEvent.setup();
+    const loadOptions = vi.fn(async (query: string) => { if (query === "zz") throw new Error("red"); return catalog; });
+    render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={empty} getRowId={payId} />);
+    await waitFor(() => expect(loadOptions).toHaveBeenCalledTimes(1));
+    await user.type(combo(), "zz");
+    await waitFor(() => expect(loadOptions).toHaveBeenCalledWith("zz"), { timeout: 1500 });
+    // Mensaje enlazado al campo (oculto) y mensaje vacío de la lista.
+    await waitFor(() => expect(screen.getAllByText("No se pudieron cargar las opciones")).toHaveLength(2));
+    expect(screen.queryByText("Sin resultados")).not.toBeInTheDocument();
+  });
+
+  it("una búsqueda sin coincidencias, sin error, sigue diciendo 'Sin resultados'", async () => {
+    const user = userEvent.setup();
+    const loadOptions = vi.fn(async (query: string) => query === "zz" ? [] : catalog);
+    render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={empty} getRowId={payId} />);
+    await waitFor(() => expect(loadOptions).toHaveBeenCalledTimes(1));
+    await user.type(combo(), "zz");
+    expect(await screen.findByText("Sin resultados", undefined, { timeout: 1500 })).toBeInTheDocument();
+  });
+
+  it("en el menú de filtro, una búsqueda tipeada que falla muestra el error de carga, no 'Sin resultados'", async () => {
+    const user = userEvent.setup();
+    const loadOptions = vi.fn(async (query: string) => { if (query === "zz") throw new Error("red"); return catalog; });
+    render(<DataGrid columns={[methodColumn({ loadOptions })]} value={one} getRowId={payId} />);
+    await waitFor(() => expect(loadOptions).toHaveBeenCalledTimes(1));
+    const menu = await openFilter(user, "Forma");
+    await user.type(within(menu).getByRole("combobox"), "zz");
+    await waitFor(() => expect(loadOptions).toHaveBeenCalledWith("zz"), { timeout: 1500 });
+    // Mensaje del campo y mensaje vacío de la lista (que vive en otro portal).
+    await waitFor(() => expect(screen.getAllByText("No se pudieron cargar las opciones")).toHaveLength(2));
+    expect(screen.queryByText("Sin resultados")).not.toBeInTheDocument();
+  });
+
   it("el error de validación tiene prioridad sobre el de carga", async () => {
     const loadOptions = vi.fn(async (_query: string): Promise<Opt[]> => { throw new Error("red"); });
     const ref = React.createRef<DataGridHandle<Pay>>();

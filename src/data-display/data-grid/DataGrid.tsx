@@ -10,6 +10,7 @@ import { TooltipProvider } from "../../primitives";
 import { gridFeatures, type GridFeatures } from "./table-features";
 import { useGridColumns } from "./use-grid-columns";
 import { useGridRows } from "./use-grid-rows";
+import { useLoadingFocus } from "./use-loading-focus";
 import { RemoteOptionsProvider, useCatalogLoading, useRemoteOptions } from "./use-remote-options";
 import { definition, frozenSide, GridRow, type GridRowView } from "./GridRow";
 import { focusCellElement, settleCellFocus, type CellFocusPlan } from "./cells/EditableCell";
@@ -47,7 +48,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   const totalRecords = serverSide && Number.isFinite(serverSide.totalRecords) && serverSide.totalRecords > 0 ? serverSide.totalRecords : 0;
   const dropRows = React.useRef<(gone: (id: string) => boolean) => void>(() => {});
   const editing = !readOnly && columns.some(column => column.editable === true || typeof column.editable === "function");
-  const { store, rows: storeRows, errors, revision, getData, reset: resetRows, patchRow, addRow: addStoreRow, removeRow: removeStoreRow, validate, disarmFirstLoad, commitCell } = useGridRows<T>({ value, defaultValue, getRowId, onChange, columns: readOnly ? noColumns : columns, editing, messages, getSelectedIds: () => selectionRef.current, serverSide: server, onRowsGone: ids => dropRows.current(id => ids.has(id)) });
+  const { store, rows: storeRows, errors, revision, getData, reset: resetRows, patchRow, addRow: addStoreRow, removeRow: removeStoreRow, validate, markQueryEmitted, disarmFirstLoad, commitCell } = useGridRows<T>({ value, defaultValue, getRowId, onChange, columns: readOnly ? noColumns : columns, editing, messages, getSelectedIds: () => selectionRef.current, serverSide: server, onRowsGone: ids => dropRows.current(id => ids.has(id)) });
   // Las celdas, el orden y los filtros leen las columnas ya resueltas con las etiquetas del catálogo remoto.
   const remote = useRemoteOptions(columns);
   // TanStack memoiza orden y filtro por los datos: al llegar etiquetas hace falta una identidad nueva para recalcularlos.
@@ -194,7 +195,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
     const index = table.getPrePaginatedRowModel().rows.findIndex(item => item.id === target.id);
     if (index < 0) {
       jump.current = undefined;
-      devWarn(`DataGrid: la fila "${target.id}" no está entre las filas visibles (filtro activo o id inexistente); no se cambia de página ni se enfoca.`);
+      devWarn(`DataGrid: la fila "${target.id}" no está entre las filas visibles (filtro activo, otra página del servidor o id inexistente); no se cambia de página ni se enfoca.`);
       return;
     }
     // Con servidor los índices son locales a la página: no hay otra página que calcular.
@@ -243,10 +244,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
     return () => observer.disconnect();
   }, [columns, visibility, selectionMode]);
   // LoadingOverlay cubre el puntero; inert bloquea también el teclado, incluso en celdas propias.
-  React.useEffect(() => {
-    if (loading) contentRef.current?.setAttribute("inert", "");
-    else contentRef.current?.removeAttribute("inert");
-  }, [loading]);
+  useLoadingFocus(loading, contentRef, messages.previousPage);
 
   // Mantener el orden visual de TanStack en todas las filas (también skeletons).
   const visibleColumns = [
@@ -275,8 +273,15 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
     const key = JSON.stringify(query);
     if (key === lastQuery.current) return;
     lastQuery.current = key;
+    markQueryEmitted();
     latest.current.serverSide?.onQueryChange(query);
-  }, [server, unpaged, queryPage, queryPageSize, sorting, columnFilters]);
+  }, [server, unpaged, queryPage, queryPageSize, sorting, columnFilters, markQueryEmitted]);
+  const warnedNoValue = React.useRef(false);
+  React.useEffect(() => {
+    if (!server || value !== undefined || warnedNoValue.current) return;
+    warnedNoValue.current = true;
+    devWarn("DataGrid: serverSide exige la prop value con la página actual; sin ella la grilla no recibe las filas del servidor.");
+  }, [server, value]);
   const rowHeight = density === "compact" ? "h-(--ui-grid-row-height-compact)" : "h-(--ui-grid-row-height)";
   const dirtyIds = React.useMemo(() => editing ? new Set(store.getDiff().dirtyIds) : noIds, [editing, store, rows, revision]);
   const rowEvents = React.useMemo(() => ({

@@ -17,6 +17,14 @@ describe("factorías de columnas", () => {
     expect(selectColumn<Premium, (typeof options)[number]>("method", "Método", { options, getOptionValue: (option) => option.id, getOptionLabel: (option) => option.name })).toMatchObject({ type: "select", options });
   });
 
+  it("selectColumn acepta loadOptions en lugar de options", () => {
+    const loadOptions = async (_query: string) => [{ id: 1, name: "Efectivo" }];
+    const column = selectColumn<Premium, { id: number; name: string }>("method", "Método", { loadOptions, getOptionValue: (option) => option.id });
+    expect(column).toMatchObject({ type: "select", loadOptions });
+    // @ts-expect-error sin options ni loadOptions no hay de dónde sacar las opciones
+    selectColumn<Premium, number>("method", "Método", {});
+  });
+
   it("las opciones sobreescriben los defaults", () => {
     expect(textColumn<Premium>("policy", "Póliza", { type: "custom" }).type).toBe("custom");
     expect(amountColumn<Premium>("amount", "Importe", { fractionDigits: 4, align: "left" })).toMatchObject({ fractionDigits: 4, align: "left" });

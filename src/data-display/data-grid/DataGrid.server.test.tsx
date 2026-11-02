@@ -1,5 +1,5 @@
 import * as React from "react";
-import { describe, it, expect, expectTypeOf, vi, beforeAll } from "vitest";
+import { describe, it, expect, expectTypeOf, vi, beforeAll, onTestFinished } from "vitest";
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DataGrid } from "./DataGrid";
@@ -505,5 +505,63 @@ describe("DataGrid: serverSide, refresco con las mismas filas", () => {
     expect(first()).toHaveValue("Pol 11");
     await click(user, "Página anterior");
     expect(first()).toHaveValue("Editada");
+  });
+});
+
+describe("DataGrid: serverSide, avisos de desarrollo", () => {
+  const warnSpy = () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    onTestFinished(() => warn.mockRestore());
+    return warn;
+  };
+  const rowsOf = (ids: string[]): Premium[] => ids.map(id => ({ id, policy: `Pol ${id}`, collectedAmount: 1, dueDate: null }));
+  const policyBox = () => within(bodyRows()[0]!).getByRole("textbox", { name: "Póliza" });
+
+  it("añadir filas por value con ediciones pendientes y sin consulta avisa y apunta a ref.addRow", async () => {
+    const user = userEvent.setup();
+    const warn = warnSpy();
+    const serverSide = { totalRecords: 20, onQueryChange: vi.fn() };
+    const ui = (list: Premium[]) => <DataGrid columns={editableColumns} getRowId={getRowId} value={list} serverSide={serverSide} />;
+    const { rerender } = render(ui(rowsOf(["a", "b"])));
+    // La respuesta a la consulta de montaje: mismas filas, arreglo nuevo.
+    rerender(ui(rowsOf(["a", "b"])));
+    await user.type(policyBox(), "X");
+    await user.tab();
+    rerender(ui(rowsOf(["a", "b", "c"])));
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("ref.addRow"));
+  });
+
+  it("un cambio de página tras editar no avisa: hubo una consulta", async () => {
+    const user = userEvent.setup();
+    const warn = warnSpy();
+    render(<Remote columns={editableColumns} total={30} />);
+    await user.type(policyBox(), "X");
+    await user.tab();
+    await next(user);
+    expect(screen.getByText("Página 2 de 3")).toBeInTheDocument();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("sin ediciones pendientes, otro conjunto de ids sin consulta no avisa", () => {
+    const warn = warnSpy();
+    const serverSide = { totalRecords: 20, onQueryChange: vi.fn() };
+    const ui = (list: Premium[]) => <DataGrid columns={editableColumns} getRowId={getRowId} value={list} serverSide={serverSide} />;
+    const { rerender } = render(ui(rowsOf(["a"])));
+    rerender(ui(rowsOf(["a"])));
+    rerender(ui(rowsOf(["a", "b"])));
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("serverSide sin value avisa una sola vez; con value no avisa", () => {
+    const warn = warnSpy();
+    const serverSide = { totalRecords: 20, onQueryChange: vi.fn() };
+    const { rerender } = render(<DataGrid columns={columns} getRowId={getRowId} defaultValue={rows} serverSide={serverSide} />);
+    rerender(<DataGrid columns={columns} getRowId={getRowId} defaultValue={rows} serverSide={{ ...serverSide }} />);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("value"));
+    warn.mockClear();
+    render(<DataGrid columns={columns} getRowId={getRowId} value={rows} serverSide={serverSide} />);
+    expect(warn).not.toHaveBeenCalled();
   });
 });

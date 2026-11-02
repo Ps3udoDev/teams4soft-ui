@@ -34,7 +34,7 @@ export type DataGridHandle<T> = {
   removeRow(id: string): void;
   /** Pinta los errores de todas las celdas editables y devuelve `isValid`. */
   validate(): boolean;
-  /** Cambia de página si hace falta y enfoca la celda; no limpia filtros. */
+  /** Enfoca la celda; en modo cliente cambia de página si hace falta (con `serverSide` solo enfoca filas de la página actual). No limpia filtros. */
   focusCell(id: string, field: string): void;
 };
 export type DataGridCellContext<T> = { row: T; value: unknown; rowId: string; grid: DataGridHandle<T> };
@@ -68,7 +68,8 @@ export interface DataGridColumn<T, TOption = unknown> {
    * El grid carga `""` una vez por columna visible para resolver etiquetas y guarda cada consulta en una caché por instancia.
    * Cambiar la identidad de la función no invalida la caché: siempre se llama a la última. Para recargar un catálogo
    * que depende de otro dato, vuelve a montar el grid con `key`.
-   * Con `options` presentes, estas dan las etiquetas de lectura y no se carga `""` para leer; el editor sigue buscando en remoto.
+   * Con `options` presentes, estas dan las etiquetas de lectura y no se carga `""` para leer; al abrir el editor o el menú de filtro sí se carga, y el editor sigue buscando en remoto.
+   * Si una búsqueda falla, el selector muestra `messages.loadOptionsError`: reabrirlo reintenta el catálogo y escribir de nuevo reintenta la búsqueda.
    */
   loadOptions?: (query: string) => Promise<TOption[]>;
   render?: (ctx: DataGridCellContext<T>) => React.ReactNode;
@@ -146,7 +147,9 @@ export interface DataGridProps<T> {
   onChange?: (data: DataGridData<T>, change: GridChange) => void;
   /**
    * Botón de la barra y destino de `ref.addRow()` sin argumento: crea la fila quien lo recibe, con `ref.addRow(row)`
-   * (salta a su página y la enfoca) o añadiéndola a `value`. En ambos casos cuenta en `addedIds`.
+   * (salta a su página y la enfoca) o, solo en modo cliente, añadiéndola a `value` (cuenta en `addedIds`, sin saltar de
+   * página). Con `serverSide` usa siempre `ref.addRow(row)` y `ref.removeRow(id)`: cambiar el conjunto de ids por `value`
+   * adopta una base nueva y vacía el diff.
    */
   onAddRow?: () => void;
   /** `true` fuerza consulta aunque haya columnas editables. */
@@ -166,8 +169,11 @@ export interface DataGridProps<T> {
    * Con `pagination={false}` la consulta lleva `pageIndex: 0` y el tamaño por defecto.
    * Un `value` externo con otro conjunto de ids (otra página, resultados filtrados) es la base nueva y no emite `onChange`:
    * las ediciones sin guardar salen del diff (`dirtyIds`, `addedIds`, `removedIds` describen solo la página actual).
-   * Un refresco con las mismas filas (mismo conjunto de ids, aunque cambie el orden o los valores) conserva el diff,
-   * los borradores y el foco. Tras guardar, llama a `ref.reset(rows)` para marcarlas como guardadas.
+   * Un refresco con las mismas filas (mismo conjunto de ids, aunque cambie el orden o los valores) conserva la base y
+   * recalcula el diff contra el `value` nuevo: gana `value`. Un valor del servidor reemplaza una edición ya confirmada
+   * (las ediciones sin guardar sobreviven solo si el padre las fusiona) y una fila intacta que cambió fuera aparece
+   * como modificada hasta `ref.reset(rows)`. Los borradores abiertos y el foco se conservan.
+   * Tras guardar, llama a `ref.reset(rows)` para marcarlas como guardadas.
    * La selección conserva los ids de otras páginas.
    */
   serverSide?: { totalRecords: number; onQueryChange: (query: DataGridQuery) => void };

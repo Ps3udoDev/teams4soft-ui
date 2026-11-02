@@ -99,6 +99,8 @@ function SelectEditor<T>({ column, value, onCommit, onPopoverOpenChange, onLoadE
   const remoteProps = remote.remote ? {
     options: remote.options, getOptionValue: remote.getOptionValue, getOptionLabel: remote.getOptionLabel,
     filterOption: remote.filterOption, loading: remote.loading, onInputValueChange: remote.onInputValueChange,
+    // Una búsqueda que falla no es "sin resultados"; sin error queda el mensaje por defecto.
+    emptyMessage: remote.error ? remote.loadOptionsError : undefined,
   } : { options: staticOptions, getOptionValue: column.getOptionValue ?? defaultValueOf, getOptionLabel: column.getOptionLabel ?? defaultLabelOf };
   return <SearchableSelectField clearable disabled={disabled} invalid={invalid || loadFailed} errorMessage={shownError} unstyled={unstyled}
     {...remoteProps}

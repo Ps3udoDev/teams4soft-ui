@@ -224,7 +224,7 @@ celdas vacías al final.
 devuelve las filas actuales y los ids seleccionados, incluso si el filtro los oculta.
 
 `loading` muestra cinco filas skeleton en la primera carga y una capa que bloquea
-la interacción cuando ya hay datos. `density="compact"`, `maxHeight`, los tokens
+la interacción cuando ya hay datos; al terminar, el foco vuelve al control que lo tenía (o, en la última página, al paginador). `density="compact"`, `maxHeight`, los tokens
 `--ui-grid-*` y los slots de `classNames`/`styles` permiten adaptar la presentación.
 `messages` sobrescribe los textos en español y `cellTypes` registra celdas propias.
 Las opciones remotas (`loadOptions`) y las consultas al servidor (`serverSide`) se describen abajo.
@@ -249,10 +249,12 @@ const columns = React.useMemo<DataGridColumn<Policy>[]>(() => [
   para resolver las etiquetas de todas las filas; mientras llega se ve el valor sin etiquetar. Escribir en el editor
   busca una vez, 250 ms después de la última tecla; elegir una opción no dispara otra búsqueda con su etiqueta.
 - **Reintento.** Un rechazo no se guarda en la caché. El editor y el menú de filtro marcan el error (borde rojo y el
-  mensaje `messages.loadOptionsError`) y reabrir el selector vuelve a llamar al servicio.
+  mensaje `messages.loadOptionsError`, también en lugar de "Sin resultados" en la lista). Reabrir el selector reintenta
+  el catálogo y volver a escribir reintenta la búsqueda.
 - **La identidad no invalida.** Cambiar la función `loadOptions` entre renders no vacía la caché y siempre se llama a
   la última. Para recargar un catálogo que depende de otro dato, vuelve a montar el grid con `key`.
-- **Con `options` presentes**, estas dan las etiquetas de lectura y no se carga `""`; el editor sigue buscando en remoto.
+- **Con `options` presentes**, estas dan las etiquetas de lectura y no se carga `""` para leer; al abrir el editor o el
+  menú de filtro sí se carga, y el editor sigue buscando en remoto.
 
 **`serverSide`: paginar, ordenar y filtrar en el servidor.** La grilla no toca las filas de `value` (exige `value`,
 que debe ser la página actual) y pide cada consulta a quien la use:
@@ -267,7 +269,10 @@ const onQueryChange = React.useCallback((query: DataGridQuery) => {
   api.premiums(query).then((result) => {
     if (request !== latest.current) return; // descarta respuestas viejas
     setPage(result);
-    setLoading(false);
+  }).catch(() => {
+    // Informa del error donde corresponda; sin el finally la grilla quedaría inerte.
+  }).finally(() => {
+    if (request === latest.current) setLoading(false);
   });
 }, []);
 const serverSide = React.useMemo(() => ({ totalRecords: page.total, onQueryChange }), [page.total, onQueryChange]);
@@ -293,8 +298,12 @@ type DataGridQuery = {
 - **`loading`** pone la capa de carga sobre las filas actuales; solo la primera carga, sin filas, usa skeleton.
 - **Diff.** Un `value` externo con otro conjunto de ids (otra página, resultados filtrados) es la base nueva y no emite
   `onChange`: las ediciones sin guardar salen del diff, y `dirtyIds`, `addedIds` y `removedIds` describen solo la página
-  actual. Un refresco con las mismas filas (mismo conjunto de ids, aunque cambie el orden o los valores) conserva el
-  diff, los borradores y el foco.
+  actual. Un refresco con las mismas filas (mismo conjunto de ids, aunque cambie el orden o los valores) conserva la base y
+  recalcula el diff contra el `value` nuevo: gana `value`. Un valor del servidor reemplaza una edición ya confirmada
+  (las ediciones sin guardar sobreviven solo si el padre las fusiona) y una fila intacta que cambió fuera aparece como
+  modificada hasta `ref.reset(rows)`. Los borradores y el foco se conservan.
+- **Filas añadidas y quitadas.** Con `serverSide`, añade con `ref.addRow(row)` y quita con `ref.removeRow(id)`: cambiar
+  el conjunto de ids por `value` adopta una base nueva y vacía el diff (en desarrollo avisa si había ediciones y no hubo consulta).
 - **Tras guardar**, llama a `ref.reset(rows)` con las filas guardadas para marcarlas como base.
 - **Selección entre páginas.** La selección por id conserva los ids de otras páginas.
 - **`pagination={false}`** envía `pageIndex: 0` con el tamaño de página por defecto; el servidor decide cuántas filas devuelve.
@@ -351,7 +360,7 @@ columna oculta: declara las columnas `required` con `hideable: false`.
 <DataGrid ref={ref} columns={columns} defaultValue={rows} getRowId={(row) => row.id}
   onAddRow={() => ref.current?.addRow(blankRow())} />;
 
-// Controlado: también cuenta en addedIds, pero no salta de página ni mueve el foco.
+// Controlado (solo modo cliente; con serverSide usa ref.addRow): también cuenta en addedIds, pero no salta de página ni mueve el foco.
 <DataGrid columns={columns} value={rows} getRowId={(row) => row.id}
   onAddRow={() => setRows((current) => [...current, blankRow()])} />;
 ```

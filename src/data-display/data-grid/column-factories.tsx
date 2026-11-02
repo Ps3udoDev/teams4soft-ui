@@ -14,7 +14,9 @@ export function dateColumn<T>(field: keyof T & string, header: string, opts?: Pa
   return { field, header, type: "date", width: 120, ...opts };
 }
 
-export function selectColumn<T, O>(field: keyof T & string, header: string, opts: Partial<DataGridColumn<T, O>> & { options: O[] }): DataGridColumn<T, O> {
+type SelectSource<T, O> = { options: O[] } | { loadOptions: NonNullable<DataGridColumn<T, O>["loadOptions"]> };
+
+export function selectColumn<T, O>(field: keyof T & string, header: string, opts: Partial<DataGridColumn<T, O>> & SelectSource<T, O>): DataGridColumn<T, O> {
   return { field, header, type: "select", ...opts };
 }
 

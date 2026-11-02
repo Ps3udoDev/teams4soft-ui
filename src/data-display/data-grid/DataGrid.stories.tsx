@@ -287,7 +287,10 @@ function ServerSideExample() {
       if (request !== latest.current) return;
       setRows(page.rows);
       setTotal(page.total);
-      setLoading(false);
+    }).catch(() => {
+      // Un fallo real se informaría aquí; el finally evita dejar la grilla inerte.
+    }).finally(() => {
+      if (request === latest.current) setLoading(false);
     });
   }, []);
   const serverSide = React.useMemo(() => ({ totalRecords: total, onQueryChange }), [total, onQueryChange]);
@@ -358,5 +361,5 @@ function RemoteSelectExample() {
 }
 export const SelectRemoto: Story = {
   render: () => <RemoteSelectExample />,
-  parameters: { docs: { description: { story: "«Aseguradora» carga su catálogo con `loadOptions` (400 ms): primero se ve el valor y luego la etiqueta. Escribir en la celda busca una vez tras 250 ms; el menú de filtro reutiliza el catálogo. Activa el fallo simulado y busca un texto nuevo para ver el error; al reabrir el selector se reintenta." } } },
+  parameters: { docs: { description: { story: "«Aseguradora» carga su catálogo con `loadOptions` (400 ms): primero se ve el valor y luego la etiqueta. Escribir en la celda busca una vez tras 250 ms; el menú de filtro reutiliza el catálogo. Activa el fallo simulado y busca un texto nuevo para ver el error en la lista; al reabrir el selector se reintenta el catálogo y al volver a escribir se reintenta la búsqueda." } } },
 };
