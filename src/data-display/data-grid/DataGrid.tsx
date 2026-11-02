@@ -12,6 +12,7 @@ import { useGridColumns } from "./use-grid-columns";
 import { useGridRows } from "./use-grid-rows";
 import { definition, frozenSide, GridRow, type GridRowView } from "./GridRow";
 import { focusCellElement, settleCellFocus, type CellFocusPlan } from "./cells/EditableCell";
+import { editCellRegistry } from "./cells/edit-cells";
 import { ReadCellStyleContext } from "./cells/read-cells";
 import { resolveFilterKind } from "./filters/filter-fns";
 import { FilterMenu } from "./filters/FilterMenu";
@@ -56,6 +57,15 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
       ids.add(id);
     }
   }, [rows, getRowId]);
+  const warnedEditors = React.useRef(new Set<string>());
+  React.useEffect(() => {
+    if (readOnly) return;
+    for (const { field, editable, type = "text" } of columns) {
+      if (!editable || cellTypes?.[type] || type in editCellRegistry || warnedEditors.current.has(field)) continue;
+      warnedEditors.current.add(field);
+      devWarn(`DataGrid: la columna "${field}" es editable pero el tipo "${type}" no tiene editor: se muestra en lectura y aun así se valida. Registra su celda en cellTypes.`);
+    }
+  }, [columns, cellTypes, readOnly]);
 
   const { columnDefs, visibility, setVisibility } = useGridColumns({ columns, cellTypes, columnVisibility, onColumnVisibilityChange, persistKey, messages });
   const tableColumns = React.useMemo<ColumnDef<GridFeatures, T, unknown>[]>(() => selectionMode === "none" ? columnDefs : [
@@ -161,6 +171,10 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
       }
     }
     jump.current = undefined;
+    if (target.field && !visibleColumns.some(column => column.id === target.field)) {
+      devWarn(`DataGrid: focusCell no enfoca "${target.field}": la columna está oculta o no existe.`);
+      return;
+    }
     const field = target.field ?? Array.from(root.querySelectorAll<HTMLElement>("td[data-row-id]")).find(cell => cell.dataset.rowId === target.id)?.dataset.field;
     if (field) focusCellElement(root, target.id, field);
   });

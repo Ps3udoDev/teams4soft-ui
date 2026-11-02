@@ -2386,4 +2386,28 @@ describe("DataGrid: revisión final de G2", () => {
       expect(screen.getByText(/Fecha no válida/)).not.toHaveClass("sr-only");
     });
   });
+
+  describe("avisos de desarrollo", () => {
+    it("una columna lookup editable sin cellTypes avisa una vez; con cellTypes o readOnly no", () => {
+      const warn = silenceWarnings();
+      const lookup: DataGridColumn<Line>[] = [{ field: "policy", header: "Cuenta", type: "lookup", editable: true }];
+      const { rerender } = render(<DataGrid columns={lookup} defaultValue={lineRows} getRowId={lineId} />);
+      rerender(<DataGrid columns={lookup} defaultValue={lineRows} getRowId={lineId} pagination={false} />);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("policy"));
+      warn.mockClear();
+      render(<DataGrid columns={[{ ...lookup[0]!, field: "kind" }]} defaultValue={lineRows} getRowId={lineId} readOnly />);
+      render(<DataGrid columns={[{ ...lookup[0]!, field: "total" }]} cellTypes={{ lookup: () => null }} defaultValue={lineRows} getRowId={lineId} />);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("focusCell sobre una columna oculta avisa y no mueve el foco", () => {
+      const warn = silenceWarnings();
+      const ref = React.createRef<DataGridHandle<Line>>();
+      render(<DataGrid ref={ref} columns={lineColumns} columnVisibility={{ collectedAmount: false }} defaultValue={lineRows} getRowId={lineId} />);
+      act(() => ref.current?.focusCell("r-1", "collectedAmount"));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("collectedAmount"));
+      expect(document.body).toHaveFocus();
+    });
+  });
 });
