@@ -177,7 +177,7 @@ toast.error({
 
 El `toast` importable es **API de cliente**: requiere un `<ToastProvider global />` montado.
 
-### Fase 4: DataGrid (consulta)
+### Fase 4: DataGrid
 
 `DataGrid` vive en el subpath `./data-display`. En npm, `next` apunta a
 `0.5.0-beta.2`, que todavía usa la fila de filtros; el menú de filtros descrito aquí
@@ -227,7 +227,69 @@ devuelve las filas originales y los ids seleccionados, incluso si el filtro los 
 la interacción cuando ya hay datos. `density="compact"`, `maxHeight`, los tokens
 `--ui-grid-*` y los slots de `classNames`/`styles` permiten adaptar la presentación.
 `messages` sobrescribe los textos en español y `cellTypes` registra celdas propias.
-Esta fase es de consulta; la edición y las consultas al servidor llegan en G2/G3.
+Las consultas al servidor (`serverSide`) llegan en G3.
+
+#### DataGrid editable
+
+Una columna con `editable: true` (o `editable: (row) => boolean`) edita su celda en el sitio;
+`readOnly` en la grilla fuerza consulta. Tipos editables: `text`, `number`, `currency`,
+`percent`, `date`, `select`, `checkbox`, `radio` y `custom` (con `cellTypes`).
+
+```tsx
+const ref = React.useRef<DataGridHandle<Premium>>(null);
+const columns: DataGridColumn<Premium>[] = [
+  textColumn<Premium>("policy", "Póliza", { editable: true, required: true }),
+  amountColumn<Premium>("amount", "Cobrado", {
+    editable: true,
+    validate: (value) => (typeof value === "number" && value < 0 ? "No puede ser negativo" : null),
+  }),
+];
+
+<DataGrid ref={ref} columns={columns} defaultValue={rows} getRowId={(row) => row.id} />;
+
+// Al aceptar:
+if (ref.current?.validate()) save(ref.current.getData());
+```
+
+`ref.getData()` devuelve el JSON completo de la edición:
+
+```ts
+{
+  rows: T[];          // filas actuales (originales, editadas y añadidas)
+  selectedIds: string[];
+  dirtyIds: string[]; // modificadas
+  addedIds: string[];
+  removedIds: string[];
+  errors: Record<rowId, Record<field, string>>;
+  isValid: boolean;
+}
+```
+
+El handle ofrece además `reset(rows)`, `patchRow(id, partial)`, `addRow(row?)`, `removeRow(id)`,
+`validate()` (pinta los errores de todas las celdas y devuelve `isValid`) y `focusCell(id, field)`.
+`onChange(data, change)` se dispara con cada edición; `column.onCommit({ row, value, prev, grid })`
+permite recalcular otras celdas con `grid.patchRow`. `onAddRow` muestra el botón de la barra y es
+quien crea la fila.
+
+- **Modo controlado.** El primer `value` no vacío, mientras la grilla está intacta y vacía, se adopta como
+  base: una carga asíncrona empieza con el diff vacío. Para recargas posteriores usa `ref.reset(rows)`.
+  Un arreglo antiguo que la grilla ya emitió se ignora; para revertir, usa `ref.reset(rows)`. Un padre
+  que ignora `onChange` conserva la edición hasta que `value` cambie de identidad.
+- **Estabilidad.** `columns` y `cellTypes` deben ser estables (constante de módulo o `useMemo`); si no,
+  se re-renderizan todas las filas.
+- **Teclado.** Enter confirma y baja; en una celda inválida, Enter se queda. Tab confirma y avanza, y
+  puede salir de una celda inválida. Escape descarta el borrador.
+- **Dentro de un `Dialog`.** El primer Escape revierte un borrador pendiente y el segundo cierra el diálogo.
+- **Negativos.** Los números rechazan negativos por defecto: usa `editorProps: { allowNegative: true }`.
+
+`NumberField` (en `forms`) es el editor numérico: separador de miles mientras se escribe, valor público
+`number | null` y `onCommit` al salir o con Enter.
+
+```tsx
+import { NumberField } from "@teams4soft/teams4soft-ui/forms";
+
+<NumberField mode="currency" value={amount} onValueChange={setAmount} aria-label="Importe" />;
+```
 
 ### Overlays
 
@@ -337,6 +399,8 @@ Si falta un provider global se emite un aviso de desarrollo, como con `toast`.
 En construcción por fases. Publicadas en npm: **0.4.0** (`latest`) y **0.5.0-beta.2** (`next`).
 
 La `0.5.0` se cierra con G2, G3, `EntityLookupField` + `EntityLookupGroup` y G4. Hasta entonces no salen betas intermedias: habrá una sola para probar todo en el frontend y, después, la versión final.
+
+**Sin publicar:** G2 — edición de `DataGrid` (celdas editables, validación, `getData()`, `onChange`, handle imperativo) y el nuevo `NumberField`. Entra en la `0.5.0` sin versión propia.
 
 | Versión | Fase | Contenido |
 | --- | --- | --- |

@@ -118,9 +118,12 @@ export interface DataGridProps<T> {
   columns: DataGridColumn<T>[];
   getRowId: (row: T) => string;
   /**
-   * Filas en modo controlado. Mientras la base esté vacía y no se haya emitido ningún cambio,
-   * un `value` nuevo se adopta como base sin emitir `onChange` (carga asíncrona: `[]` y luego las filas).
-   * Después, un `value` nuevo no toca la base: para recargar desde el back, usar `ref.reset(rows)`.
+   * Filas en modo controlado. Mientras la grilla esté intacta y vacía, el primer `value` no vacío se adopta
+   * como base sin emitir `onChange`: una carga asíncrona (`[]` y luego las filas) empieza con el diff vacío.
+   * Las recargas posteriores se hacen con `ref.reset(rows)`.
+   * Un arreglo antiguo que la grilla ya emitió se ignora; para revertir, usar `ref.reset(rows)`.
+   * Un padre que ignora `onChange` conserva la edición hasta que `value` cambie de identidad.
+   * `columns` y `cellTypes` deben ser estables (constante de módulo o `useMemo`), o se re-renderizan todas las filas.
    */
   value?: T[];
   defaultValue?: T[];
