@@ -2,6 +2,7 @@ import * as React from "react";
 import { CheckboxField, DateField, NumberField, RadioGroup, SearchableSelectField, TextField } from "../../../forms";
 import { cn, composeEventHandlers } from "../../../lib";
 import type { DataGridColumn, DataGridColumnType } from "../DataGrid.types";
+import { optionLabelOf, optionValueOf, useRemoteSelect } from "../use-remote-options";
 
 export interface EditCellProps<T> {
   rowId: string;
@@ -75,8 +76,8 @@ function NumberEditor<T>({ column, value, onCommit, label, disabled, invalid, er
 }
 
 const hiddenLabel = "sr-only";
-const defaultValueOf = (option: unknown) => (option as { value: unknown }).value;
-const defaultLabelOf = (option: unknown) => String((option as { label: unknown }).label ?? "");
+const defaultValueOf = optionValueOf;
+const defaultLabelOf = optionLabelOf;
 
 // DateField confirma solo (blur y Enter): su texto es estado interno y el borrador de la celda no interviene.
 // Estos campos enlazan `errorMessage` por sí mismos; el mensaje de la celda se ve en el Tooltip y aquí queda oculto.
@@ -86,10 +87,20 @@ function DateEditor<T>({ column, value, onCommit, onPopoverOpenChange, label, di
 }
 
 function SelectEditor<T>({ column, value, onCommit, onPopoverOpenChange, label, disabled, invalid, error, unstyled, className }: EditCellProps<T>) {
-  const options = React.useMemo(() => [...(column.options ?? [])], [column.options]);
-  return <SearchableSelectField clearable disabled={disabled} invalid={invalid} errorMessage={error} unstyled={unstyled}
-    options={options} getOptionValue={column.getOptionValue ?? defaultValueOf} getOptionLabel={column.getOptionLabel ?? defaultLabelOf}
-    {...withEditorProps(column, { classNames: { label: hiddenLabel, root: cn(!unstyled && "min-w-36", className), control: cn(!unstyled && invalidBorder), error: error && hiddenLabel } })} label={label} value={value ?? null} onValueChange={next => onCommit(next ?? null)} onOpenChange={open => { onPopoverOpenChange?.(open); (column.editorProps?.onOpenChange as ((open: boolean) => void) | undefined)?.(open); }} />;
+  const staticOptions = React.useMemo(() => [...(column.options ?? [])], [column.options]);
+  const remote = useRemoteSelect(column, value);
+  // Con loadOptions la búsqueda es del servidor; un error de validación pasa por delante del de carga.
+  const loadFailed = remote.remote && remote.error;
+  const shownError = error ?? (loadFailed ? remote.loadOptionsError : undefined);
+  const remoteProps = remote.remote ? {
+    options: remote.options, getOptionValue: remote.getOptionValue, getOptionLabel: remote.getOptionLabel,
+    filterOption: remote.filterOption, loading: remote.loading, onInputValueChange: remote.onInputValueChange,
+  } : { options: staticOptions, getOptionValue: column.getOptionValue ?? defaultValueOf, getOptionLabel: column.getOptionLabel ?? defaultLabelOf };
+  return <SearchableSelectField clearable disabled={disabled} invalid={invalid || loadFailed} errorMessage={shownError} unstyled={unstyled}
+    {...remoteProps}
+    {...withEditorProps(column, { classNames: { label: hiddenLabel, root: cn(!unstyled && "min-w-36", className), control: cn(!unstyled && invalidBorder), error: shownError && hiddenLabel } })} label={label} value={value ?? null}
+    onValueChange={(next, option) => { remote.onPick(option); onCommit(next ?? null); }}
+    onOpenChange={open => { remote.onOpenChange(open); onPopoverOpenChange?.(open); (column.editorProps?.onOpenChange as ((open: boolean) => void) | undefined)?.(open); }} />;
 }
 
 function CheckboxEditor<T>({ column, value, onCommit, label, disabled, invalid, error, unstyled, className }: EditCellProps<T>) {

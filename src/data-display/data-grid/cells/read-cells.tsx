@@ -1,6 +1,7 @@
 import * as React from "react";
 import { CheckboxField } from "../../../forms";
 import { formatCellText } from "../format";
+import { isOptionsPending } from "../use-remote-options";
 import type { DataGridCellComponent, DataGridColumnType } from "../DataGrid.types";
 
 export const ReadCellStyleContext = React.createContext(false);
@@ -8,7 +9,9 @@ export const ReadCellStyleContext = React.createContext(false);
 const TextCell: DataGridCellComponent<unknown> = ({ column, value, row }) => {
   const unstyled = React.useContext(ReadCellStyleContext);
   const text = formatCellText(column, value);
-  return <>{column.format?.(value, row) ?? <span title={text} className={unstyled ? undefined : "block truncate"}>{text}</span>}</>;
+  // Mientras llega el catálogo remoto se muestra el valor crudo, nunca una celda vacía.
+  const pending = (isOptionsPending(column) && value != null) || undefined;
+  return <>{column.format?.(value, row) ?? <span title={text} data-pending={pending} className={unstyled ? undefined : "block truncate"}>{text}</span>}</>;
 };
 const CheckboxCell: DataGridCellComponent<unknown> = ({ column, value, row }) => {
   const unstyled = React.useContext(ReadCellStyleContext);

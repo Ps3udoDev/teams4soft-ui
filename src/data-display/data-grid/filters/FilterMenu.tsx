@@ -4,6 +4,7 @@ import { DateField, SearchableSelectField, TextField } from "../../../forms";
 import { cn } from "../../../lib";
 import { Button } from "../../../primitives";
 import type { DataGridColumn, DataGridFilterOperator, DataGridFilterValue, DataGridMessages } from "../DataGrid.types";
+import { useRemoteSelect } from "../use-remote-options";
 import { filterOperatorsFor, resolveFilterKind } from "./filter-fns";
 
 export interface FilterMenuProps<T> {
@@ -35,6 +36,8 @@ export function FilterMenu<T>({ column, value, onChange, messages, className, st
   const [operator, setOperator] = React.useState<DataGridFilterOperator>(value?.operator ?? operators[0]!);
   const [draft, setDraft] = React.useState<unknown>(value?.value);
   const enterOnDateInput = React.useRef(false);
+  // Misma búsqueda remota que el editor; el filtro compara por valor, así que el borrador conserva su opción.
+  const remote = useRemoteSelect(column, draft, open);
   React.useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   if (!kind) return null;
 
@@ -80,10 +83,15 @@ export function FilterMenu<T>({ column, value, onChange, messages, className, st
     </div>;
     if (kind === "select") {
       const booleanOptions = [{ value: true, label: messages.yes }, { value: false, label: messages.no }];
-      const options = column.type === "checkbox" ? booleanOptions : [...(column.options ?? [])];
-      const getValue = column.type === "checkbox" ? (o: unknown) => (o as { value: boolean }).value : column.getOptionValue ?? ((o: unknown) => (o as { value: unknown }).value);
-      const getLabel = column.type === "checkbox" ? (o: unknown) => (o as { label: string }).label : column.getOptionLabel ?? ((o: unknown) => String((o as { label: unknown }).label ?? ""));
-      return <SearchableSelectField label={label} classNames={{ label: "sr-only" }} options={options} getOptionValue={getValue} getOptionLabel={getLabel} value={draft ?? null} onValueChange={next => setDraft(next ?? undefined)} clearable unstyled={unstyled} />;
+      const useRemote = remote.remote && column.type !== "checkbox";
+      const options = column.type === "checkbox" ? booleanOptions : useRemote ? remote.options : [...(column.options ?? [])];
+      const getValue = column.type === "checkbox" ? (o: unknown) => (o as { value: boolean }).value : useRemote ? remote.getOptionValue : column.getOptionValue ?? ((o: unknown) => (o as { value: unknown }).value);
+      const getLabel = column.type === "checkbox" ? (o: unknown) => (o as { label: string }).label : useRemote ? remote.getOptionLabel : column.getOptionLabel ?? ((o: unknown) => String((o as { label: unknown }).label ?? ""));
+      const remoteProps = useRemote ? {
+        filterOption: remote.filterOption, loading: remote.loading, onInputValueChange: remote.onInputValueChange,
+        onOpenChange: remote.onOpenChange, invalid: remote.error, errorMessage: remote.error ? remote.loadOptionsError : undefined,
+      } : undefined;
+      return <SearchableSelectField label={label} classNames={{ label: "sr-only" }} options={options} getOptionValue={getValue} getOptionLabel={getLabel} {...remoteProps} value={draft ?? null} onValueChange={(next, option) => { if (useRemote) remote.onPick(option); setDraft(next ?? undefined); }} clearable unstyled={unstyled} />;
     }
     return <TextField aria-label={label} value={String(draft ?? "")} inputMode={kind === "number" ? "decimal" : undefined} unstyled={unstyled} onValueChange={setDraft} />;
   }

@@ -10,6 +10,7 @@ import { TooltipProvider } from "../../primitives";
 import { gridFeatures, type GridFeatures } from "./table-features";
 import { useGridColumns } from "./use-grid-columns";
 import { useGridRows } from "./use-grid-rows";
+import { RemoteOptionsProvider, useCatalogLoading, useRemoteOptions } from "./use-remote-options";
 import { definition, frozenSide, GridRow, type GridRowView } from "./GridRow";
 import { focusCellElement, settleCellFocus, type CellFocusPlan } from "./cells/EditableCell";
 import { editCellRegistry } from "./cells/edit-cells";
@@ -67,7 +68,11 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
     }
   }, [columns, cellTypes, readOnly]);
 
-  const { columnDefs, visibility, setVisibility } = useGridColumns({ columns, cellTypes, columnVisibility, onColumnVisibilityChange, persistKey, messages });
+  // Las celdas, el orden y los filtros leen las columnas ya resueltas con las etiquetas del catálogo remoto.
+  const remote = useRemoteOptions(columns);
+  const { columnDefs, visibility, setVisibility } = useGridColumns({ columns: remote.columns, cellTypes, columnVisibility, onColumnVisibilityChange, persistKey, messages });
+  useCatalogLoading(remote.store, columns, visibility);
+  const remoteContext = React.useMemo(() => ({ store: remote.store, loadOptionsError: messages.loadOptionsError }), [remote.store, messages.loadOptionsError]);
   const tableColumns = React.useMemo<ColumnDef<GridFeatures, T, unknown>[]>(() => selectionMode === "none" ? columnDefs : [
     { id: "__select", size: 40, minSize: 40, enableSorting: false, enableHiding: false, enableResizing: false, enableColumnFilter: false }, ...columnDefs,
   ], [columnDefs, selectionMode]);
@@ -265,7 +270,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   const pinnedWidths = Object.entries(measuredWidths).filter(([id]) => pinnedIds.has(id));
   const presentationKey = JSON.stringify([columnSizing, pinnedWidths, density, loading, readOnly, unstyled, selectionMode, revision, messages.selectRow, classNames?.row, classNames?.cell, classNames?.editor, styles?.row, styles?.cell, styles?.editor]);
   const rowView: GridRowView<T> = { store, grid, density, loading, readOnly, editing, unstyled, revision, selectionMode, classNames, styles, cellStyle, renderSelection: rowSelectionControl, commitCell, focusAfterEnter, ...rowEvents };
-  return <ReadCellStyleContext.Provider value={unstyled}><TooltipProvider><div data-slot="root" data-density={density} data-loading={loading || undefined} aria-busy={loading || undefined}
+  return <RemoteOptionsProvider value={remoteContext}><ReadCellStyleContext.Provider value={unstyled}><TooltipProvider><div data-slot="root" data-density={density} data-loading={loading || undefined} aria-busy={loading || undefined}
     className={cn(!unstyled && "relative font-(family-name:--ui-grid-font) text-ui-foreground", className, classNames?.root)} style={{ ...styles?.root, ...style }}>
     <div ref={contentRef}>
       <GridToolbar addLabel={messages.addRow} onAdd={onAddRow && !readOnly ? requestNewRow : undefined} disabled={loading} className={classNames?.toolbar} style={styles?.toolbar} unstyled={unstyled} toggler={columnToggler ? <ColumnToggler columns={columns} visibility={visibility} onToggle={(field, visible) => setVisibility(previous => ({ ...previous, [field]: visible }))} messages={messages} className={classNames?.columnToggler} style={styles?.columnToggler} unstyled={unstyled} disabled={loading} /> : undefined}>{toolbar}</GridToolbar>
@@ -295,7 +300,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
               {visibleColumns.map(column => <td key={column.id} className={cn(!unstyled && "px-3 py-2")} style={cellStyle(column)}><Skeleton unstyled={unstyled} /></td>)}
             </tr>) : displayedRows.length === 0 ? <tr><td colSpan={Math.max(1, visibleColumns.length)} data-slot="empty" className={cn(!unstyled && "p-8 text-center", classNames?.empty)} style={styles?.empty}>
               {hasFilters ? messages.noResults : <>{emptyState?.icon}<div>{emptyState?.title ?? messages.emptyTitle}</div>{emptyState?.hint && <div>{emptyState.hint}</div>}</>}
-            </td></tr> : displayedRows.map(row => <GridRow key={row.id} row={row} isSelected={row.getIsSelected()} isDirty={dirtyIds.has(row.id)} errorsForRow={errors[row.id]} rowClassName={props.getRowClassName?.(row.original)} columnsKey={columnsKey} presentationKey={presentationKey} columns={columns} cellTypes={cellTypes} view={rowView} />)}
+            </td></tr> : displayedRows.map(row => <GridRow key={row.id} row={row} isSelected={row.getIsSelected()} isDirty={dirtyIds.has(row.id)} errorsForRow={errors[row.id]} rowClassName={props.getRowClassName?.(row.original)} columnsKey={columnsKey} presentationKey={presentationKey} columns={remote.columns} cellTypes={cellTypes} view={rowView} />)}
           </tbody>
         </table>
       </div>
@@ -307,7 +312,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
       <Progress label={messages.loading} size="sm" className={cn(!unstyled && "absolute inset-x-0 top-0 z-50")} unstyled={unstyled} />
       <LoadingOverlay open blocking target="container" message={messages.loading} indicator={null} unstyled={unstyled} />
     </div>}
-  </div></TooltipProvider></ReadCellStyleContext.Provider>;
+  </div></TooltipProvider></ReadCellStyleContext.Provider></RemoteOptionsProvider>;
 }
 
 export const DataGrid = React.forwardRef(DataGridInner) as <T>(props: DataGridProps<T> & { ref?: React.Ref<DataGridHandle<T>> }) => React.ReactElement;

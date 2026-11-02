@@ -2456,3 +2456,245 @@ describe("DataGrid: revisión final de G2", () => {
     });
   });
 });
+
+describe("DataGrid: select remoto con loadOptions", () => {
+  type Pay = { id: string; method: number | null; note: string };
+  type Opt = { value: number; label: string };
+  const catalog: Opt[] = [{ value: 1, label: "Efectivo" }, { value: 2, label: "Tarjeta" }, { value: 3, label: "Transferencia" }];
+  const payId = (row: Pay) => row.id;
+  const one: Pay[] = [{ id: "r-1", method: 3, note: "" }];
+  const empty: Pay[] = [{ id: "r-1", method: null, note: "" }];
+  function deferred<V>() {
+    let resolve!: (value: V) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<V>((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+  }
+  const methodColumn = (extra: Partial<DataGridColumn<Pay>>): DataGridColumn<Pay> => ({ field: "method", header: "Forma", type: "select", ...extra });
+  const firstCell = (index = 0) => within(bodyRows()[index]!).getAllByRole("cell")[0]!;
+  const combo = () => screen.getByRole("combobox", { name: "Forma" });
+  const settle = (ms = 320) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)); });
+  const queriesOf = (fn: { mock: { calls: unknown[][] } }) => fn.mock.calls.map(call => call[0]);
+
+  it("50 filas de una columna remota llaman a loadOptions('') una vez; antes muestran el valor y luego la etiqueta", async () => {
+    const gate = deferred<Opt[]>();
+    const loadOptions = vi.fn((_query: string) => gate.promise);
+    const many: Pay[] = Array.from({ length: 50 }, (_, i) => ({ id: `r-${i + 1}`, method: 3, note: "" }));
+    render(<DataGrid columns={[methodColumn({ loadOptions })]} value={many} getRowId={payId} pagination={false} />);
+    expect(loadOptions).toHaveBeenCalledTimes(1);
+    expect(loadOptions).toHaveBeenCalledWith("");
+    expect(firstCell()).toHaveTextContent("3");
+    expect(firstCell().querySelector("[data-pending]")).not.toBeNull();
+    await act(async () => { gate.resolve(catalog); });
+    expect(firstCell()).toHaveTextContent("Transferencia");
+    expect(firstCell().querySelector("[data-pending]")).toBeNull();
+    expect(loadOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it("50 editores remotos tampoco repiten la llamada", async () => {
+    const loadOptions = vi.fn(async (_query: string) => catalog);
+    const many: Pay[] = Array.from({ length: 50 }, (_, i) => ({ id: `r-${i + 1}`, method: 3, note: "" }));
+    render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={many} getRowId={payId} pagination={false} />);
+    await waitFor(() => expect(screen.getAllByRole("combobox", { name: "Forma" })[0]).toHaveValue("Transferencia"));
+    expect(loadOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it("si falla la carga, la lectura deja el valor sin marca de pendiente", async () => {
+    const loadOptions = vi.fn(async (_query: string): Promise<Opt[]> => { throw new Error("red"); });
+    render(<DataGrid columns={[methodColumn({ loadOptions })]} value={one} getRowId={payId} />);
+    await waitFor(() => expect(loadOptions).toHaveBeenCalled());
+    await waitFor(() => expect(firstCell().querySelector("[data-pending]")).toBeNull());
+    expect(firstCell()).toHaveTextContent("3");
+  });
+
+  it("una columna oculta carga al mostrarse", async () => {
+    const loadOptions = vi.fn(async (_query: string) => catalog);
+    const cols: DataGridColumn<Pay>[] = [{ field: "note", header: "Nota" }, methodColumn({ loadOptions })];
+    const { rerender } = render(<DataGrid columns={cols} value={one} getRowId={payId} columnVisibility={{ note: true, method: false }} />);
+    await settle(20);
+    expect(loadOptions).not.toHaveBeenCalled();
+    rerender(<DataGrid columns={cols} value={one} getRowId={payId} columnVisibility={{ note: true, method: true }} />);
+    await waitFor(() => expect(screen.getByText("Transferencia")).toBeInTheDocument());
+    expect(loadOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it("con options estáticas junto a loadOptions la lectura usa las estáticas y no carga ''", async () => {
+    const loadOptions = vi.fn(async (_query: string) => catalog);
+    render(<DataGrid columns={[methodColumn({ loadOptions, options: [{ value: 3, label: "Transferencia" }] })]} value={one} getRowId={payId} />);
+    expect(firstCell()).toHaveTextContent("Transferencia");
+    expect(firstCell().querySelector("[data-pending]")).toBeNull();
+    await settle(20);
+    expect(loadOptions).not.toHaveBeenCalled();
+  });
+
+  it("un rechazo deja el editor inválido y al reabrirlo se reintenta", async () => {
+    const user = userEvent.setup();
+    const loadOptions = vi.fn(async (_query: string) => catalog);
+    loadOptions.mockRejectedValueOnce(new Error("red"));
+    render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={empty} getRowId={payId} />);
+    await waitFor(() => expect(combo()).toHaveAttribute("aria-invalid", "true"));
+    expect(screen.getByText("No se pudieron cargar las opciones")).toBeInTheDocument();
+    expect(loadOptions).toHaveBeenCalledTimes(1);
+    await user.click(combo());
+    await waitFor(() => expect(loadOptions).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(combo()).not.toHaveAttribute("aria-invalid"));
+    expect(await screen.findByRole("option", { name: "Tarjeta" })).toBeInTheDocument();
+  });
+
+  it("el error de validación tiene prioridad sobre el de carga", async () => {
+    const loadOptions = vi.fn(async (_query: string): Promise<Opt[]> => { throw new Error("red"); });
+    const ref = React.createRef<DataGridHandle<Pay>>();
+    render(<DataGrid ref={ref} columns={[methodColumn({ loadOptions, editable: true, required: true })]} defaultValue={empty} getRowId={payId} />);
+    await waitFor(() => expect(combo()).toHaveAttribute("aria-invalid", "true"));
+    act(() => { ref.current?.validate(); });
+    expect(screen.getByText("Requerido")).toBeInTheDocument();
+    expect(screen.queryByText("No se pudieron cargar las opciones")).not.toBeInTheDocument();
+  });
+
+  it("la respuesta de 'ab' que llega después de la de 'abc' no pisa las opciones", async () => {
+    const user = userEvent.setup();
+    const pending = new Map<string, ReturnType<typeof deferred<Opt[]>>>();
+    const loadOptions = vi.fn((query: string) => { const gate = deferred<Opt[]>(); pending.set(query, gate); return gate.promise; });
+    render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={empty} getRowId={payId} />);
+    await act(async () => { pending.get("")!.resolve([]); });
+    await user.type(combo(), "ab");
+    await waitFor(() => expect(loadOptions).toHaveBeenCalledWith("ab"));
+    await user.keyboard("c");
+    await waitFor(() => expect(loadOptions).toHaveBeenCalledWith("abc"));
+    await act(async () => { pending.get("abc")!.resolve([{ value: 7, label: "resultado abc" }]); });
+    await act(async () => { pending.get("ab")!.resolve([{ value: 8, label: "resultado ab" }]); });
+    expect(await screen.findByRole("option", { name: "resultado abc" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "resultado ab" })).not.toBeInTheDocument();
+  });
+
+  it("enfocar y salir con las opciones pendientes no cambia el valor ni marca la fila", async () => {
+    const user = userEvent.setup();
+    const gate = deferred<Opt[]>();
+    const loadOptions = vi.fn((_query: string) => gate.promise);
+    const onChange = vi.fn();
+    render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={one} getRowId={payId} onChange={onChange} />);
+    expect(combo()).toHaveValue("3");
+    await user.click(combo());
+    await user.tab();
+    expect(combo()).toHaveValue("3");
+    expect(onChange).not.toHaveBeenCalled();
+    expect(bodyRows()[0]).not.toHaveAttribute("data-dirty");
+    await act(async () => { gate.resolve(catalog); });
+    expect(combo()).toHaveValue("Transferencia");
+    await settle();
+    expect(queriesOf(loadOptions)).toEqual([""]);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("enfocar y salir tras un fallo de carga tampoco cambia el valor", async () => {
+    const user = userEvent.setup();
+    const loadOptions = vi.fn(async (_query: string): Promise<Opt[]> => { throw new Error("red"); });
+    const onChange = vi.fn();
+    render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={one} getRowId={payId} onChange={onChange} />);
+    await waitFor(() => expect(combo()).toHaveAttribute("aria-invalid", "true"));
+    await user.click(combo());
+    await user.keyboard("{Escape}");
+    await user.tab();
+    expect(combo()).toHaveValue("3");
+    expect(onChange).not.toHaveBeenCalled();
+    expect(bodyRows()[0]).not.toHaveAttribute("data-dirty");
+  });
+
+  it("elegir una opción guarda el valor y la etiqueta no dispara búsquedas; reabrir vuelve a ''", async () => {
+    const user = userEvent.setup();
+    const loadOptions = vi.fn(async (_query: string) => catalog);
+    const onChange = vi.fn();
+    render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={empty} getRowId={payId} onChange={onChange} />);
+    await user.click(combo());
+    await user.click(await screen.findByRole("option", { name: "Tarjeta" }));
+    expect(onChange.mock.calls.at(-1)![1]).toMatchObject({ field: "method", prev: null, next: 2 });
+    expect(combo()).toHaveValue("Tarjeta");
+    await settle();
+    expect(queriesOf(loadOptions)).toEqual([""]);
+    await user.click(combo());
+    await user.clear(combo());
+    await user.keyboard("Tra");
+    await waitFor(() => expect(loadOptions).toHaveBeenCalledWith("Tra"));
+    await user.clear(combo());
+    await settle();
+    expect(queriesOf(loadOptions)).toEqual(["", "Tra"]);
+    expect(await screen.findByRole("option", { name: "Efectivo" })).toBeInTheDocument();
+  });
+
+  it("la opción elegida en una búsqueda conserva su etiqueta", async () => {
+    const user = userEvent.setup();
+    const loadOptions = vi.fn(async (query: string) => query === "" ? catalog.slice(0, 1) : [{ value: 9, label: "Cheque" }]);
+    render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={empty} getRowId={payId} />);
+    await user.type(combo(), "Che");
+    await user.click(await screen.findByRole("option", { name: "Cheque" }));
+    expect(combo()).toHaveValue("Cheque");
+    await settle();
+    expect(combo()).toHaveValue("Cheque");
+  });
+
+  it("resolver el catálogo no pierde el borrador de otra celda ni su foco", async () => {
+    const user = userEvent.setup();
+    const gate = deferred<Opt[]>();
+    const loadOptions = vi.fn((_query: string) => gate.promise);
+    const cols: DataGridColumn<Pay>[] = [{ field: "note", header: "Nota", editable: true }, methodColumn({ loadOptions })];
+    render(<DataGrid columns={cols} defaultValue={one} getRowId={payId} />);
+    const note = screen.getByRole("textbox", { name: "Nota" });
+    await user.type(note, "borrador");
+    expect(note).toHaveFocus();
+    await act(async () => { gate.resolve(catalog); });
+    expect(screen.getByText("Transferencia")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Nota" })).toBe(note);
+    expect(note).toHaveValue("borrador");
+    expect(note).toHaveFocus();
+  });
+
+  it("un menú de filtro remoto reutiliza el catálogo y filtra por valor", async () => {
+    const user = userEvent.setup();
+    const loadOptions = vi.fn(async (_query: string) => catalog);
+    const items: Pay[] = [{ id: "r-1", method: 1, note: "" }, { id: "r-2", method: 2, note: "" }, { id: "r-3", method: 3, note: "" }];
+    render(<DataGrid columns={[methodColumn({ loadOptions })]} value={items} getRowId={payId} />);
+    await waitFor(() => expect(screen.getByText("Tarjeta")).toBeInTheDocument());
+    const menu = await openFilter(user, "Forma");
+    await user.click(within(menu).getByRole("button", { name: /abrir opciones/i }));
+    await user.click(await screen.findByRole("option", { name: "Tarjeta" }));
+    await user.click(within(menu).getByRole("button", { name: "Aplicar" }));
+    expect(bodyRows()).toHaveLength(1);
+    expect(bodyRows()[0]).toHaveTextContent("Tarjeta");
+    expect(queriesOf(loadOptions)).toEqual([""]);
+  });
+
+  it.each([false, true])("bajo StrictMode loadOptions('') se llama una vez (editable: %s)", async editable => {
+    const loadOptions = vi.fn(async (_query: string) => catalog);
+    render(<React.StrictMode><DataGrid columns={[methodColumn({ loadOptions, editable })]} defaultValue={one} getRowId={payId} /></React.StrictMode>);
+    await waitFor(() => expect(loadOptions).toHaveBeenCalled());
+    await settle(20);
+    expect(loadOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it("desmontar con la carga en vuelo no actualiza estado ni deja rechazos sin manejar", async () => {
+    const error = vi.spyOn(console, "error");
+    onTestFinished(() => error.mockRestore());
+    const gate = deferred<Opt[]>();
+    const loadOptions = vi.fn((_query: string) => gate.promise);
+    const { unmount } = render(<DataGrid columns={[methodColumn({ loadOptions, editable: true })]} defaultValue={one} getRowId={payId} />);
+    await waitFor(() => expect(loadOptions).toHaveBeenCalled());
+    unmount();
+    await act(async () => { gate.reject(new Error("tarde")); });
+    await settle(20);
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("cambiar la identidad de loadOptions no recarga y se usa la última función", async () => {
+    const user = userEvent.setup();
+    const first = vi.fn(async (_query: string) => catalog);
+    const second = vi.fn(async (query: string) => [{ value: 9, label: `nuevo ${query}` }]);
+    const make = (loadOptions: DataGridColumn<Pay>["loadOptions"]) => [methodColumn({ loadOptions, editable: true })];
+    const { rerender } = render(<DataGrid columns={make(first)} defaultValue={empty} getRowId={payId} />);
+    await waitFor(() => expect(first).toHaveBeenCalledTimes(1));
+    rerender(<DataGrid columns={make(second)} defaultValue={empty} getRowId={payId} />);
+    await user.type(combo(), "zz");
+    await waitFor(() => expect(second).toHaveBeenCalledWith("zz"));
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalledWith("");
+  });
+});

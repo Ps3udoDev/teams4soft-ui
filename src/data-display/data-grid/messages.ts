@@ -38,4 +38,5 @@ export const dataGridMessagesEs: DataGridMessages = {
   no: "No",
   addRow: "Agregar",
   required: "Requerido",
+  loadOptionsError: "No se pudieron cargar las opciones",
 };

@@ -616,3 +616,29 @@ describe("SearchableSelectField — accesibilidad y personalización", () => {
     expect(ref.current).toBe(screen.getByRole("combobox"));
   });
 });
+
+describe("SearchableSelectField — etiqueta tardía", () => {
+  const props = {
+    label: "País",
+    getOptionValue: (option: Country) => option.code,
+    getOptionLabel: (option: Country) => option.name,
+    onValueChange: () => {},
+  };
+
+  it("sincroniza el texto cuando la etiqueta del valor llega después, sin notificar el texto", () => {
+    const onInputValueChange = vi.fn();
+    const { rerender } = render(<SearchableSelectField<Country, string> {...props} options={[]} value="MX" onInputValueChange={onInputValueChange} />);
+    expect(screen.getByRole("combobox")).toHaveValue("");
+    rerender(<SearchableSelectField<Country, string> {...props} options={countries} value="MX" onInputValueChange={onInputValueChange} />);
+    expect(screen.getByRole("combobox")).toHaveValue("México");
+    expect(onInputValueChange).not.toHaveBeenCalled();
+  });
+
+  it("no pisa lo que la persona está escribiendo cuando llega la etiqueta", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<SearchableSelectField<Country, string> {...props} options={[]} value="MX" />);
+    await user.type(screen.getByRole("combobox"), "xy");
+    rerender(<SearchableSelectField<Country, string> {...props} options={countries} value="MX" />);
+    expect(screen.getByRole("combobox")).toHaveValue("xy");
+  });
+});
