@@ -37,6 +37,7 @@ export interface LookupInputProps {
   style?: React.CSSProperties;
   classNames?: { input?: string; clearButton?: string; trigger?: string; criteriaMenu?: string };
   styles?: { input?: React.CSSProperties; clearButton?: React.CSSProperties; trigger?: React.CSSProperties; criteriaMenu?: React.CSSProperties };
+  "aria-label"?: string;
   "aria-describedby"?: string;
   "aria-invalid"?: React.AriaAttributes["aria-invalid"];
   "aria-required"?: React.AriaAttributes["aria-required"];

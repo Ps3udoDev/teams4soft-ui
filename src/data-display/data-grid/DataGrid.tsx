@@ -14,7 +14,7 @@ import { useLoadingFocus } from "./use-loading-focus";
 import { RemoteOptionsProvider, useCatalogLoading, useRemoteOptions } from "./use-remote-options";
 import { definition, frozenSide, GridRow, type GridRowView } from "./GridRow";
 import { focusCellElement, settleCellFocus, type CellFocusPlan } from "./cells/EditableCell";
-import { editCellRegistry } from "./cells/edit-cells";
+import { editorFor } from "./cells/edit-cells";
 import { ReadCellStyleContext } from "./cells/read-cells";
 import { resolveFilterKind } from "./filters/filter-fns";
 import { FilterMenu } from "./filters/FilterMenu";
@@ -70,15 +70,16 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   const warnedEditors = React.useRef(new Set<string>());
   React.useEffect(() => {
     if (readOnly) return;
-    for (const { field, editable, type = "text" } of columns) {
-      if (!editable || cellTypes?.[type] || type in editCellRegistry || warnedEditors.current.has(field)) continue;
+    for (const column of columns) {
+      const { field, editable, type = "text" } = column;
+      if (!editable || cellTypes?.[type] || editorFor(column) || warnedEditors.current.has(field)) continue;
       warnedEditors.current.add(field);
       devWarn(`DataGrid: la columna "${field}" es editable pero el tipo "${type}" no tiene editor: se muestra en lectura y aun así se valida. Registra su celda en cellTypes.`);
     }
   }, [columns, cellTypes, readOnly]);
 
   const { columnDefs, visibility, setVisibility } = useGridColumns({ columns: remote.columns, cellTypes, columnVisibility, onColumnVisibilityChange, persistKey, messages });
-  useCatalogLoading(remote.store, columns, visibility);
+  useCatalogLoading(remote.store, columns, visibility, storeRows);
   const remoteContext = React.useMemo(() => ({ store: remote.store, loadOptionsError: messages.loadOptionsError }), [remote.store, messages.loadOptionsError]);
   const tableColumns = React.useMemo<ColumnDef<GridFeatures, T, unknown>[]>(() => selectionMode === "none" ? columnDefs : [
     { id: "__select", size: 40, minSize: 40, enableSorting: false, enableHiding: false, enableResizing: false, enableColumnFilter: false }, ...columnDefs,

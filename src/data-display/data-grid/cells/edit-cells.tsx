@@ -1,8 +1,10 @@
 import * as React from "react";
 import { CheckboxField, DateField, NumberField, RadioGroup, SearchableSelectField, TextField } from "../../../forms";
 import { cn, composeEventHandlers } from "../../../lib";
+// Ciclo de módulos: EntityLookupField -> LookupDialog -> DataGrid -> GridRow -> aquí. Solo se usa al renderizar LookupEditor.
+import { EntityLookupField } from "../../entity-lookup-field/EntityLookupField";
 import type { DataGridColumn, DataGridColumnType } from "../DataGrid.types";
-import { optionLabelOf, optionValueOf, useRemoteSelect } from "../use-remote-options";
+import { optionLabelOf, optionValueOf, useRemoteLookup, useRemoteSelect } from "../use-remote-options";
 
 export interface EditCellProps<T> {
   rowId: string;
@@ -109,6 +111,41 @@ function SelectEditor<T>({ column, value, onCommit, onPopoverOpenChange, onLoadE
     onOpenChange={open => { remote.onOpenChange(open); onPopoverOpenChange?.(open); (column.editorProps?.onOpenChange as ((open: boolean) => void) | undefined)?.(open); }} />;
 }
 
+// React hace burbujear por el árbol los eventos del modal: ni su foco ni su puntero deben abrir el Tooltip de la celda,
+// que quedaría sobre el modal y se llevaría su Escape.
+function stopFromPortal(event: React.SyntheticEvent<HTMLDivElement>) {
+  if (!event.currentTarget.contains(event.target as Node)) event.stopPropagation();
+}
+
+function LookupEditor<T>({ column, value, onCommit, onPopoverOpenChange, onLoadError, label, disabled, invalid, error, unstyled, className }: EditCellProps<T>) {
+  const lookup = useRemoteLookup<T, any>(column, value);
+  const [searchFailed, setSearchFailed] = React.useState(false);
+  const reportedError = searchFailed ? lookup.loadOptionsError : undefined;
+  React.useEffect(() => { onLoadError?.(reportedError); }, [onLoadError, reportedError]);
+  const editorProps = column.editorProps ?? {};
+  const linked = useLinkedError(error ?? reportedError, editorProps["aria-describedby"]);
+  const { lookupColumns, header, getOptionLabel = defaultLabelOf } = column;
+  const columns = React.useMemo(
+    () => lookupColumns ?? [{ field: "label", header, sortable: false, filter: false, format: (_: unknown, item: unknown) => getOptionLabel(item) }],
+    [lookupColumns, header, getOptionLabel],
+  );
+  return <div style={{ display: "contents" }} onFocus={stopFromPortal} onPointerMove={stopFromPortal}>
+    <EntityLookupField<any> resolveOnBlur disabled={disabled} invalid={invalid || searchFailed} unstyled={unstyled} columns={columns}
+      {...withEditorProps(column, { className, classNames: { root: cn(!unstyled && "min-w-40"), trigger: cn(!unstyled && "h-(--ui-control-height) w-(--ui-control-height) shrink-0") } })}
+      aria-label={label} aria-describedby={linked.describedBy}
+      selectedItem={lookup.selectedItem} getItemId={lookup.getItemId} getItemLabel={lookup.getItemLabel}
+      search={query => { setSearchFailed(false); return lookup.search(query); }}
+      onSearchError={failure => { setSearchFailed(true); (editorProps.onSearchError as ((failure: unknown) => void) | undefined)?.(failure); }}
+      onSelectionChange={item => {
+        if (item === null) return onCommit(null);
+        lookup.remember(item);
+        onCommit(lookup.valueOf(item));
+      }}
+      onOpenChange={open => { onPopoverOpenChange?.(open); (editorProps.onOpenChange as ((open: boolean) => void) | undefined)?.(open); }} />
+    {linked.message}
+  </div>;
+}
+
 function CheckboxEditor<T>({ column, value, onCommit, label, disabled, invalid, error, unstyled, className }: EditCellProps<T>) {
   return <CheckboxField disabled={disabled} invalid={invalid} errorMessage={error} unstyled={unstyled}
     {...withEditorProps(column, { classNames: { label: hiddenLabel, root: className, error: error && hiddenLabel } })} label={label} checked={value === true} onCheckedChange={checked => onCommit(checked === true)} />;
@@ -135,6 +172,14 @@ export const editCellRegistry: Partial<Record<DataGridColumnType, React.Componen
   percent: NumberEditor,
   date: DateEditor,
   select: SelectEditor,
+  lookup: LookupEditor,
   checkbox: CheckboxEditor,
   radio: RadioEditor,
 };
+
+/** Un lookup sin `loadOptions` ni `options` no tiene dónde buscar: se queda en lectura y `cellTypes` puede darle celda. */
+export function editorFor<T>(column: DataGridColumn<T>): React.ComponentType<EditCellProps<any>> | undefined {
+  const type = column.type ?? "text";
+  if (type === "lookup" && !column.loadOptions && column.options === undefined) return undefined;
+  return editCellRegistry[type as keyof typeof editCellRegistry];
+}

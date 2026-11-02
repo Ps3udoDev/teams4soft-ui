@@ -102,6 +102,9 @@ export interface EntityLookupFieldProps<T>
   required?: boolean;
   invalid?: boolean;
   inputRef?: React.Ref<HTMLInputElement>;
+  /** Names the input when there is no visible `label`. */
+  "aria-label"?: string;
+  "aria-describedby"?: string;
 
   className?: string;
   classNames?: Partial<EntityLookupFieldClassNames>;

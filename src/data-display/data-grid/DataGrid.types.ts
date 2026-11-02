@@ -64,14 +64,17 @@ export interface DataGridColumn<T, TOption = unknown> {
   getOptionValue?(option: TOption): unknown;
   getOptionLabel?(option: TOption): string;
   /**
-   * Opciones remotas de una columna `select`: recibe el texto buscado (`""` al abrir) y devuelve las opciones.
+   * Opciones remotas de una columna `select` o `lookup`: recibe el texto buscado (`""` al abrir) y devuelve las opciones.
    * El grid carga `""` una vez por columna visible para resolver etiquetas y guarda cada consulta en una caché por instancia.
    * Cambiar la identidad de la función no invalida la caché: siempre se llama a la última. Para recargar un catálogo
    * que depende de otro dato, vuelve a montar el grid con `key`.
    * Con `options` presentes, estas dan las etiquetas de lectura y no se carga `""` para leer; al abrir el editor o el menú de filtro sí se carga, y el editor sigue buscando en remoto.
    * Si una búsqueda falla, el selector muestra `messages.loadOptionsError`: reabrirlo reintenta el catálogo y escribir de nuevo reintenta la búsqueda.
+   * En `lookup`, un catálogo que falló se reintenta una vez por cada cambio de las filas.
    */
   loadOptions?: (query: string) => Promise<TOption[]>;
+  /** Columnas del modal de una columna `lookup`. Por defecto, una con la etiqueta. */
+  lookupColumns?: DataGridColumn<TOption extends object ? TOption : any>[];
   render?: (ctx: DataGridCellContext<T>) => React.ReactNode;
   editable?: boolean | ((row: T) => boolean);
   /** Props del editor interno. La celda conserva `value`, `onCommit`/`onValueChange` y `aria-label`; `className` y `classNames` se suman, y `onBlur`/`onKeyDown` se componen con la confirmación. */

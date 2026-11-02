@@ -1031,6 +1031,34 @@ describe("EntityLookupField pie del modal y formulario", () => {
   });
 });
 
+describe("EntityLookupField sin label visible y etiqueta tardía", () => {
+  const item = (name: string): Prov => ({ id: 1, name, code: "C1" });
+  const field = (selected: Prov | null, extra: Partial<EntityLookupFieldProps<Prov>> = {}) => (
+    <EntityLookupField<Prov> selectedItem={selected} onSelectionChange={() => {}} getItemId={(p) => p.id} getItemLabel={(p) => p.name} columns={columns} items={[]} {...extra} />
+  );
+
+  it("aria-label y aria-describedby llegan al input", () => {
+    render(field(null, { "aria-label": "Ramo", "aria-describedby": "ayuda" }));
+    expect(screen.getByRole("textbox", { name: "Ramo" })).toHaveAttribute("aria-describedby", "ayuda");
+    expect(document.querySelector("label")).toBeNull();
+  });
+
+  it("si cambia la etiqueta del mismo registro, el texto que la mostraba la sigue", () => {
+    const { rerender } = render(field(item("30")));
+    expect(input()).toHaveValue("30");
+    rerender(field(item("Otro")));
+    expect(input()).toHaveValue("Otro");
+  });
+
+  it("lo escrito no se pisa aunque cambie la etiqueta del mismo registro", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(field(item("30")));
+    await user.type(input(), "4");
+    rerender(field(item("Otro")));
+    expect(input()).toHaveValue("304");
+  });
+});
+
 describe("EntityLookupField importación", () => {
   it("importar el índice del subpath no falla y expone el componente", async () => {
     const mod = await import("../index");

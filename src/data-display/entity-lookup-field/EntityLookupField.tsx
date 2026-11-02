@@ -237,14 +237,18 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
   React.useEffect(() => {
     const previous = previousRef.current;
     previousRef.current = { id: selectedId, label: selectedLabel ?? "" };
-    if (previous.id === selectedId) return;
+    if (previous.id === selectedId) {
+      // A label that arrives late for the same record replaces the old one, but only if that is what the input still shows.
+      if (previous.label !== (selectedLabel ?? "") && textRef.current === previous.label) setText(selectedLabel ?? "");
+      return;
+    }
     // Internal transitions already left the text equal to the new label, so this only writes for outside changes.
     if (textRef.current !== (selectedLabel ?? "")) {
       dirtyRef.current = false;
       setText(selectedLabel ?? "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
+  }, [selectedId, selectedLabel]);
 
   const inert = disabled || readOnly;
   const isDirtyText = () => {
@@ -310,6 +314,8 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
             ref={mergedInputRef}
             name={props.name}
             placeholder={props.placeholder}
+            aria-label={props["aria-label"]}
+            aria-describedby={props["aria-describedby"]}
             value={text}
             onValueChange={onTextChange}
             onKeyDown={onKeyDown}
