@@ -152,13 +152,13 @@ const cellTypeColumns: DataGridColumn<Entry>[] = [
   { field: "units", header: "Número", type: "number", align: "right", editable: true },
   amountColumn<Entry>("amount", "Moneda", { editable: true }),
   { field: "rate", header: "Porcentaje", type: "percent", align: "right", fractionDigits: 2, editable: true },
-  dateColumn<Entry>("dueDate", "Fecha", { editable: true, width: 160, minWidth: 160 }),
-  selectColumn<Entry, { value: number; label: string }>("method", "Select", { options: methods, editable: true, width: 190, minWidth: 190 }),
+  dateColumn<Entry>("dueDate", "Fecha", { editable: true }),
+  selectColumn<Entry, { value: number; label: string }>("method", "Select", { options: methods, editable: true }),
   { field: "paid", header: "Casilla", type: "checkbox", editable: true },
-  { field: "side", header: "D/C", type: "radio", options: sides, editable: true, width: 240, minWidth: 240 },
+  { field: "side", header: "D/C", type: "radio", options: sides, editable: true },
 ];
 export const TiposDeCelda: Story = {
-  render: (args) => <DataGrid {...(args as object)} columns={cellTypeColumns} value={undefined} defaultValue={entryRows} getRowId={entryId} pagination={false} />,
+  render: () => <DataGrid columns={cellTypeColumns} defaultValue={entryRows} getRowId={entryId} pagination={false} />,
   parameters: { docs: { description: { story: "Una columna editable de cada tipo. Para valores negativos usa `editorProps: { allowNegative: true }`." } } },
 };
 
@@ -185,8 +185,8 @@ export const PrimasPorCobrar: Story = {
 
 const dialogColumns: DataGridColumn<Entry>[] = [
   textColumn<Entry>("policy", "Póliza", { editable: true, minWidth: 140 }),
-  dateColumn<Entry>("dueDate", "Fecha", { editable: true, width: 160, minWidth: 160 }),
-  selectColumn<Entry, { value: number; label: string }>("method", "Forma", { options: methods, editable: true, width: 190, minWidth: 190 }),
+  dateColumn<Entry>("dueDate", "Fecha", { editable: true }),
+  selectColumn<Entry, { value: number; label: string }>("method", "Forma", { options: methods, editable: true }),
 ];
 function DialogExample({ viewMode }: { viewMode: string }) {
   const [open, setOpen] = React.useState(viewMode === "story");
