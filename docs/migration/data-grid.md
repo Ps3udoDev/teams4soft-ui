@@ -4,7 +4,7 @@ Guía para el equipo del frontend que prueba `0.5.0-beta.5`. Cubre `DataTable` +
 
 ## Instalar la beta
 
-Instala la versión exacta. Con `minimumReleaseAge` de pnpm 11, `@next` resuelve a la versión anterior durante las primeras 24 horas.
+Instala la versión exacta. Con `minimumReleaseAge` de pnpm 11, `@next` resuelve a la versión anterior durante las primeras 24 horas. Si tu proyecto define `minimumReleaseAge`, pnpm también bloquea la instalación exacta durante ese tiempo (`minimumReleaseAgeStrict` es `true` por defecto cuando se configura explícitamente): añade `@teams4soft/teams4soft-ui` a `minimumReleaseAgeExclude` o espera 24 horas.
 
 ```bash
 pnpm add @teams4soft/teams4soft-ui@0.5.0-beta.5

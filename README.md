@@ -16,7 +16,7 @@ import "@teams4soft/teams4soft-ui/styles.css";
 
 ### Probar la beta
 
-Instala la versión exacta, no `@next`: con `minimumReleaseAge` de pnpm 11, `@next` resuelve a la versión anterior durante las primeras 24 horas desde la publicación.
+Instala la versión exacta, no `@next`: con `minimumReleaseAge` de pnpm 11, `@next` resuelve a la versión anterior durante las primeras 24 horas desde la publicación. Si tu proyecto define `minimumReleaseAge`, pnpm también bloquea la instalación exacta durante ese tiempo (`minimumReleaseAgeStrict` es `true` por defecto cuando se configura explícitamente): añade `@teams4soft/teams4soft-ui` a `minimumReleaseAgeExclude` o espera 24 horas.
 
 ```bash
 pnpm add @teams4soft/teams4soft-ui@0.5.0-beta.5
@@ -192,9 +192,8 @@ El `toast` importable es **API de cliente**: requiere un `<ToastProvider global 
 
 ### Fase 4: DataGrid
 
-`DataGrid` vive en el subpath `./data-display`. En npm, `next` apunta todavía a
-`0.5.0-beta.2`, que usa la fila de filtros; el menú de filtros descrito aquí llega con
-`0.5.0-beta.5`. TanStack Table viene incluido; solo instala los peers Radix de
+`DataGrid` vive en el subpath `./data-display`. El menú de filtros descrito
+aquí está disponible desde `0.5.0-beta.5`; las betas anteriores usan la fila de filtros. TanStack Table viene incluido; solo instala los peers Radix de
 Popover, Checkbox, Slot y Tooltip. Si vienes de PrimeReact, empieza por la
 [guía de migración](docs/migration/data-grid.md).
 
@@ -596,7 +595,7 @@ Si falta un provider global se emite un aviso de desarrollo, como con `toast`.
 
 ## Estado
 
-En construcción por fases. Publicadas en npm: **0.4.0** (`latest`) y **0.5.0-beta.2** (`next`). La versión que hay que instalar para probar el frontend es la **0.5.0-beta.5** (`next`), que reemplaza a `beta.2` en cuanto se publique.
+En construcción por fases. `latest` es la **0.4.0**. La versión que hay que instalar para probar el frontend es la **0.5.0-beta.5** (`next`), que sustituye a la `0.5.0-beta.2`.
 
 La `0.5.0-beta.5` reúne en una sola beta todo lo que la `0.5.0` lleva más allá de `beta.2`: G2 (edición de `DataGrid` y `NumberField`), G3 (opciones remotas y consultas al servidor) y `EntityLookupField` + `EntityLookupGroup`, con su guía de migración desde PrimeReact. La `0.5.0` final sale cuando esa beta se valide en el frontend.
 

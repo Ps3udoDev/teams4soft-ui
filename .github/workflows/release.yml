@@ -27,6 +27,19 @@ jobs:
         run: node scripts/verify-clean-install.mjs
         env:
           REACT_VERSION: "18"
+      - name: Verify release type matches version
+        env:
+          IS_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          case "$VERSION" in
+            *-*) HAS_SUFFIX=true ;;
+            *) HAS_SUFFIX=false ;;
+          esac
+          if [ "$HAS_SUFFIX" != "$IS_PRERELEASE" ]; then
+            echo "::error::package.json version $VERSION (pre-release suffix: $HAS_SUFFIX) does not match the GitHub Release prerelease flag ($IS_PRERELEASE)"
+            exit 1
+          fi
       - name: Publish to npm
         run: pnpm publish --access public --provenance --no-git-checks --tag ${{ github.event.release.prerelease && 'next' || 'latest' }}
         env:
