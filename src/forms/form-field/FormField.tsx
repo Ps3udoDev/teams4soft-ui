@@ -16,6 +16,15 @@ export type { FormFieldContextValue } from "./FormField.context";
 
 type UnknownProps = Record<string, unknown>;
 
+// React 18 keeps `ref` on the element and strips it from props; React 19 keeps it in props.
+// In development, reading it from the other place logs a warning on either version.
+const refLivesInProps = Number.parseInt(React.version, 10) >= 19;
+
+function getElementRef(element: React.ReactElement<UnknownProps>): React.Ref<unknown> | undefined {
+  const holder: { ref?: unknown } = refLivesInProps ? element.props : (element as unknown as { ref?: unknown });
+  return holder.ref as React.Ref<unknown> | undefined;
+}
+
 function isEmptyMessage(children: React.ReactNode): boolean {
   return children === undefined || children === null || children === "";
 }
@@ -312,7 +321,7 @@ export function FormFieldControl({
   const internalRef = React.useRef<HTMLElement | null>(null);
 
   const childElement = children as React.ReactElement<UnknownProps>;
-  const childRef = childElement.props.ref as React.Ref<unknown> | undefined;
+  const childRef = getElementRef(childElement);
 
   // Identidad estable entre renders: evita que React desmonte/reasigne el
   // ref del control en cada render (mergeRefs(...) inline generaría una

@@ -1,5 +1,6 @@
 import * as React from "react";
 import type { DataGridColumn } from "./DataGrid.types";
+import { normalizeText } from "./filters/filter-fns";
 import { dataGridMessagesEs } from "./messages";
 import { createOptionsCache } from "./options-cache";
 
@@ -11,6 +12,8 @@ const DEBOUNCE_MS = 250;
 
 type Loader = (query: string) => Promise<unknown[]>;
 type ValueOf = (option: any) => unknown;
+
+const hasRemoteCatalog = (type: string | undefined) => type === "select" || type === "lookup";
 
 // Columnas resueltas cuyo catálogo "" aún no llega: la celda de lectura las marca con data-pending.
 const pendingColumns = new WeakSet<object>();
@@ -87,6 +90,10 @@ export function createRemoteOptions() {
       requested.add(field);
       void load(field, "");
     },
+    /** Sin efecto si el catálogo no falló; una carga en curso se comparte por la caché. */
+    retryCatalog(field: string) {
+      if (failed.has(field)) void load(field, "");
+    },
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => { listeners.delete(listener); };
@@ -94,7 +101,7 @@ export function createRemoteOptions() {
     getVersion: () => version,
     /** Devuelve la columna con `options` del catálogo; conserva su identidad mientras nada cambie. */
     resolve<T>(column: DataGridColumn<T>): DataGridColumn<T> {
-      if (!column.loadOptions || column.type !== "select") return column;
+      if (!column.loadOptions || !hasRemoteCatalog(column.type)) return column;
       const staticOptions = column.options !== undefined;
       const base = staticOptions ? column.options : results.get(column.field)?.get("");
       const extras = picked.get(column.field);
@@ -140,12 +147,22 @@ export function useRemoteOptions<T>(columns: DataGridColumn<T>[]) {
 }
 
 /** Solo las columnas remotas visibles cargan "" (una oculta lo hace al mostrarse). */
-export function useCatalogLoading<T>(store: RemoteOptionsStore, columns: DataGridColumn<T>[], visibility: Record<string, boolean>) {
+export function useCatalogLoading<T>(store: RemoteOptionsStore, columns: DataGridColumn<T>[], visibility: Record<string, boolean>, rows: readonly T[]) {
+  const loadsCatalog = (column: DataGridColumn<T>) => column.loadOptions && column.options === undefined && visibility[column.field] !== false;
   React.useEffect(() => {
     for (const column of columns) {
-      if (column.loadOptions && column.type === "select" && column.options === undefined && visibility[column.field] !== false) store.ensureCatalog(column.field);
+      if (hasRemoteCatalog(column.type) && loadsCatalog(column)) store.ensureCatalog(column.field);
     }
   }, [store, columns, visibility]);
+  // Solo con filas nuevas: el fallo no las cambia, así que un cargador que siempre falla no entra en bucle.
+  const seenRows = React.useRef(rows);
+  React.useEffect(() => {
+    if (seenRows.current === rows) return;
+    seenRows.current = rows;
+    for (const column of columns) {
+      if (column.type === "lookup" && loadsCatalog(column)) store.retryCatalog(column.field);
+    }
+  }, [store, columns, visibility, rows]);
 }
 
 export interface ColumnOptions<O> { options: O[]; loading: boolean; error: boolean; retry: () => void }
@@ -232,4 +249,32 @@ export function useRemoteSelect<T, O>(column: DataGridColumn<T, O>, value: unkno
   };
 
   return { remote, options, loading, error, loadOptionsError, getOptionValue, getOptionLabel, filterOption, onInputValueChange, onOpenChange, onPick };
+}
+
+/** Lo que un `EntityLookupField` de una columna necesita para buscar y resolver el valor guardado. */
+export function useRemoteLookup<T, O>(column: DataGridColumn<T, O>, value: unknown) {
+  const { store, loadOptionsError } = useRemoteContext();
+  const { field, loadOptions: loader, options } = column;
+  if (loader) store.register(field, loader as Loader);
+  const baseValue = (column.getOptionValue ?? optionValueOf) as ValueOf;
+  const baseLabel = (column.getOptionLabel ?? optionLabelOf) as (option: any) => string;
+
+  // Marcador estable, no null: el campo trataría el id crudo como texto escrito y un Tab lo buscaría.
+  const placeholder = React.useRef({} as O).current;
+  const known = value == null ? undefined : (store.findOption(field, value, baseValue) ?? options?.find(option => baseValue(option) === value)) as O | undefined;
+  const selectedItem: O | null = value == null ? null : known ?? placeholder;
+
+  const search = (query: string): Promise<O[]> => {
+    if (loader) return store.load(field, query) as Promise<O[]>;
+    const needle = normalizeText(query);
+    return Promise.resolve((options ?? []).filter(option => normalizeText(baseLabel(option)).includes(needle)));
+  };
+
+  return {
+    selectedItem, search, loadOptionsError,
+    getItemId: (item: O) => (item === placeholder ? value : baseValue(item)) as string | number,
+    getItemLabel: (item: O) => item === placeholder ? String(value) : baseLabel(item),
+    remember: (item: O) => { if (loader) store.remember(field, item, baseValue); },
+    valueOf: (item: O) => baseValue(item),
+  };
 }

@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Button } from "../../primitives";
 import { Dialog } from "../../overlays";
 import { DataGrid } from "./DataGrid";
-import { amountColumn, dateColumn, selectColumn, textColumn } from "./column-factories";
+import { actionsColumn, amountColumn, dateColumn, selectColumn, textColumn } from "./column-factories";
 import type { DataGridColumn, DataGridData, DataGridFilterValue, DataGridHandle, DataGridQuery } from "./DataGrid.types";
 import type { GridChange } from "./grid-rows-store";
 
@@ -68,7 +68,6 @@ export const PersistenciaColumnas: Story = {
 };
 export const Compacta: Story = { args: { density: "compact", maxHeight: "38vh" } };
 
-// ---- Edición (G2) ----------------------------------------------------------
 // Las columnas y cellTypes son constantes de módulo: con identidad inestable se re-renderizan todas las filas.
 
 type Entry = { id: string; policy: string; amount: number | null; rate: number | null; units: number | null; dueDate: string | null; method: number | null; paid: boolean; side: "D" | "C" };
@@ -202,7 +201,6 @@ export const EditableEnDialog: Story = {
   parameters: { docs: { description: { story: "Dentro de un `Dialog`, el primer Escape descarta el borrador pendiente y el segundo cierra el diálogo. Los editores de fecha y select abren popovers anidados." } } },
 };
 
-// ---- Servidor (G3) ---------------------------------------------------------
 // Back simulado en memoria con latencia de 400 ms. Datos deterministas.
 
 const LATENCY_MS = 400;
@@ -312,8 +310,6 @@ export const ServerSide: Story = {
   parameters: { docs: { description: { story: "500 registros en memoria con 400 ms de latencia. Página, orden y filtros viajan en `onQueryChange` (una consulta por cambio, `pageIndex` desde 0); un cambio de orden o filtro vuelve a la primera página. Las respuestas que llegan tarde se descartan. La selección conserva los ids de otras páginas." } } },
 };
 
-// ---- Select remoto (G3) ----------------------------------------------------
-
 type Policy = { id: string; policy: string; insurer: number | null };
 const insurerNames = ["Allianz", "Axa", "Banorte", "Chubb", "GNP", "HDI", "Inbursa", "Mapfre", "Qualitas", "Zurich"];
 const insurers = insurerNames.flatMap((name, index) => ["Vida", "Auto", "Hogar", "Salud"].map((line, j) => ({ value: index * 4 + j + 1, label: `${name} ${line}` })));
@@ -362,4 +358,145 @@ function RemoteSelectExample() {
 export const SelectRemoto: Story = {
   render: () => <RemoteSelectExample />,
   parameters: { docs: { description: { story: "«Aseguradora» carga su catálogo con `loadOptions` (400 ms): primero se ve el valor y luego la etiqueta. Escribir en la celda busca una vez tras 250 ms; el menú de filtro reutiliza el catálogo. Activa el fallo simulado y busca un texto nuevo para ver el error en la lista; al reabrir el selector se reintenta el catálogo y al volver a escribir se reintenta la búsqueda." } } },
+};
+
+type Installment = {
+  id: string; selected: boolean; branch: number | null; line: number | null; policy: string; endorsement: string;
+  insured: string; premium: number; collected: number | null; commission: number | null; net: number; observations: string;
+};
+type LineOption = { value: number; code: string; label: string };
+const branchOptions = [{ value: 1, label: "Quito" }, { value: 2, label: "Guayaquil" }, { value: 3, label: "Cuenca" }];
+const lineOptions: LineOption[] = Array.from({ length: 24 }, (_, index) => ({
+  value: index + 1,
+  code: `R${String(index + 1).padStart(2, "0")}`,
+  label: `${["Vida", "Auto", "Hogar", "Salud", "Incendio", "Transporte"][index % 6]!} ${Math.floor(index / 6) + 1}`,
+}));
+const lineColumns: DataGridColumn<LineOption>[] = [{ field: "code", header: "Código", minWidth: 80 }, { field: "label", header: "Ramo", minWidth: 140 }];
+const makeInstallments = (): Installment[] => Array.from({ length: 500 }, (_, index) => {
+  const premium = 800 + ((index * 53) % 300) * 10;
+  const collected = index % 4 === 0 ? null : premium / 2;
+  return {
+    id: `cuota-${index + 1}`, selected: index % 5 !== 0, branch: (index % 3) + 1, line: (index % lineOptions.length) + 1,
+    policy: `POL-${String(1000 + index)}`, endorsement: String(index % 4), insured: `${surnames[index % surnames.length]} ${index + 1}`,
+    premium, collected, commission: 0, net: premium - (collected ?? 0), observations: index % 7 === 0 ? "Revisar cobranza" : "",
+  };
+});
+const installmentId = (row: Installment) => row.id;
+const netOf = (premium: number, collected: unknown, commission: unknown) =>
+  premium - (typeof collected === "number" ? collected : 0) - (typeof commission === "number" ? commission : 0);
+
+function PrimasCompletaExample() {
+  const ref = React.useRef<DataGridHandle<Installment>>(null);
+  // El "servidor" guarda cada edición confirmada, para que sobreviva al cambio de página.
+  const db = React.useRef<Installment[]>(makeInstallments());
+  const [rows, setRows] = React.useState<Installment[]>([]);
+  const [total, setTotal] = React.useState(0);
+  const [loading, setLoading] = React.useState(true);
+  const [queries, setQueries] = React.useState(0);
+  const [saves, setSaves] = React.useState(0);
+  const [consults, setConsults] = React.useState<string[]>([]);
+  const [observed, setObserved] = React.useState<string | null>(null);
+  const [lineQueries, setLineQueries] = React.useState<string[]>([]);
+  const latest = React.useRef(0);
+  const nextNew = React.useRef(0);
+
+  const onQueryChange = React.useCallback((query: DataGridQuery) => {
+    const request = ++latest.current;
+    setQueries((current) => current + 1);
+    setLoading(true);
+    void (async () => {
+      await delay(LATENCY_MS);
+      let result = db.current.filter((row) => Object.entries(query.filters).every(([field, filter]) => matches(row[field as keyof Installment], filter)));
+      const [sort] = query.sorting;
+      if (sort) {
+        const key = sort.field as keyof Installment;
+        result = [...result].sort((a, b) => {
+          const x = a[key];
+          const y = b[key];
+          const order = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "es");
+          return sort.desc ? -order : order;
+        });
+      }
+      if (request !== latest.current) return;
+      const start = query.pageIndex * query.pageSize;
+      setRows(result.slice(start, start + query.pageSize));
+      setTotal(result.length);
+      setLoading(false);
+    })();
+  }, []);
+  const serverSide = React.useMemo(() => ({ totalRecords: total, onQueryChange }), [total, onQueryChange]);
+
+  const columns = React.useMemo<DataGridColumn<Installment>[]>(() => {
+    const searchLines = async (query: string) => {
+      setLineQueries((current) => [...current, query]);
+      await delay(LATENCY_MS);
+      const needle = plain(query);
+      return lineOptions.filter((option) => !needle || plain(`${option.code} ${option.label}`).includes(needle));
+    };
+    return [
+    { field: "selected", header: "Imputar", type: "checkbox", editable: true, filter: false, align: "center", width: 90 },
+    selectColumn<Installment, { value: number; label: string }>("branch", "Sucursal", { options: branchOptions, editable: true, minWidth: 140 }),
+    { field: "line", header: "Ramo", type: "lookup", editable: true, required: true, minWidth: 220, loadOptions: searchLines, lookupColumns: lineColumns, filter: false },
+    textColumn<Installment>("policy", "Póliza", { editable: true, frozen: "left", minWidth: 140, editorProps: { maxLength: 12 } }),
+    textColumn<Installment>("endorsement", "Endoso", {
+      editable: true, minWidth: 100,
+      onCommit: ({ row, value, grid }) => {
+        // Equivale al onBlur de Endoso, que consulta las cuotas de la póliza.
+        setConsults((current) => [...current, `${row.policy}/${String(value)}`]);
+        grid.patchRow(row.id, { insured: `Consultado ${row.policy}/${String(value)}` });
+      },
+    }),
+    textColumn<Installment>("insured", "Asegurado", { minWidth: 200, sortable: false }),
+    amountColumn<Installment>("premium", "A aplicar"),
+    amountColumn<Installment>("collected", "Imp. cobrado", {
+      editable: true, minWidth: 130,
+      onCommit: ({ row, value, grid }) => grid.patchRow(row.id, { net: netOf(row.premium, value, row.commission) }),
+    }),
+    amountColumn<Installment>("commission", "Com. desc.", {
+      minWidth: 120,
+      editable: (row) => row.collected !== null,
+      onCommit: ({ row, value, grid }) => grid.patchRow(row.id, { net: netOf(row.premium, row.collected, value) }),
+    }),
+    amountColumn<Installment>("net", "Neto recaudar"),
+    {
+      field: "observations", header: "Stat", type: "custom", filter: false, sortable: false, align: "center", width: 90,
+      render: ({ row }) => <Button size="sm" variant="ghost" aria-label={`Observaciones de ${row.policy}`} onClick={() => setObserved(row.policy)}>{row.observations ? "Obs." : "OK"}</Button>,
+    },
+    actionsColumn<Installment>([{ label: "Eliminar fila", icon: "×", onClick: (row) => ref.current?.removeRow(row.id) }]),
+    ];
+  }, []);
+
+  const onChange = React.useCallback((data: DataGridData<Installment>, change: GridChange) => {
+    setRows(data.rows);
+    const changed = data.rows.find((row) => row.id === change.rowId);
+    if (change.type === "remove" && change.rowId) db.current = db.current.filter((row) => row.id !== change.rowId);
+    else if (change.type === "add" && changed) db.current = [changed, ...db.current];
+    else if (changed) db.current = db.current.map((row) => (row.id === changed.id ? changed : row));
+    setSaves((current) => current + 1);
+  }, []);
+  const addRow = React.useCallback(() => {
+    const id = `nueva-${++nextNew.current}`;
+    ref.current?.addRow({ id, selected: true, branch: null, line: null, policy: "", endorsement: "", insured: "", premium: 0, collected: null, commission: null, net: 0, observations: "" });
+  }, []);
+
+  return <div className="grid gap-4">
+    <DataGrid ref={ref} columns={columns} value={rows} getRowId={installmentId} loading={loading} serverSide={serverSide}
+      onChange={onChange} onAddRow={addRow} maxHeight="45vh" emptyState={{ title: "Sin cuotas cargadas", hint: "Use Agregar y capture sucursal, ramo y póliza." }}
+      pagination={{ pageSize: 10, pageSizeOptions: [10, 25, 50] }} />
+    <output aria-live="polite" aria-label="Estado del back" className="rounded border border-ui-border p-3 text-xs">
+      <span data-testid="query-count">Consultas al servidor: {queries}</span>
+      <br />
+      <span data-testid="save-count">Cambios guardados: {saves}</span>
+      <br />
+      <span data-testid="consults">Consultas de cuotas: {consults.length ? consults.join(", ") : "ninguna"}</span>
+      <br />
+      <span data-testid="line-queries">Búsquedas de ramo: {lineQueries.length}{lineQueries.length ? ` (última «${lineQueries.at(-1)}»)` : ""}</span>
+      <br />
+      <span data-testid="observed">Observación abierta: {observed ?? "ninguna"}</span>
+    </output>
+  </div>;
+}
+export const PrimasPorCobrarCompleta: Story = {
+  render: () => <PrimasCompletaExample />,
+  parameters: { docs: { description: { story: "Reproduce la captura de Primas por cobrar sobre 500 cuotas en un servidor simulado (400 ms): paginación, orden y filtros en el servidor; casilla «Imputar», sucursal (select), ramo (columna `lookup` con modal), texto editable con `maxLength`, importes que recalculan «Neto» con `grid.patchRow`, comisión editable por fila, celda propia de estado, «Agregar» y eliminar fila (columna fija a la derecha). Endoso simula la consulta de cuotas al confirmar. Las ediciones confirmadas se guardan en el servidor simulado y sobreviven al cambio de página." } } },
 };

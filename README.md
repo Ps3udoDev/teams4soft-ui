@@ -37,10 +37,11 @@ pnpm add @radix-ui/react-slot @radix-ui/react-tooltip @radix-ui/react-checkbox @
 Importables desde el paquete raíz (`@teams4soft/teams4soft-ui`) o desde los subpaths `@teams4soft/teams4soft-ui/primitives`, `@teams4soft/teams4soft-ui/forms`, `@teams4soft/teams4soft-ui/layout`, `@teams4soft/teams4soft-ui/feedback`, `@teams4soft/teams4soft-ui/data-display` y `@teams4soft/teams4soft-ui/overlays`:
 
 - **DataGrid** (`data-display`) — tabla de consulta con filtros, orden, paginación, selección y columnas configurables.
+- **EntityLookupField** / **EntityLookupGroup** (`data-display`) — buscadores de catálogo (local o remoto) con modal de resultados, de uno o varios campos.
 - **Button** (`primitives`) — botón con variantes, tamaños, estado `loading` y soporte `asChild`.
 - **Tooltip** / **TooltipProvider** (`primitives`) — tooltip accesible sobre `@radix-ui/react-tooltip`.
 - **FormField** (`forms`) — wiring de accesibilidad (label, descripción, error) para controles de formulario.
-- **TextField** (`forms`) — campo de texto controlado/no controlado, con soporte de `clear`, password y `loading`, integrado con `FormField`.
+- **TextField** (`forms`) — campo de texto controlado/no controlado, con soporte de `clear` (`clearLabel` personaliza el nombre accesible del botón), password y `loading`, integrado con `FormField`.
 - **CheckboxField** (`forms`) — control booleano/indeterminado con label, descripción y error, sobre Radix `Checkbox`.
 - **RadioGroup** (`forms`) — selección única de un conjunto de opciones, sobre Radix `RadioGroup`.
 - **DateField** (`forms`) — fecha con escritura directa y calendario accesible; valor ISO `YYYY-MM-DD` sin desplazamiento por zona horaria.
@@ -396,6 +397,86 @@ import { NumberField } from "@teams4soft/teams4soft-ui/forms";
 
 <NumberField mode="currency" value={amount} onValueChange={setAmount} aria-label="Importe" />;
 ```
+
+### Buscadores de catálogo: EntityLookupField y EntityLookupGroup
+
+Viven en `./data-display`, junto a `DataGrid`, que usan para mostrar los resultados en un
+modal. Requieren los mismos peers que `DataGrid` y `Dialog`. La librería nunca hace HTTP:
+`search` es una función tuya y devuelve un arreglo (paginación en cliente),
+`{ items, total }` (paginación en el servidor) o `null` (abortar sin tocar la interfaz).
+
+```tsx
+import { EntityLookupField } from "@teams4soft/teams4soft-ui/data-display";
+import type { DataGridColumn } from "@teams4soft/teams4soft-ui/data-display";
+
+type Provider = { id: number; code: string; name: string };
+// Define las columnas fuera del render o con useMemo.
+const columns: DataGridColumn<Provider>[] = [
+  { field: "code", header: "Código" },
+  { field: "name", header: "Nombre" },
+];
+
+const [provider, setProvider] = useState<Provider | null>(null);
+
+// El padre debe aplicar `onSelectionChange`: `selectedItem` es controlado.
+<EntityLookupField<Provider>
+  label="Proveedor"
+  selectedItem={provider}
+  onSelectionChange={setProvider}
+  getItemId={(item) => item.id}
+  getItemLabel={(item) => item.name}
+  columns={columns}
+  clearable
+  search={async (query, { page, pageSize, criterion, signal }) => {
+    const response = await fetch(`/api/providers?q=${query}&page=${page}&size=${pageSize}`, { signal });
+    const { rows, total } = await response.json();
+    return { items: rows, total };
+  }}
+/>;
+```
+
+- Local: pasa `items` en lugar de `search`. Enter o «…» con texto abren el modal con las filas filtradas.
+- Remoto: `ctx.page` empieza en 1 y `ctx.signal` se aborta si llega otra búsqueda. Con una sola coincidencia
+  se selecciona sin abrir el modal (`autoSelectSingle`); sin coincidencias aparece un aviso, con
+  «Sí, crear nuevo» si pasas `onCreateRequest`.
+- `searchOnEnter="dirty"` hace que Enter busque solo si el texto difiere de la etiqueta de la selección
+  vigente, como Tab. Por defecto (`"always"`) Enter con texto siempre busca.
+- `restoreCancelledText` devuelve la etiqueta de la selección cuando una búsqueda termina sin elegir nada:
+  al cerrar el aviso sin aceptar, o al salir del campo tras cancelar el modal. La celda `lookup` lo activa.
+- `criteria` convierte «…» en un menú de criterios; `criterion` viaja en `ctx` y se conserva al paginar.
+- `resolveOnBlur` resuelve el texto al salir del campo; `renderEntityForm` añade «Nuevo» / «Consultar» en el
+  modal; `onTriggerClick` reemplaza la búsqueda por una acción propia.
+- En una columna `type: "lookup"` del `DataGrid`, la celda usa este campo con `loadOptions` y `lookupColumns`.
+
+`EntityLookupGroup` es el equivalente con varios campos: cada uno manda su propio parámetro al back y
+«…» va en uno solo (`primary`, por defecto el último). Es controlado con `values` y `onValuesChange`.
+
+```tsx
+import { EntityLookupGroup } from "@teams4soft/teams4soft-ui/data-display";
+import type { LookupGroupField } from "@teams4soft/teams4soft-ui/data-display";
+
+const fields: LookupGroupField[] = [
+  { key: "lastName", param: "apellidoPaterno", label: "Apellido paterno", selectField: "lastName" },
+  { key: "motherLastName", param: "apellidoMaterno", label: "Apellido materno", selectField: "motherLastName" },
+  { key: "firstName", param: "nombre", label: "Nombre", selectField: "firstName" },
+];
+
+const [values, setValues] = useState({ lastName: "", motherLastName: "", firstName: "" });
+
+<EntityLookupGroup<Person>
+  fields={fields}
+  values={values}
+  onValuesChange={setValues}
+  search={(params, ctx) => searchPeople(params, ctx)}
+  getItemId={(item) => item.id}
+  columns={personColumns}
+  gridColumns={3}
+/>;
+```
+
+`params` lleva cada campo buscable con su propio valor; `searchParam` (por defecto `"search"`) lleva el
+término genérico mientras la captura esté incompleta. Elegir una fila llama a `onValuesChange` una sola vez
+con todos los campos que tengan `selectField`.
 
 ### Overlays
 

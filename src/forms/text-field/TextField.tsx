@@ -131,6 +131,7 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
       leading,
       trailing,
       clearable = false,
+      clearLabel = "Limpiar",
       onClear,
       revealPassword = false,
       invalid = false,
@@ -319,7 +320,7 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
             type="button"
             className={cn(!unstyled && auxButtonBaseClassName, classNames?.clearButton)}
             style={styles?.clearButton}
-            aria-label="Limpiar"
+            aria-label={clearLabel}
             onClick={handleClear}
           >
             <IconX />

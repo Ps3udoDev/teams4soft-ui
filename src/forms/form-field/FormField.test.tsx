@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
+import * as React from "react";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
@@ -296,5 +297,34 @@ describe("FormField (API compuesta)", () => {
     }
     render(<Probe />);
     expect(observed).toBeNull();
+  });
+});
+
+describe("FormField.Control ref del control hijo", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("entrega el nodo a una ref de objeto del hijo y no avisa de un acceso a ref", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const ref = React.createRef<HTMLInputElement>();
+    render(<FormField.Root><FormField.Label>Nombre</FormField.Label><FormField.Control><input ref={ref} /></FormField.Control></FormField.Root>);
+    expect(ref.current).toBe(screen.getByLabelText("Nombre"));
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it("llama a una ref de callback del hijo con el nodo y con null al desmontar", () => {
+    const ref = vi.fn();
+    const { unmount } = render(<FormField.Root><FormField.Label>Nombre</FormField.Label><FormField.Control><input ref={ref} /></FormField.Control></FormField.Root>);
+    const node = screen.getByLabelText("Nombre");
+    expect(ref).toHaveBeenLastCalledWith(node);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it("sin ref en el hijo no avisa", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<FormField.Root><FormField.Label>Nombre</FormField.Label><FormField.Control><input /></FormField.Control></FormField.Root>);
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });

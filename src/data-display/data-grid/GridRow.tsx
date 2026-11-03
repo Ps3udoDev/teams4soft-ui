@@ -2,7 +2,7 @@ import * as React from "react";
 import type { Column, ColumnPinningPosition, Row, RowData } from "@tanstack/react-table";
 import { cn } from "../../lib";
 import { EditableCell, type CellFocusPlan } from "./cells/EditableCell";
-import { editCellRegistry } from "./cells/edit-cells";
+import { editorFor } from "./cells/edit-cells";
 import { readCellRegistry } from "./cells/read-cells";
 import { isCellEditable } from "./validation";
 import type { GridFeatures } from "./table-features";
@@ -75,7 +75,7 @@ function GridRowInner<T extends RowData>({ row, isSelected, isDirty, errorsForRo
       const type = col?.type ?? "text";
       const CustomType = cellTypes?.[type];
       const editable = col !== undefined && !readOnly && isCellEditable(col, row.original);
-      const Editor = col && !CustomType && editable ? editCellRegistry[type as keyof typeof editCellRegistry] : undefined;
+      const Editor = col && !CustomType && editable ? editorFor(col) : undefined;
       const Cell = CustomType ?? readCellRegistry[type as keyof typeof readCellRegistry] ?? readCellRegistry.text;
       const align = col?.align ?? (["number", "currency", "percent"].includes(type) ? "right" : "left");
       const pinned = cell.column.getIsPinned();
