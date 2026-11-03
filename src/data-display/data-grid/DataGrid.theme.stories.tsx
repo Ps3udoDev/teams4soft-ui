@@ -50,8 +50,9 @@ const claimsTheme = `
   --ui-grid-header-fg: #fff;
   --ui-grid-row-alt: #f7f9fc;
   --ui-grid-font: var(--claims-font);
+  font-family: var(--claims-font);
 }
-/* body.claims-portals cubre toda la página: la comparación restituye los valores por defecto de tokens.css. */
+/* body.claims-portals cubre toda la página: la comparación restituye los valores por defecto de tokens.css y la fuente base de Storybook. */
 .claims-default {
   --ui-primary: #4f46e5;
   --ui-border: #e4e4e7;
@@ -61,6 +62,7 @@ const claimsTheme = `
   --ui-grid-header-fg: var(--ui-foreground);
   --ui-grid-row-alt: color-mix(in srgb, var(--ui-muted) 50%, transparent);
   --ui-grid-font: initial;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif;
 }
 `;
 
