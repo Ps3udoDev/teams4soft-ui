@@ -1,0 +1,7 @@
+minimumReleaseAge: 1440
+minimumReleaseAgeStrict: true
+strictDepBuilds: true
+blockExoticSubdeps: true
+allowBuilds:
+  esbuild: true
+  "@parcel/watcher": false

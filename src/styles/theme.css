@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "./tokens.css";
 
-@theme {
+@theme inline {
   --color-ui-background: var(--ui-background);
   --color-ui-foreground: var(--ui-foreground);
   --color-ui-primary: var(--ui-primary);
@@ -20,3 +20,9 @@
 /* Fuerza a Tailwind a generar utilidades base aunque aún no haya componentes.
    Se ampliará cuando existan clases en los componentes. */
 @source inline("{bg,text,border}-ui-{background,foreground,primary,muted,border,danger}");
+
+/* Los componentes leen var(--radius-ui-*): se redeclaran en cada elemento para que un tema de subárbol (o de body) llegue a los portales. */
+:where(*, ::before, ::after) {
+  --radius-ui-sm: var(--ui-radius-sm);
+  --radius-ui-md: var(--ui-radius-md);
+}
