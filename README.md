@@ -441,6 +441,8 @@ const [provider, setProvider] = useState<Provider | null>(null);
   «Sí, crear nuevo» si pasas `onCreateRequest`.
 - `searchOnEnter="dirty"` hace que Enter busque solo si el texto difiere de la etiqueta de la selección
   vigente, como Tab. Por defecto (`"always"`) Enter con texto siempre busca.
+- `restoreCancelledText` devuelve la etiqueta de la selección cuando una búsqueda termina sin elegir nada:
+  al cerrar el aviso sin aceptar, o al salir del campo tras cancelar el modal. La celda `lookup` lo activa.
 - `criteria` convierte «…» en un menú de criterios; `criterion` viaja en `ctx` y se conserva al paginar.
 - `resolveOnBlur` resuelve el texto al salir del campo; `renderEntityForm` añade «Nuevo» / «Consultar» en el
   modal; `onTriggerClick` reemplaza la búsqueda por una acción propia.

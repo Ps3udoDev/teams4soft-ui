@@ -229,6 +229,79 @@ describe("DataGrid: celda lookup, foco y modal", () => {
     });
   });
 
+  describe("salir con clic tras cancelar una búsqueda", () => {
+    const resolved: Row[] = [{ id: "r-1", ramo: 10, note: "a" }, { id: "r-2", ramo: 30, note: "b" }];
+    const renderWithOutside = (rows: Row[], onChange: (data: DataGridData<Row>) => void, loadOptions = makeLoader()) => {
+      render(<><DataGrid columns={[column({ loadOptions })]} defaultValue={rows} getRowId={rowId} onChange={onChange} /><button>fuera</button></>);
+      return loadOptions;
+    };
+    const cancelModal = async (user: ReturnType<typeof userEvent.setup>) => {
+      await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(queryDialog()).not.toBeInTheDocument());
+      await waitFor(() => expect(inputs()[0]).toHaveFocus());
+    };
+
+    it("modal cancelado: la celda vuelve a la etiqueta guardada sin emitir ni buscar otra vez", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      const loadOptions = renderWithOutside(resolved, onChange);
+      await waitFor(() => expect(inputs()[0]).toHaveValue("Ramo 1"));
+      await user.type(inputs()[0]!, "{Backspace}{Backspace}");
+      await user.keyboard("{Enter}");
+      await cancelModal(user);
+      expect(inputs()[0]).toHaveValue("Ramo");
+      await user.click(screen.getByRole("button", { name: "fuera" }));
+      await waitFor(() => expect(inputs()[0]).toHaveValue("Ramo 1"));
+      await flush();
+      expect(onChange).not.toHaveBeenCalled();
+      expect(countOf(loadOptions, "Ramo")).toBe(1);
+      expect(queryDialog()).toBeNull();
+    });
+
+    it("modal cancelado en una celda vacía: el texto se limpia", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      renderWithOutside(twoEmpty, onChange);
+      await user.type(inputs()[0]!, "ramo");
+      await user.keyboard("{Enter}");
+      await cancelModal(user);
+      await user.click(screen.getByRole("button", { name: "fuera" }));
+      await waitFor(() => expect(inputs()[0]).toHaveValue(""));
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("si escribe otra vez tras cancelar, salir resuelve el texto nuevo", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      renderWithOutside(resolved, onChange);
+      await waitFor(() => expect(inputs()[0]).toHaveValue("Ramo 1"));
+      await user.type(inputs()[0]!, "{Backspace}{Backspace}");
+      await user.keyboard("{Enter}");
+      await cancelModal(user);
+      await user.clear(inputs()[0]!);
+      onChange.mockClear();
+      await user.type(inputs()[0]!, "Otro");
+      await user.click(screen.getByRole("button", { name: "fuera" }));
+      await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+      expect(lastRows(onChange)[0]!.ramo).toBe(30);
+    });
+
+    it("aviso sin resultados cerrado con Escape: la celda vuelve a la etiqueta guardada", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      renderWithOutside(resolved, onChange);
+      await waitFor(() => expect(inputs()[0]).toHaveValue("Ramo 1"));
+      await user.type(inputs()[0]!, "zzz");
+      await user.keyboard("{Enter}");
+      const notice = await screen.findByRole("alertdialog");
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(notice).not.toBeInTheDocument());
+      await waitFor(() => expect(inputs()[0]).toHaveValue("Ramo 1"));
+      expect(onChange).not.toHaveBeenCalled();
+    });
+  });
+
   describe("Enter sobre texto no escrito", () => {
     const walk: Row[] = [{ id: "r-1", ramo: 999, note: "a" }, { id: "r-2", ramo: 30, note: "b" }, { id: "r-3", ramo: null, note: "c" }];
 

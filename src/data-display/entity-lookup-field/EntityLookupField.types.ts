@@ -69,6 +69,8 @@ export interface EntityLookupFieldProps<T>
   /** `"dirty"`: Enter searches only when the text differs from the current selection's label, as Tab does. @default "always" */
   searchOnEnter?: "always" | "dirty";
   resolveOnBlur?: boolean;
+  /** Puts the selection's label back when a search ends without a selection: at once on a kept notice, on blur after a cancelled dialog. */
+  restoreCancelledText?: boolean;
   onResolveNotFound?(text: string): void;
   onCreateRequest?(query: string): void;
   notFoundMessage?: React.ReactNode | ((query: string) => React.ReactNode);

@@ -132,7 +132,7 @@ function LookupEditor<T>({ column, value, onCommit, onPopoverOpenChange, trackSe
     [lookupColumns, header, getOptionLabel],
   );
   return <div style={{ display: "contents" }} onFocus={stopFromPortal} onPointerMove={stopFromPortal}>
-    <EntityLookupField<any> resolveOnBlur searchOnEnter="dirty" disabled={disabled} invalid={invalid || searchFailed} unstyled={unstyled} columns={columns}
+    <EntityLookupField<any> resolveOnBlur restoreCancelledText searchOnEnter="dirty" disabled={disabled} invalid={invalid || searchFailed} unstyled={unstyled} columns={columns}
       {...withEditorProps(column, { className, classNames: { root: cn(!unstyled && "min-w-40"), trigger: cn(!unstyled && "h-(--ui-control-height) w-(--ui-control-height) shrink-0") } })}
       aria-label={label} aria-describedby={linked.describedBy}
       selectedItem={lookup.selectedItem} getItemId={lookup.getItemId} getItemLabel={lookup.getItemLabel}

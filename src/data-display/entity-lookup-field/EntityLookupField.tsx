@@ -80,6 +80,12 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
   const menuOpenRef = React.useRef(false);
   // Typed or pasted since the last selection or search; text that came from outside never sets it.
   const dirtyRef = React.useRef(false);
+  const dialogCancelledRef = React.useRef(false);
+
+  const restoreSelectionLabel = () => {
+    const current = latest.current.selectedItem;
+    setText(current ? latest.current.getItemLabel(current) : "");
+  };
 
   const [innerCriterion, setInnerCriterion] = React.useState(() => defaultCriterion ?? criteria?.[0]?.value);
   const activeCriterion = criterion ?? innerCriterion;
@@ -148,6 +154,8 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
         if (result === "dismissed") {
           setText("");
           if (latest.current.selectedItem) latest.current.onSelectionChange(null);
+        } else if (result === "kept" && latest.current.restoreCancelledText) {
+          restoreSelectionLabel();
         }
         break;
       }
@@ -162,6 +170,7 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
   // `chosen` is the criterion just picked in the menu, which a controlling parent may not have echoed back yet.
   const runLookup = async (query: string, intent: "commit" | "browse", preselect: string | null = null, chosen = activeCriterion) => {
     dirtyRef.current = false;
+    dialogCancelledRef.current = false;
     const outcome = await controller.runSearch(query, { intent, criterion: chosen });
     await settle(outcome, preselect);
     return outcome;
@@ -186,7 +195,12 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
     if (!latest.current.resolveOnBlur || disabled || readOnly || onTriggerClick || withinControl) return;
     if (menuOpenRef.current || openRef.current || noticeOpenRef.current) return;
     const value = textRef.current.trim();
-    if (!dirtyRef.current || !isDirtyText()) return;
+    if (!isDirtyText()) return;
+    if (!dirtyRef.current) {
+      // No later event would correct the text: it stays on screen while the value behind it is the old one.
+      if (dialogCancelledRef.current && latest.current.restoreCancelledText) restoreSelectionLabel();
+      return;
+    }
     dirtyRef.current = false;
 
     if (latest.current.search) {
@@ -224,6 +238,7 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
   const wasOpenRef = React.useRef(open);
   React.useEffect(() => {
     if (wasOpenRef.current && !open) {
+      dialogCancelledRef.current = true;
       ownsOpenRef.current = false;
       setPreselectedId(null);
       setForm(null);
