@@ -68,7 +68,6 @@ export const PersistenciaColumnas: Story = {
 };
 export const Compacta: Story = { args: { density: "compact", maxHeight: "38vh" } };
 
-// ---- Edición (G2) ----------------------------------------------------------
 // Las columnas y cellTypes son constantes de módulo: con identidad inestable se re-renderizan todas las filas.
 
 type Entry = { id: string; policy: string; amount: number | null; rate: number | null; units: number | null; dueDate: string | null; method: number | null; paid: boolean; side: "D" | "C" };
@@ -202,7 +201,6 @@ export const EditableEnDialog: Story = {
   parameters: { docs: { description: { story: "Dentro de un `Dialog`, el primer Escape descarta el borrador pendiente y el segundo cierra el diálogo. Los editores de fecha y select abren popovers anidados." } } },
 };
 
-// ---- Servidor (G3) ---------------------------------------------------------
 // Back simulado en memoria con latencia de 400 ms. Datos deterministas.
 
 const LATENCY_MS = 400;
@@ -312,8 +310,6 @@ export const ServerSide: Story = {
   parameters: { docs: { description: { story: "500 registros en memoria con 400 ms de latencia. Página, orden y filtros viajan en `onQueryChange` (una consulta por cambio, `pageIndex` desde 0); un cambio de orden o filtro vuelve a la primera página. Las respuestas que llegan tarde se descartan. La selección conserva los ids de otras páginas." } } },
 };
 
-// ---- Select remoto (G3) ----------------------------------------------------
-
 type Policy = { id: string; policy: string; insurer: number | null };
 const insurerNames = ["Allianz", "Axa", "Banorte", "Chubb", "GNP", "HDI", "Inbursa", "Mapfre", "Qualitas", "Zurich"];
 const insurers = insurerNames.flatMap((name, index) => ["Vida", "Auto", "Hogar", "Salud"].map((line, j) => ({ value: index * 4 + j + 1, label: `${name} ${line}` })));
@@ -363,8 +359,6 @@ export const SelectRemoto: Story = {
   render: () => <RemoteSelectExample />,
   parameters: { docs: { description: { story: "«Aseguradora» carga su catálogo con `loadOptions` (400 ms): primero se ve el valor y luego la etiqueta. Escribir en la celda busca una vez tras 250 ms; el menú de filtro reutiliza el catálogo. Activa el fallo simulado y busca un texto nuevo para ver el error en la lista; al reabrir el selector se reintenta el catálogo y al volver a escribir se reintenta la búsqueda." } } },
 };
-
-// ---- Primas por cobrar completa (editable + lookup + servidor) -------------
 
 type Installment = {
   id: string; selected: boolean; branch: number | null; line: number | null; policy: string; endorsement: string;
