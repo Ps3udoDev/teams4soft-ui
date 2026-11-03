@@ -1,16 +1,18 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const { peerDependencies, devDependencies } = JSON.parse(readFileSync("package.json", "utf8")) as {
+const { peerDependencies, devDependencies, dependencies } = JSON.parse(readFileSync("package.json", "utf8")) as {
   peerDependencies: Record<string, string>;
+  dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
 };
 const radixPeers = Object.keys(peerDependencies).filter(name => name.startsWith("@radix-ui/"));
 
 describe("rangos de peers", () => {
-  it("TanStack se limita a la v9: DataGrid registra sus features con la API de esa mayor", () => {
-    expect(peerDependencies["@tanstack/react-table"]).toBe("^9.3.1");
-    expect(devDependencies["@tanstack/react-table"]).toBe("^9.3.1");
+  it("TanStack va como dependencia exacta de la v9, no como peer", () => {
+    expect(dependencies["@tanstack/react-table"]).toBe("9.3.1");
+    expect(peerDependencies["@tanstack/react-table"]).toBeUndefined();
+    expect(devDependencies["@tanstack/react-table"]).toBeUndefined();
   });
 
   it("React declara solo las mayores probadas en CI", () => {

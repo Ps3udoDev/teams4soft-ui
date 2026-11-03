@@ -16,7 +16,9 @@ import "@teams4soft/teams4soft-ui/styles.css";
 
 ## Peer dependencies
 
-La librería se apoya en [Radix UI](https://www.radix-ui.com/) para overlays y controles, en TanStack Table para `DataGrid` y en componentes propios. Los rangos usan `^` sobre la mayor probada: React `^18.3.0 || ^19.0.0` y `@tanstack/react-table` `^9.3.1`; los mínimos de Radix están en `peerDependencies` de `package.json`. Una nueva mayor se admite solo después de probarla en CI.
+La librería se apoya en [Radix UI](https://www.radix-ui.com/) para overlays y controles, en TanStack Table para `DataGrid` y en componentes propios. Los rangos usan `^` sobre la mayor probada: React `^18.3.0 || ^19.0.0`; los mínimos de Radix están en `peerDependencies` de `package.json`. Una nueva mayor se admite solo después de probarla en CI. TanStack Table no es peer: la librería lo trae como dependencia con la versión exacta `9.3.1`, así que no hay que instalarlo, y un `@tanstack/react-table` v8 en tu proyecto convive sin conflicto.
+
+**Node:** se requiere `^20.19.0 || >=22.12.0`. Con `require`, los subpaths `primitives`, `forms`, `layout`, `feedback` y `overlays` cargan sin más. La raíz y `/data-display` dependen de TanStack v9, que es solo ESM, y se cargan por `require` gracias al soporte de `require(esm)` de esas versiones de Node. Si los cargas por `require` en un runner con su propio cargador, como Jest, pruébalo antes o usa ESM (no probado).
 
 Algunos componentes usan primitivas de Radix como peer dependencies — tu proyecto debe declararlas:
 
@@ -182,8 +184,8 @@ El `toast` importable es **API de cliente**: requiere un `<ToastProvider global 
 
 `DataGrid` vive en el subpath `./data-display`. En npm, `next` apunta a
 `0.5.0-beta.2`, que todavía usa la fila de filtros; el menú de filtros descrito aquí
-llega con la próxima beta. Instala también `@tanstack/react-table@9` (la v8 no es
-compatible) y los peers Radix de Popover, Checkbox, Slot y Tooltip.
+llega con la próxima beta. TanStack Table viene incluido; solo instala los peers Radix de
+Popover, Checkbox, Slot y Tooltip.
 
 ```tsx
 import { DataGrid, textColumn, amountColumn, dateColumn } from "@teams4soft/teams4soft-ui/data-display";
