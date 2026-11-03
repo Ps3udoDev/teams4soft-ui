@@ -596,16 +596,15 @@ Si falta un provider global se emite un aviso de desarrollo, como con `toast`.
 
 ## Estado
 
-En construcción por fases. Publicadas en npm: **0.4.0** (`latest`) y **0.5.0-beta.2** (`next`).
+En construcción por fases. Publicadas en npm: **0.4.0** (`latest`) y **0.5.0-beta.2** (`next`). La versión que hay que instalar para probar el frontend es la **0.5.0-beta.5** (`next`), que reemplaza a `beta.2` en cuanto se publique.
 
-La `0.5.0` se cierra con G2, G3, `EntityLookupField` + `EntityLookupGroup` y G4. Hasta entonces no salen betas intermedias: habrá una sola para probar todo en el frontend y, después, la versión final.
-
-**Sin publicar:** G2 — edición de `DataGrid` (celdas editables, validación, `getData()`, `onChange`, handle imperativo) y el nuevo `NumberField`. Entra en la `0.5.0` sin versión propia. Le sigue G3: opciones remotas (`loadOptions`) y consultas al servidor (`serverSide`).
+La `0.5.0-beta.5` reúne en una sola beta todo lo que la `0.5.0` lleva más allá de `beta.2`: G2 (edición de `DataGrid` y `NumberField`), G3 (opciones remotas y consultas al servidor) y `EntityLookupField` + `EntityLookupGroup`, con su guía de migración desde PrimeReact. La `0.5.0` final sale cuando esa beta se valide en el frontend.
 
 `beta.3` y `beta.4` existen solo en el repositorio y no se publicaron: su contenido sale en la `0.5.0-beta.5`.
 
 | Versión | Fase | Contenido |
 | --- | --- | --- |
+| 0.5.0-beta.5 | G2 + G3 + EntityLookup — Validación final | Edición de `DataGrid` (celdas editables, validación, `getData()`, `onChange`, handle imperativo) y el nuevo `NumberField`. Opciones remotas (`loadOptions`) y consultas al servidor (`serverSide`). `EntityLookupField`, `EntityLookupGroup` y la celda `lookup`. Historia de tema Claims en Storybook. `@tanstack/react-table` pasa a dependencia fija (`9.3.1`). Requiere Node `^20.19.0 || >=22.12.0`. Guía de migración en `docs/migration/data-grid.md`. Las variables `--color-ui-*` ya no se emiten. |
 | 0.5.0-beta.4 (no se publicó) | G1 — Menú de filtros | Cada encabezado filtrable lleva un icono que abre un menú con condición y valor; reemplaza la fila de filtros. Nuevas `filterOperators`, `messages.filter*` y slots `filterButton` y `filterMenu`. Se eliminan los slots `filterRow` y `filterCell` y el token `--ui-grid-filter-height`. |
 | 0.5.0-beta.3 (no se publicó) | Correcciones | El cuerpo de `Dialog` trae padding por defecto (`classNames={{ body: "p-0" }}` lo quita) y su pie alinea a la derecha. `RadioGroup` alinea sus opciones al inicio. `FeedbackDialog` avisa en desarrollo si `rejectLabel` llega sin `showReject`. |
 | 0.5.0-beta.2 | G1 — TanStack v9 | Migra `DataGrid` a `@tanstack/react-table@^9.3.1`, con la API nativa de esa mayor. La API pública de `DataGrid` no cambia; el peer pasa de la v8 a la v9. |
