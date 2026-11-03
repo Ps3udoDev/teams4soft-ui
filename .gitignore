@@ -16,12 +16,9 @@ docs/presentation/
 skills-lock.json
 
 # Skills de Claude instaladas localmente (no commiteables)
-.claude/skills/
+.claude/
 
 # Docs locales no commiteables (plan 2b y presentación)
-docs/superpowers/
+docs/
 # tija (local)
-.tija/cache/
-.tija/index/
-.tija/session/
-.tija/tmp/
+.tija/
