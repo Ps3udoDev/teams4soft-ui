@@ -14,6 +14,16 @@ Importa los estilos una vez en el punto de entrada de tu app:
 import "@teams4soft/teams4soft-ui/styles.css";
 ```
 
+### Probar la beta
+
+Instala la versión exacta, no `@next`: con `minimumReleaseAge` de pnpm 11, `@next` resuelve a la versión anterior durante las primeras 24 horas desde la publicación.
+
+```bash
+pnpm add @teams4soft/teams4soft-ui@0.5.0-beta.5
+```
+
+Para migrar desde PrimeReact sigue la [guía de migración de `DataGrid`](docs/migration/data-grid.md): tabla de equivalencias, diferencias conocidas, `NumberField`, `EntityLookupField` y el tema Siniestros.
+
 ## Peer dependencies
 
 La librería se apoya en [Radix UI](https://www.radix-ui.com/) para overlays y controles, en TanStack Table para `DataGrid` y en componentes propios. Los rangos usan `^` sobre la mayor probada: React `^18.3.0 || ^19.0.0`; los mínimos de Radix están en `peerDependencies` de `package.json`. Una nueva mayor se admite solo después de probarla en CI. TanStack Table no es peer: la librería lo trae como dependencia con la versión exacta `9.3.1`, así que no hay que instalarlo, y un `@tanstack/react-table` v8 en tu proyecto convive sin conflicto.
@@ -182,10 +192,11 @@ El `toast` importable es **API de cliente**: requiere un `<ToastProvider global 
 
 ### Fase 4: DataGrid
 
-`DataGrid` vive en el subpath `./data-display`. En npm, `next` apunta a
-`0.5.0-beta.2`, que todavía usa la fila de filtros; el menú de filtros descrito aquí
-llega con la próxima beta. TanStack Table viene incluido; solo instala los peers Radix de
-Popover, Checkbox, Slot y Tooltip.
+`DataGrid` vive en el subpath `./data-display`. En npm, `next` apunta todavía a
+`0.5.0-beta.2`, que usa la fila de filtros; el menú de filtros descrito aquí llega con
+`0.5.0-beta.5`. TanStack Table viene incluido; solo instala los peers Radix de
+Popover, Checkbox, Slot y Tooltip. Si vienes de PrimeReact, empieza por la
+[guía de migración](docs/migration/data-grid.md).
 
 ```tsx
 import { DataGrid, textColumn, amountColumn, dateColumn } from "@teams4soft/teams4soft-ui/data-display";
@@ -591,10 +602,12 @@ La `0.5.0` se cierra con G2, G3, `EntityLookupField` + `EntityLookupGroup` y G4.
 
 **Sin publicar:** G2 — edición de `DataGrid` (celdas editables, validación, `getData()`, `onChange`, handle imperativo) y el nuevo `NumberField`. Entra en la `0.5.0` sin versión propia. Le sigue G3: opciones remotas (`loadOptions`) y consultas al servidor (`serverSide`).
 
+`beta.3` y `beta.4` existen solo en el repositorio y no se publicaron: su contenido sale en la `0.5.0-beta.5`.
+
 | Versión | Fase | Contenido |
 | --- | --- | --- |
-| 0.5.0-beta.4 (sin publicar) | G1 — Menú de filtros | Cada encabezado filtrable lleva un icono que abre un menú con condición y valor; reemplaza la fila de filtros. Nuevas `filterOperators`, `messages.filter*` y slots `filterButton` y `filterMenu`. Se eliminan los slots `filterRow` y `filterCell` y el token `--ui-grid-filter-height`. |
-| 0.5.0-beta.3 (sin publicar) | Correcciones | El cuerpo de `Dialog` trae padding por defecto (`classNames={{ body: "p-0" }}` lo quita) y su pie alinea a la derecha. `RadioGroup` alinea sus opciones al inicio. `FeedbackDialog` avisa en desarrollo si `rejectLabel` llega sin `showReject`. |
+| 0.5.0-beta.4 (no se publicó) | G1 — Menú de filtros | Cada encabezado filtrable lleva un icono que abre un menú con condición y valor; reemplaza la fila de filtros. Nuevas `filterOperators`, `messages.filter*` y slots `filterButton` y `filterMenu`. Se eliminan los slots `filterRow` y `filterCell` y el token `--ui-grid-filter-height`. |
+| 0.5.0-beta.3 (no se publicó) | Correcciones | El cuerpo de `Dialog` trae padding por defecto (`classNames={{ body: "p-0" }}` lo quita) y su pie alinea a la derecha. `RadioGroup` alinea sus opciones al inicio. `FeedbackDialog` avisa en desarrollo si `rejectLabel` llega sin `showReject`. |
 | 0.5.0-beta.2 | G1 — TanStack v9 | Migra `DataGrid` a `@tanstack/react-table@^9.3.1`, con la API nativa de esa mayor. La API pública de `DataGrid` no cambia; el peer pasa de la v8 a la v9. |
 | 0.5.0-beta.1 | G1 — Corrección | Limita el peer a `@tanstack/react-table@^8.21.3`: con `0.5.0-beta.0`, una instalación limpia resolvía la v9 y el paquete no cargaba. Todos los peers pasan de `>=` a `^`, con Radix y React actualizados; sube los mínimos de Radix. |
 | 0.5.0-beta.0 | G1 — Consulta | `DataGrid`, factorías, filtros, selección, paginación y tokens; subpath `./data-display`. |
