@@ -20,3 +20,8 @@ skills-lock.json
 
 # Docs locales no commiteables (plan 2b y presentación)
 docs/superpowers/
+# tija (local)
+.tija/cache/
+.tija/index/
+.tija/session/
+.tija/tmp/

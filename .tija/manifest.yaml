@@ -1,0 +1,122 @@
+version: 1
+project:
+  name: teams4soft-ui
+  type: react-vite
+content:
+  language: es
+git:
+  host: github
+  branchConvention: conventional
+  branchPrefixes:
+    - feat
+    - fix
+    - refactor
+    - chore
+    - docs
+    - ci
+    - perf
+    - test
+    - build
+    - style
+    - revert
+    - feature
+    - bugfix
+    - hotfix
+    - release
+  baseBranches:
+    - main
+    - master
+    - dev
+    - develop
+    - desarrollo
+pullRequest:
+  target: main
+  template: .github/PULL_REQUEST_TEMPLATE.md
+  rules: .tija/rules/pull-request.md
+  title:
+    convention: conventional-commits
+    requireScope: true
+    maxLength: 100
+  requiredSections:
+    - Resumen
+    - Objetivo
+    - Cambios realizados
+    - Pruebas
+  minSectionLength: 10
+  invalidValues:
+    - n/a
+    - na
+    - no aplica
+    - pendiente
+    - todo
+    - por definir
+    - '...'
+    - '-'
+  autoAssign: true
+quality:
+  tests:
+    provider: vitest
+agents:
+  default: claude
+  tasks:
+    architecture:
+      tier: deep
+    comments:
+      tier: fast
+    pullRequest:
+      tier: fast
+    review:
+      tier: balanced
+skills:
+  antislop-code:
+    path: .tija/skills/antislop-code/SKILL.md
+  antislop-copywriting:
+    path: .tija/skills/antislop-copywriting/SKILL.md
+  generar-informe-pdf:
+    path: .tija/skills/generar-informe-pdf/SKILL.md
+  generar-reporte-actividades:
+    path: .tija/skills/generar-reporte-actividades/SKILL.md
+  thermo-quality:
+    path: .tija/skills/thermo-quality/SKILL.md
+  thermo-review:
+    path: .tija/skills/thermo-review/SKILL.md
+comments:
+  include:
+    - src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}
+  exclude:
+    - '**/*.min.js'
+    - dist/**
+    - build/**
+    - '**/*.d.ts'
+    - node_modules/**
+tija:
+  defaultsVersion: "4"
+  installed:
+    .github/PULL_REQUEST_TEMPLATE.md: 929dc06b42e3a1c606dce5d0f305e3afb2f3b52debd1a8062bef9f22cd6d1dbc
+    .tija/rules/pull-request.md: 66ab10b118818d7fffbc82b6c0bf0fdef0dafd79871f476f808c205de825626b
+    .tija/skills/antislop-code/LICENSE: 9fd83fb1fda52ca0094b96e2ed5a3d6c42a81b95a6c6326553f5bbe570f443de
+    .tija/skills/antislop-code/SKILL.md: 6cbb4c79b9ef5a155037eaebaa79c2056813ce9a8cbb3988cc16aa72fb0d6307
+    .tija/skills/antislop-copywriting/LICENSE: 9fd83fb1fda52ca0094b96e2ed5a3d6c42a81b95a6c6326553f5bbe570f443de
+    .tija/skills/antislop-copywriting/SKILL.md: 00020c38527fab31221df004efd432049a489914eb5c957e69bb3b34d5b689aa
+    .tija/skills/generar-informe-pdf/SKILL.md: 350f40a1f81089e4c4fcebc6e2e4a907cd4a75b138223c37699c346333902dae
+    .tija/skills/generar-informe-pdf/assets/branding/header-pattern.png: 644c48039fa2f12832dcf232967b9664c82c3e863eed8551411233120d88f48d
+    .tija/skills/generar-informe-pdf/assets/branding/logo.png: 6a2a6b6d0ad9a6642cd16fa10d3c983ca2696f00d4cfec347325143f4e4d1a8d
+    .tija/skills/generar-informe-pdf/examples/informe-ejemplo/figuras/fig1-flujo.svg: 3c91bea299ca12826a0185a09c8f4a05d29b82d73d0347183e0a0e68f1cec701
+    .tija/skills/generar-informe-pdf/examples/informe-ejemplo/informe.json: 532c503a1b0668b94466eb651483ba3312b8425cb10f7617955050cbb49500e1
+    .tija/skills/generar-informe-pdf/references/content-schema.md: 965aa3be22a47ede4c0187144654a3b297c855d84b14eb02ece2a25d6f9c6c2d
+    .tija/skills/generar-informe-pdf/references/figure-style.md: 945fccb99efe2d69bdd29993c49d7d4b4b1c26c1cb976e7803643cec29b71903
+    .tija/skills/generar-informe-pdf/requirements.txt: 3242e5eb6eeaf341802e4ae8c1c65ed705d3791bddc3866ebe7636bc859e8554
+    .tija/skills/generar-informe-pdf/scripts/build_report.py: 2a1fde84ba061150c032db97f57c0e49e0edd9ee2f403cdafc4d8ce19b9ace1f
+    .tija/skills/generar-informe-pdf/template.json: 7074a1bfda3dc79646ade53172c91ec2635bc69670f06fbf5c09742fba21c337
+    .tija/skills/generar-reporte-actividades/SKILL.md: 72790ca877f2571c561b3e61d44fcd5d0b6d4314e0573af6a3e7aade359beadc
+    .tija/skills/generar-reporte-actividades/activity-template.json: bf9b6add77f138caefc0ef033e4f073d04b360f43298b80c681803df86f9d5a4
+    .tija/skills/generar-reporte-actividades/references/report-schema.md: 936d59ec34fff6f06432a029be6b4f1297f609c41647245aa51df3fe83c42985
+    .tija/skills/generar-reporte-actividades/scripts/build_activity_report.py: 0c352f3671df385f3be3e7645caad3af5179bb4e35773bc33bc11aa7947a6bef
+    .tija/skills/generar-reporte-actividades/scripts/collect_activity.py: a60a9fbc9a9070939a49489d3b2f702c5a86d0f3727a47120a4ee8ae42dfe5f7
+    .tija/skills/thermo-quality/LICENSE: 702f5f331b56aff0e33d8c7826df5202559f894145eb70355c6477b55b5bb8a0
+    .tija/skills/thermo-quality/SKILL.md: 032c5b797be2acb422e498c86d72bff88e0f13166448280e24bd80cc9e6aa917
+    .tija/skills/thermo-review/LICENSE: 702f5f331b56aff0e33d8c7826df5202559f894145eb70355c6477b55b5bb8a0
+    .tija/skills/thermo-review/SKILL.md: e2199e93576a5ad35ba0e8f5fcdf9586c4a1813560ed1ea777fc3a3d0c10403c
+    .tija/templates/pull-request.md: 929dc06b42e3a1c606dce5d0f305e3afb2f3b52debd1a8062bef9f22cd6d1dbc
+    .tija/workflows/.gitkeep: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    .tija/workflows/pre-pr.yaml: 84874f0fc29c3761b3e04057685009c46f6934057f878b71a9d720a5239bca63
