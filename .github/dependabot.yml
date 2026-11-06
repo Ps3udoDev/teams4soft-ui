@@ -1,10 +1,42 @@
 version: 2
 updates:
+  # Dependencias npm: un solo PR mensual agrupado con minor + patch.
+  # Las versiones mayores se ignoran; se actualizan a mano cuando se planifiquen.
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+    commit-message:
+      prefix: build(deps)
+
+  # GitHub Actions: mismo criterio, un PR mensual agrupado sin saltos mayores.
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+    commit-message:
+      prefix: build(deps)
