@@ -61,12 +61,13 @@
       "require": "./dist/overlays.cjs"
     },
     "./styles.css": "./dist/styles.css",
+    "./styles-no-preflight.css": "./dist/styles-no-preflight.css",
     "./tokens.css": "./dist/tokens.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build:js": "tsup",
-    "build:css": "pnpm exec tailwindcss -i src/styles/theme.css -o dist/styles.css --minify && node -e \"require('fs').copyFileSync('src/styles/tokens.css','dist/tokens.css')\"",
+    "build:css": "pnpm exec tailwindcss -i src/styles/theme.css -o dist/styles.css --minify && pnpm exec tailwindcss -i src/styles/theme-no-preflight.css -o dist/styles-no-preflight.css --minify && node -e \"require('fs').copyFileSync('src/styles/tokens.css','dist/tokens.css')\"",
     "build": "pnpm build:js && pnpm build:css",
     "test": "vitest run",
     "test:watch": "vitest",
