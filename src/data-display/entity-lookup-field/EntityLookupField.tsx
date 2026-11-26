@@ -73,7 +73,7 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
     onSearchError,
   });
   const { state, close: closeController, invalidate } = controller;
-  const { noticesElement, showNotFound, showQueryRequired } = useLookupNotices({ messages, notFoundMessage, onCreateRequest });
+  const { noticesElement, showNotFound, showQueryRequired, dismiss: dismissNotices } = useLookupNotices({ messages, notFoundMessage, onCreateRequest });
 
   const noticeOpenRef = React.useRef(false);
   noticeOpenRef.current = noticesElement !== null;
@@ -232,10 +232,15 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
     if (!open || ownsOpenRef.current) return;
     ownsOpenRef.current = true;
     // An inert remote field opens with no rows: it must not hit the back end.
-    if ((disabled || readOnly) && latest.current.search) return;
+    if ((disabled || readOnly) && latest.current.search) return () => { ownsOpenRef.current = false; };
+    let active = true;
     void runTrigger().then((outcome) => {
-      if (outcome.type !== "choose") closeDialog();
+      if (active && outcome.type !== "choose") closeDialog();
     });
+    return () => {
+      active = false;
+      ownsOpenRef.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -265,6 +270,7 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
     } else {
       internalSelectionIdRef.current = undefined;
       invalidate();
+      dismissNotices();
       if (openRef.current) closeDialog();
     }
     // Internal transitions already left the text equal to the new label, so this only writes for outside changes.
@@ -299,6 +305,7 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
     setText(next);
     if (next === "") {
       invalidate();
+      dismissNotices();
       if (latest.current.selectedItem) {
         internalSelectionIdRef.current = null;
         latest.current.onSelectionChange(null);

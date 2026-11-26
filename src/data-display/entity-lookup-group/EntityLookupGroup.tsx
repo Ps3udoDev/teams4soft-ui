@@ -49,7 +49,7 @@ export function EntityLookupGroup<T>(props: EntityLookupGroupProps<T>) {
     onSearchError,
   });
   const { state, close: closeController, invalidate } = controller;
-  const { noticesElement, showNotFound, showQueryRequired } = useLookupNotices({ messages, notFoundMessage, onCreateRequest });
+  const { noticesElement, showNotFound, showQueryRequired, dismiss: dismissNotices } = useLookupNotices({ messages, notFoundMessage, onCreateRequest });
 
   const [open, setOpen] = React.useState(false);
   const openRef = React.useRef(open);
@@ -121,8 +121,9 @@ export function EntityLookupGroup<T>(props: EntityLookupGroupProps<T>) {
     }
     internalValuesRef.current = null;
     invalidate();
+    dismissNotices();
     if (openRef.current) setOpen(false);
-  }, [values, invalidate]);
+  }, [values, invalidate, dismissNotices]);
 
   const settle = async (outcome: LookupOutcome<T, Record<string, string>>, term: string) => {
     switch (outcome.type) {
@@ -165,6 +166,7 @@ export function EntityLookupGroup<T>(props: EntityLookupGroupProps<T>) {
     internalValuesRef.current = next;
     if (!normalizedRef.current.some((f) => f.searchable && read(next, f.key))) {
       invalidate();
+      dismissNotices();
     }
     latest.current.onValuesChange(next, field.key);
   };

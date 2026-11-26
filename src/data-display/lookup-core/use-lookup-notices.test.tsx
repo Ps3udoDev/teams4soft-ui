@@ -132,13 +132,13 @@ describe("useLookupNotices", () => {
     expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
   });
 
-  it("al desmontar resuelve los avisos pendientes como kept", async () => {
+  it("al desmontar resuelve los avisos pendientes como aborted", async () => {
     const { api, view } = setup();
     let notFound!: ReturnType<typeof track<NotFoundResult>>;
     act(() => { notFound = track(api().showNotFound("ABC")); });
     await screen.findByRole("alertdialog");
     view.unmount();
-    await waitFor(() => expect(notFound.value).toBe("kept"));
+    await waitFor(() => expect(notFound.value).toBe("aborted"));
   });
 
   it("usa el onCreateRequest más reciente", async () => {

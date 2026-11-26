@@ -615,10 +615,12 @@ function Catalogo10kPaginadoExample() {
       serverSide={serverSide}
       pagination={{ pageSize: 50, pageSizeOptions: [25, 50, 100] }}
       emptyState={{ title: "Sin pólizas para los criterios actuales", hint: "Desactive el modo vacío o reintente la carga." }}
-      onChange={(data, change) => {
-        if (change.type === "edit" && change.rowId) {
-          const row = data.rows.find((r) => r.id === change.rowId);
-          if (row) setDrafts((prev) => ({ ...prev, [change.rowId!]: row }));
+      onChange={(_data, change) => {
+        if (change.type === "edit" && change.rowId && change.field) {
+          setDrafts((prev) => ({
+            ...prev,
+            [change.rowId!]: { ...(prev[change.rowId!] ?? {}), [change.field!]: change.next },
+          }));
         }
       }}
     />

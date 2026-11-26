@@ -191,6 +191,8 @@ export function useLookupController<T, TQuery extends LookupQuery = LookupQuery>
   const close = useCallback(() => {
     begin();
     lastRef.current = null;
+    previousStatusRef.current = "idle";
+    stateRef.current = initialState();
     dispatch({ type: "reset" });
   }, [begin]);
 

@@ -107,18 +107,59 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   }
   const filtersRef = React.useRef(columnFilters);
   filtersRef.current = columnFilters;
+  const sortingRef = React.useRef(sorting);
+  sortingRef.current = sorting;
+  const paginationRef = React.useRef(paginationState);
+  paginationRef.current = paginationState;
+  const allowServerQuery = React.useCallback(
+    (nextPagination: { pageIndex: number; pageSize: number }, nextSorting: SortingState, nextFilters: ColumnFiltersState) => {
+      const guard = latest.current.serverSide?.onBeforeQueryChange;
+      if (!guard) return true;
+      const unpagedMode = latest.current.pagination === false;
+      const nextQuery: DataGridQuery = {
+        pageIndex: unpagedMode ? 0 : nextPagination.pageIndex,
+        pageSize: nextPagination.pageSize,
+        sorting: nextSorting.map(item => ({ field: item.id, desc: item.desc })),
+        filters: Object.fromEntries(nextFilters.filter(item => item.value != null).map(item => [item.id, item.value as DataGridFilterValue])),
+      };
+      return guard(nextQuery) !== false;
+    },
+    [],
+  );
+  const onPaginationChange = React.useCallback((updater: Updater<{ pageIndex: number; pageSize: number }>) => {
+    const next = typeof updater === "function" ? updater(paginationRef.current) : updater;
+    if (latest.current.serverSide && !allowServerQuery(next, sortingRef.current, filtersRef.current)) return;
+    paginationRef.current = next;
+    setPagination(next);
+  }, [allowServerQuery]);
   const onSortingChange = React.useCallback((updater: Updater<SortingState>) => {
-    setSorting(updater);
-    if (latest.current.serverSide) setPagination(current => current.pageIndex === 0 ? current : { ...current, pageIndex: 0 });
-  }, []);
+    const next = typeof updater === "function" ? updater(sortingRef.current) : updater;
+    const nextPage = latest.current.serverSide && paginationRef.current.pageIndex !== 0
+      ? { ...paginationRef.current, pageIndex: 0 }
+      : paginationRef.current;
+    if (latest.current.serverSide && !allowServerQuery(nextPage, next, filtersRef.current)) return;
+    sortingRef.current = next;
+    setSorting(next);
+    if (nextPage !== paginationRef.current) {
+      paginationRef.current = nextPage;
+      setPagination(nextPage);
+    }
+  }, [allowServerQuery]);
   // Aplicar lo mismo, o limpiar sin filtro, no es un cambio: ni re-renderiza ni vuelve a la primera página.
   const onColumnFiltersChange = React.useCallback((updater: Updater<ColumnFiltersState>) => {
     const next = typeof updater === "function" ? updater(filtersRef.current) : updater;
     if (JSON.stringify(next) === JSON.stringify(filtersRef.current)) return;
+    const nextPage = latest.current.serverSide && paginationRef.current.pageIndex !== 0
+      ? { ...paginationRef.current, pageIndex: 0 }
+      : paginationRef.current;
+    if (latest.current.serverSide && !allowServerQuery(nextPage, sortingRef.current, next)) return;
     filtersRef.current = next;
     setColumnFilters(next);
-    if (latest.current.serverSide) setPagination(current => current.pageIndex === 0 ? current : { ...current, pageIndex: 0 });
-  }, []);
+    if (nextPage !== paginationRef.current) {
+      paginationRef.current = nextPage;
+      setPagination(nextPage);
+    }
+  }, [allowServerQuery]);
   const rowSelection = React.useMemo(() => toRowSelection(selectedIds), [selectedIds]);
   const updateSelection = React.useCallback((updater: Updater<RowSelectionState>) => {
     const next = typeof updater === "function" ? updater(toRowSelection(selectionRef.current)) : updater;
@@ -147,7 +188,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
     state: { columnVisibility: visibility, sorting, columnFilters, columnPinning, columnSizing, pagination: paginationState, rowSelection },
     onColumnVisibilityChange: setVisibility, onSortingChange,
     onColumnFiltersChange, onColumnSizingChange: setColumnSizing,
-    onPaginationChange: setPagination, onRowSelectionChange: updateSelection,
+    onPaginationChange, onRowSelectionChange: updateSelection,
     // Las features son estáticas: sin paginación, manualPagination deja pasar todas las filas.
     manualPagination: pagination === false || server, manualSorting: server, manualFiltering: server,
     rowCount: server ? totalRecords : undefined, autoResetPageIndex: false, sortDescFirst: false, columnResizeMode: "onChange",

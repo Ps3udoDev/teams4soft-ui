@@ -66,7 +66,7 @@ const check = (index: number) => within(bodyRows()[index]!).getByRole("checkbox"
 describe("DataGrid: serverSide", () => {
   it("exporta DataGridQuery y la prop serverSide", () => {
     expectTypeOf<DataGridQuery>().toEqualTypeOf<{ pageIndex: number; pageSize: number; sorting: Array<{ field: string; desc: boolean }>; filters: Record<string, { operator: DataGridFilterOperator; value: unknown }> }>();
-    expectTypeOf<NonNullable<DataGridProps<Premium>["serverSide"]>>().toEqualTypeOf<{ totalRecords: number; onQueryChange: (query: DataGridQuery) => void }>();
+    expectTypeOf<NonNullable<DataGridProps<Premium>["serverSide"]>>().toEqualTypeOf<{ totalRecords: number; onQueryChange: (query: DataGridQuery) => void; onBeforeQueryChange?: (next: DataGridQuery) => boolean }>();
   });
 
   it("al montar emite una vez la consulta inicial, con initialSort", () => {
@@ -628,24 +628,28 @@ describe("DataGrid: serverSide, paridad de consulta, orden y borradores por ID",
     expect(within(bodyRows()[1]!).getByRole("textbox", { name: "Póliza" })).toHaveValue("Pol 19");
   });
 
-  it("cancelar navegación con cambios pendientes conserva página, selección y valor del borrador", async () => {
+  it("cancelar navegación con cambios pendientes conserva página, selección, dirtyIds y valor del borrador sin remontar", async () => {
     const user = userEvent.setup();
+    const gridRef = React.createRef<DataGridHandle<Premium>>();
+    const onQuery = vi.fn();
     function GuardedParent() {
       const [page, setPage] = React.useState(0);
       const [rowsByPage, setRowsByPage] = React.useState<Record<number, Premium[]>>({ 0: pageRows(0), 1: pageRows(1) });
       const [selection, setSelection] = React.useState<string[]>([]);
       const [dirty, setDirty] = React.useState(false);
       const [pendingPage, setPendingPage] = React.useState<number | null>(null);
-      const [gridKey, setGridKey] = React.useState(0);
 
       const serverSide = React.useMemo(() => ({
         totalRecords: 20,
-        onQueryChange: (q: DataGridQuery) => {
-          if (q.pageIndex === page) return;
-          if (dirty) {
-            setPendingPage(q.pageIndex);
-            return;
+        onBeforeQueryChange: (nextQuery: DataGridQuery) => {
+          if (dirty && nextQuery.pageIndex !== page) {
+            setPendingPage(nextQuery.pageIndex);
+            return false;
           }
+          return true;
+        },
+        onQueryChange: (q: DataGridQuery) => {
+          onQuery(q);
           setPage(q.pageIndex);
         },
       }), [page, dirty]);
@@ -653,7 +657,7 @@ describe("DataGrid: serverSide, paridad de consulta, orden y borradores por ID",
       return (
         <div>
           <DataGrid
-            key={gridKey}
+            ref={gridRef}
             columns={editableColumns}
             getRowId={getRowId}
             value={rowsByPage[page]}
@@ -668,7 +672,7 @@ describe("DataGrid: serverSide, paridad de consulta, orden y borradores por ID",
           />
           {pendingPage !== null && (
             <div role="alertdialog" aria-label="Cambios sin guardar">
-              <button onClick={() => { setPendingPage(null); setGridKey(k => k + 1); }}>Cancelar navegación</button>
+              <button onClick={() => setPendingPage(null)}>Cancelar navegación</button>
               <button onClick={() => { setDirty(false); setPage(pendingPage); setPendingPage(null); }}>Descartar y avanzar</button>
             </div>
           )}
@@ -677,6 +681,7 @@ describe("DataGrid: serverSide, paridad de consulta, orden y borradores por ID",
     }
 
     render(<GuardedParent />);
+    onQuery.mockClear();
     await user.click(screen.getAllByRole("checkbox", { name: "Seleccionar fila" })[0]!);
     const firstInput = () => within(bodyRows()[0]!).getByRole("textbox", { name: "Póliza" });
     await user.clear(firstInput());
@@ -685,10 +690,13 @@ describe("DataGrid: serverSide, paridad de consulta, orden y borradores por ID",
 
     await next(user);
     expect(screen.getByRole("alertdialog", { name: "Cambios sin guardar" })).toBeInTheDocument();
+    expect(onQuery).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Cancelar navegación" }));
 
     expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByText("Página 1 de 2")).toBeInTheDocument();
     expect(firstInput()).toHaveValue("Borrador-1");
     expect(screen.getAllByRole("checkbox", { name: "Seleccionar fila" })[0]).toBeChecked();
+    expect(gridRef.current?.getData().dirtyIds).toEqual(["r-1"]);
   });
 });

@@ -1226,4 +1226,51 @@ describe("EntityLookupField vigencia de intención y concurrencia", () => {
     await user.click(screen.getByRole("button", { name: "No" }));
     expect(onCreateRequest).not.toHaveBeenCalled();
   });
+
+  it("en StrictMode: defaultOpen={true} remoto lista las filas sin cerrarse ni quedar colgado", async () => {
+    const search = vi.fn(async (): Promise<LookupSearchResponse<Prov>> => ({ items: provs(1, 3), total: 3 }));
+    render(
+      <React.StrictMode>
+        <Harness search={search} defaultOpen />
+      </React.StrictMode>,
+    );
+    expect(await screen.findByRole("dialog", { name: "Seleccionar elemento" })).toBeInTheDocument();
+    await waitFor(() => expect(bodyRows()).toHaveLength(3));
+  });
+
+  it("cambio externo de selección cierra un aviso notFound pendiente sin limpiar la nueva entidad", async () => {
+    const onSelectionChange = vi.fn();
+    const user = userEvent.setup();
+    const search = vi.fn(async (): Promise<LookupSearchResponse<Prov>> => ({ items: [], total: 0 }));
+    const { rerender } = render(
+      <EntityLookupField<Prov>
+        selectedItem={prov(1)}
+        onSelectionChange={onSelectionChange}
+        getItemId={(p) => p.id}
+        getItemLabel={(p) => p.name}
+        columns={columns}
+        search={search}
+      />,
+    );
+
+    await user.clear(input());
+    onSelectionChange.mockClear();
+    await user.type(input(), "inexistente{Enter}");
+    expect(await screen.findByText(/No se encontró/)).toBeInTheDocument();
+
+    rerender(
+      <EntityLookupField<Prov>
+        selectedItem={prov(9)}
+        onSelectionChange={onSelectionChange}
+        getItemId={(p) => p.id}
+        getItemLabel={(p) => p.name}
+        columns={columns}
+        search={search}
+      />,
+    );
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(onSelectionChange).not.toHaveBeenCalled();
+    expect(input()).toHaveValue("Proveedor 9");
+  });
 });

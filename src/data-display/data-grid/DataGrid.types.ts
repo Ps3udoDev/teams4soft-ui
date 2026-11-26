@@ -186,7 +186,12 @@ export interface DataGridProps<T> {
    * Tras guardar, llama a `ref.reset(rows)` para marcarlas como guardadas.
    * La selección conserva los ids de otras páginas.
    */
-  serverSide?: { totalRecords: number; onQueryChange: (query: DataGridQuery) => void };
+  serverSide?: {
+    totalRecords: number;
+    onQueryChange: (query: DataGridQuery) => void;
+    /** Si devuelve `false`, cancela el cambio de página, orden o filtro antes de mutar el estado de la grilla. */
+    onBeforeQueryChange?: (next: DataGridQuery) => boolean;
+  };
   loading?: boolean;
   toolbar?: React.ReactNode;
   onRowClick?: (row: T, event: React.MouseEvent<HTMLTableRowElement>) => void;
