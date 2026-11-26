@@ -1,0 +1,6 @@
+# Propietarios de controles de seguridad, publicación y cadena de suministro
+/.github/workflows/ @Ps3udoDev
+/.github/CODEOWNERS @Ps3udoDev
+/scripts/audit-lockfile.mjs @Ps3udoDev
+/scripts/release-gate.mjs @Ps3udoDev
+/docs/migration/excepciones-seguridad.json @Ps3udoDev
