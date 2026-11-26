@@ -72,7 +72,7 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
     autoSelectSingle,
     onSearchError,
   });
-  const { state, close: closeController } = controller;
+  const { state, close: closeController, invalidate } = controller;
   const { noticesElement, showNotFound, showQueryRequired } = useLookupNotices({ messages, notFoundMessage, onCreateRequest });
 
   const noticeOpenRef = React.useRef(false);
@@ -90,8 +90,12 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
   const [innerCriterion, setInnerCriterion] = React.useState(() => defaultCriterion ?? criteria?.[0]?.value);
   const activeCriterion = criterion ?? innerCriterion;
 
+  // Distinguishes our own selection/clear echoes from external entity/context changes.
+  const internalSelectionIdRef = React.useRef<string | null | undefined>(undefined);
+
   const applySelection = (item: T) => {
     dirtyRef.current = false;
+    internalSelectionIdRef.current = String(latest.current.getItemId(item));
     setText(latest.current.getItemLabel(item));
     latest.current.onSelectionChange(item);
   };
@@ -256,6 +260,13 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
       if (previous.label !== (selectedLabel ?? "") && textRef.current === previous.label) setText(selectedLabel ?? "");
       return;
     }
+    if (internalSelectionIdRef.current === selectedId) {
+      internalSelectionIdRef.current = undefined;
+    } else {
+      internalSelectionIdRef.current = undefined;
+      invalidate();
+      if (openRef.current) closeDialog();
+    }
     // Internal transitions already left the text equal to the new label, so this only writes for outside changes.
     if (textRef.current !== (selectedLabel ?? "")) {
       dirtyRef.current = false;
@@ -286,7 +297,13 @@ export function EntityLookupField<T>(props: EntityLookupFieldProps<T>) {
   const onTextChange = (next: string) => {
     dirtyRef.current = true;
     setText(next);
-    if (next === "" && latest.current.selectedItem) latest.current.onSelectionChange(null);
+    if (next === "") {
+      invalidate();
+      if (latest.current.selectedItem) {
+        internalSelectionIdRef.current = null;
+        latest.current.onSelectionChange(null);
+      }
+    }
   };
 
   const onTrigger = () => {

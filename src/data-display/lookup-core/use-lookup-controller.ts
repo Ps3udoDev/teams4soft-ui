@@ -155,7 +155,7 @@ export function useLookupController<T, TQuery extends LookupQuery = LookupQuery>
       }
 
       const only = rows[0];
-      if (rows.length === 1 && intent === "commit" && autoSelectSingle && only !== undefined) {
+      if (rows.length === 1 && (total === null || total === 1) && intent === "commit" && autoSelectSingle && only !== undefined) {
         dispatch({ type: "reset" });
         return { type: "selected", item: only };
       }
@@ -194,5 +194,5 @@ export function useLookupController<T, TQuery extends LookupQuery = LookupQuery>
     dispatch({ type: "reset" });
   }, [begin]);
 
-  return { state, runSearch, goToPage, close };
+  return { state, runSearch, goToPage, close, invalidate: close };
 }

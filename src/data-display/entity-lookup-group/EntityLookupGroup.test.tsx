@@ -1,6 +1,6 @@
 import * as React from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EntityLookupGroup } from "./EntityLookupGroup";
 import type { EntityLookupGroupProps, LookupGroupField } from "./EntityLookupGroup.types";
@@ -417,5 +417,69 @@ describe("EntityLookupGroup layout y campos", () => {
     expect(view.container.querySelector("[data-slot=grid]")).toHaveClass("mi-grid");
     expect(view.container.querySelector("[data-slot=field]")).toHaveClass("mi-campo");
     expect(trigger()).toHaveClass("mi-boton");
+  });
+});
+
+describe("EntityLookupGroup vigencia de intención y concurrencia", () => {
+  it("dos búsquedas resueltas en orden inverso (ignorando abort): solo aplica la vigente", async () => {
+    let resolveA!: (v: LookupSearchResponse<Person>) => void;
+    let resolveB!: (v: LookupSearchResponse<Person>) => void;
+    const search = vi.fn((params: Record<string, string>) => new Promise<LookupSearchResponse<Person>>((resolve) => {
+      if (params.name === "A") resolveA = resolve;
+      else resolveB = resolve;
+    }));
+    const { user, onSelectionChange } = setup({ search, initial: { ...empty, nombre: "A" } });
+
+    await user.type(field("Nombre"), "{Enter}");
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(1));
+    await user.clear(field("Nombre"));
+    await user.type(field("Nombre"), "B{Enter}");
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+
+    await act(async () => { resolveB({ items: [person(2)], total: 1 }); });
+    await waitFor(() => expect(onSelectionChange).toHaveBeenCalledWith(person(2)));
+
+    await act(async () => { resolveA({ items: [person(1)], total: 1 }); });
+    expect(onSelectionChange).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("cambio externo de values (cambio de póliza) durante búsqueda invalida la respuesta antigua", async () => {
+    let resolveA!: (v: LookupSearchResponse<Person>) => void;
+    const search = vi.fn(() => new Promise<LookupSearchResponse<Person>>((resolve) => { resolveA = resolve; }));
+    const onValuesChange = vi.fn();
+    const onSelectionChange = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <EntityLookupGroup<Person>
+        fields={fields}
+        values={{ ...empty, nombre: "POLIZA1" }}
+        onValuesChange={onValuesChange}
+        onSelectionChange={onSelectionChange}
+        getItemId={(p) => p.id}
+        columns={columns}
+        search={search}
+      />,
+    );
+
+    await user.type(field("Nombre"), "{Enter}");
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(1));
+
+    // Reemplazo externo de contexto / póliza
+    rerender(
+      <EntityLookupGroup<Person>
+        fields={fields}
+        values={{ ...empty, nombre: "POLIZA2" }}
+        onValuesChange={onValuesChange}
+        onSelectionChange={onSelectionChange}
+        getItemId={(p) => p.id}
+        columns={columns}
+        search={search}
+      />,
+    );
+
+    await act(async () => { resolveA({ items: [person(7)], total: 1 }); });
+    expect(onSelectionChange).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

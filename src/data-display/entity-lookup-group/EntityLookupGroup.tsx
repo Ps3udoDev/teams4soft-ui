@@ -48,14 +48,18 @@ export function EntityLookupGroup<T>(props: EntityLookupGroupProps<T>) {
     autoSelectSingle: true,
     onSearchError,
   });
-  const { state, close: closeController } = controller;
+  const { state, close: closeController, invalidate } = controller;
   const { noticesElement, showNotFound, showQueryRequired } = useLookupNotices({ messages, notFoundMessage, onCreateRequest });
 
   const [open, setOpen] = React.useState(false);
+  const openRef = React.useRef(open);
+  openRef.current = open;
   const [dialogPageSize, setDialogPageSize] = React.useState(pageSize);
   const inputsRef = React.useRef(new Map<string, HTMLInputElement>());
   // `null`: the trigger button started the search.
   const originRef = React.useRef<string | null>(null);
+  const internalValuesRef = React.useRef<Record<string, string> | null>(null);
+  const prevValuesRef = React.useRef(values);
 
   const buildQuery = (term: string) =>
     (latest.current.buildParams ?? buildDefaultParams)({
@@ -75,6 +79,7 @@ export function EntityLookupGroup<T>(props: EntityLookupGroupProps<T>) {
 
   const pick = (item: T) => {
     const next = applySelection(normalizedRef.current, valuesRef.current, item);
+    internalValuesRef.current = next;
     latest.current.onValuesChange(next);
     latest.current.onSelectionChange?.(item);
   };
@@ -98,6 +103,26 @@ export function EntityLookupGroup<T>(props: EntityLookupGroupProps<T>) {
     if (wasOpenRef.current && !open) closeController();
     wasOpenRef.current = open;
   }, [open, closeController]);
+
+  // Invalidate in-flight searches when the parent replaces `values` externally (e.g. policy switch).
+  React.useEffect(() => {
+    const prev = prevValuesRef.current;
+    prevValuesRef.current = values;
+    const sameAs = (other: Record<string, string> | null) => {
+      if (!other) return false;
+      const keys = new Set([...Object.keys(other), ...Object.keys(values)]);
+      for (const k of keys) if ((other[k] ?? "") !== (values[k] ?? "")) return false;
+      return true;
+    };
+    if (sameAs(prev)) return;
+    if (sameAs(internalValuesRef.current)) {
+      internalValuesRef.current = null;
+      return;
+    }
+    internalValuesRef.current = null;
+    invalidate();
+    if (openRef.current) setOpen(false);
+  }, [values, invalidate]);
 
   const settle = async (outcome: LookupOutcome<T, Record<string, string>>, term: string) => {
     switch (outcome.type) {
@@ -136,7 +161,12 @@ export function EntityLookupGroup<T>(props: EntityLookupGroupProps<T>) {
   };
 
   const onTextChange = (field: NormalizedField, text: string) => {
-    latest.current.onValuesChange({ ...valuesRef.current, [field.key]: text }, field.key);
+    const next = { ...valuesRef.current, [field.key]: text };
+    internalValuesRef.current = next;
+    if (!normalizedRef.current.some((f) => f.searchable && read(next, f.key))) {
+      invalidate();
+    }
+    latest.current.onValuesChange(next, field.key);
   };
 
   const onTrigger = () => {
