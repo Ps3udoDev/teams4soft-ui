@@ -104,6 +104,9 @@ const tokensCss = fs.readFileSync(require.resolve("${PACKAGE}/tokens.css"), "utf
 if (!tokensCss.includes("--ui-primary:")) throw new Error("tokens.css sin tokens esperados");
 const stylesCss = fs.readFileSync(require.resolve("${PACKAGE}/styles.css"), "utf8");
 if (!stylesCss.includes("--ui-primary")) throw new Error("styles.css sin tema/tokens");
+const noPreflightCss = fs.readFileSync(require.resolve("${PACKAGE}/styles-no-preflight.css"), "utf8");
+if (!noPreflightCss.includes("--ui-primary")) throw new Error("styles-no-preflight.css sin tema/tokens");
+if (noPreflightCss.length >= stylesCss.length) throw new Error("styles-no-preflight.css parece incluir preflight completo");
 console.log("require sin require(esm) y CSS del tarball (${REQUIRE_SUBPATHS.join(", ")}, styles.css, tokens.css) correctos");
 `;
 
