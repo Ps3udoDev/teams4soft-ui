@@ -67,6 +67,16 @@ export const PersistenciaColumnas: Story = {
   parameters: { docs: { description: { story: "Oculta una columna y recarga la página: la visibilidad se restaura desde localStorage. Cambiar los campos invalida la configuración guardada." } } },
 };
 export const Compacta: Story = { args: { density: "compact", maxHeight: "38vh" } };
+export const ConDivisores: Story = {
+  args: { columnDividers: true, selectionMode: "multiple" },
+  parameters: {
+    docs: {
+      description: {
+        story: "Activa `columnDividers` para dibujar divisores verticales de 1 px entre columnas visibles (encabezado y cuerpo), respetando selección, columnas fijas, redimensionado y ocultación desde el icono de ojo.",
+      },
+    },
+  },
+};
 
 // Las columnas y cellTypes son constantes de módulo: con identidad inestable se re-renderizan todas las filas.
 

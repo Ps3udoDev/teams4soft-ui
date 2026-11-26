@@ -26,3 +26,8 @@
   --radius-ui-sm: var(--ui-radius-sm);
   --radius-ui-md: var(--ui-radius-md);
 }
+
+/* Divisores verticales opcionales en DataGrid: acotados a las celdas directas del propio grid. */
+[data-slot="root"][data-column-dividers="true"] [data-slot="table"] > :is(thead, tbody) > tr > :is(th, td):not(:last-child) {
+  border-inline-end: 1px solid var(--ui-border);
+}
