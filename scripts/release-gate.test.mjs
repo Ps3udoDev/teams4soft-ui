@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
-import { checkPublishIdempotency, validateReleaseCandidate, verifyManifestDigest } from "./release-gate.mjs";
+import {
+  checkPublishIdempotency,
+  evaluatePromotionDossier,
+  validateReleaseCandidate,
+  verifyManifestDigest,
+  verifyPublishedPackage,
+} from "./release-gate.mjs";
 
 describe("validateReleaseCandidate", () => {
   it("accepts matching stable tag, version, channel and authorized branch", () => {
@@ -147,6 +153,101 @@ describe("checkPublishIdempotency", () => {
         }),
       }),
       /integrity|digest|mismatch/i
+    );
+  });
+});
+
+describe("evaluatePromotionDossier (4 trial dossiers)", () => {
+  const stableIntegrity = "sha512-STABLECANDIDATE==";
+  const makeCompleteDossier = () => ({
+    candidate: { version: "0.5.0", tag: "v0.5.0", gitSha: "4523228", integrity: stableIntegrity },
+    pilotEvidences: [
+      {
+        module: "issuance",
+        tarballIntegrity: stableIntegrity,
+        testedFrontendSha: "132a803",
+        approvedFrontendSha: "132a803",
+      },
+      {
+        module: "claims",
+        tarballIntegrity: stableIntegrity,
+        testedFrontendSha: "ff0cec0",
+        approvedFrontendSha: "ff0cec0",
+      },
+    ],
+    exceptions: [{ id: "GHSA-g7r4-m6w7-qqqr", owner: "Ps3udoDev", expiresAt: "2027-01-25" }],
+    checks: {
+      react18: { passed: true, tarballIntegrity: stableIntegrity },
+      react19: { passed: true, tarballIntegrity: stableIntegrity },
+      node22: { passed: true, tarballIntegrity: stableIntegrity },
+      node24: { passed: true, tarballIntegrity: stableIntegrity },
+      node26: { passed: true, tarballIntegrity: stableIntegrity },
+      esmCjsCss: { passed: true, tarballIntegrity: stableIntegrity },
+      a11y: { passed: true, tarballIntegrity: stableIntegrity },
+      performance: { passed: true, tarballIntegrity: stableIntegrity },
+    },
+    approvals: { platform: "Ps3udoDev", frontend: "FrontendLead", qa: "QALead", maintainer: "Ps3udoDev" },
+    evaluatedAt: "2026-11-26",
+  });
+
+  it("1. approves a complete dossier where all evidence matches candidate digest and SHAs", () => {
+    const res = evaluatePromotionDossier(makeCompleteDossier());
+    assert.equal(res.approved, true);
+    assert.deepEqual(res.reasons, []);
+  });
+
+  it("2. rejects a dossier reusing a beta digest or beta version", () => {
+    const dossier = makeCompleteDossier();
+    dossier.pilotEvidences[0].tarballIntegrity = "sha512-BETA5DIGEST==";
+    const res = evaluatePromotionDossier(dossier);
+    assert.equal(res.approved, false);
+    assert.ok(res.reasons.some((r) => /digest/i.test(r)));
+  });
+
+  it("3. rejects a dossier with a frontend SHA different from the tested pilot commit", () => {
+    const dossier = makeCompleteDossier();
+    dossier.pilotEvidences[1].testedFrontendSha = "deadbeef";
+    const res = evaluatePromotionDossier(dossier);
+    assert.equal(res.approved, false);
+    assert.ok(res.reasons.some((r) => /frontend SHA mismatch/i.test(r)));
+  });
+
+  it("4. rejects a dossier with an expired security exception", () => {
+    const dossier = makeCompleteDossier();
+    dossier.exceptions[0].expiresAt = "2026-11-01";
+    const res = evaluatePromotionDossier(dossier);
+    assert.equal(res.approved, false);
+    assert.ok(res.reasons.some((r) => /expired/i.test(r)));
+  });
+});
+
+describe("verifyPublishedPackage", () => {
+  it("passes when channel, integrity and SLSA provenance match", () => {
+    const res = verifyPublishedPackage({
+      expectedVersion: "0.5.0",
+      expectedChannel: "latest",
+      expectedIntegrity: "sha512-OK==",
+      distTags: { latest: "0.5.0", next: "0.5.0-beta.5" },
+      versionMetadata: {
+        dist: { integrity: "sha512-OK==", attestations: { provenance: { predicateType: "https://slsa.dev/provenance/v1" } } },
+      },
+    });
+    assert.equal(res.verified, true);
+  });
+
+  it("rejects unexpected dist-tag channel target", () => {
+    assert.throws(
+      () =>
+        verifyPublishedPackage({
+          expectedVersion: "0.5.0",
+          expectedChannel: "latest",
+          expectedIntegrity: "sha512-OK==",
+          distTags: { latest: "0.4.0" },
+          versionMetadata: {
+            dist: { integrity: "sha512-OK==", attestations: { provenance: { predicateType: "https://slsa.dev/provenance/v1" } } },
+          },
+        }),
+      /Dist-tag/i
     );
   });
 });
