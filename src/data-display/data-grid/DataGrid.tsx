@@ -34,7 +34,7 @@ function toRowSelection(ids: string[]): RowSelectionState {
 function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.ForwardedRef<DataGridHandle<T>>) {
   const {
     columns, getRowId, value, defaultValue, columnVisibility, onColumnVisibilityChange,
-    onChange, onAddRow, readOnly = false, persistKey, columnToggler = true, selectionMode = "none", selection, onSelectionChange,
+    onChange, onAddRow, readOnly = false, persistKey, columnToggler = true, columnDividers = false, selectionMode = "none", selection, onSelectionChange,
     pagination, serverSide, loading = false, toolbar, initialSort, density = "normal", maxHeight,
     emptyState, cellTypes, className, classNames, styles, style, unstyled = false,
   } = props;
@@ -367,7 +367,7 @@ function DataGridInner<T extends RowData>(props: DataGridProps<T>, ref: React.Fo
   const pinnedWidths = Object.entries(measuredWidths).filter(([id]) => pinnedIds.has(id));
   const presentationKey = JSON.stringify([columnSizing, pinnedWidths, density, loading, readOnly, unstyled, selectionMode, revision, messages.selectRow, classNames?.row, classNames?.cell, classNames?.editor, styles?.row, styles?.cell, styles?.editor]);
   const rowView: GridRowView<T> = { store, grid, density, loading, readOnly, editing, unstyled, revision, selectionMode, classNames, styles, cellStyle, renderSelection: rowSelectionControl, commitCell, focusAfterEnter, ...rowEvents };
-  return <RemoteOptionsProvider value={remoteContext}><ReadCellStyleContext.Provider value={unstyled}><TooltipProvider><div data-slot="root" data-density={density} data-loading={loading || undefined} aria-busy={loading || undefined}
+  return <RemoteOptionsProvider value={remoteContext}><ReadCellStyleContext.Provider value={unstyled}><TooltipProvider><div data-slot="root" data-density={density} data-loading={loading || undefined} data-column-dividers={!unstyled && columnDividers ? "true" : undefined} aria-busy={loading || undefined}
     className={cn(!unstyled && "relative font-(family-name:--ui-grid-font) text-ui-foreground", className, classNames?.root)} style={{ ...styles?.root, ...style }}>
     <div ref={contentRef}>
       <GridToolbar addLabel={messages.addRow} onAdd={onAddRow && !readOnly ? requestNewRow : undefined} disabled={loading} className={classNames?.toolbar} style={styles?.toolbar} unstyled={unstyled} toggler={columnToggler ? <ColumnToggler columns={columns} visibility={visibility} onToggle={(field, visible) => setVisibility(previous => ({ ...previous, [field]: visible }))} messages={messages} className={classNames?.columnToggler} style={styles?.columnToggler} unstyled={unstyled} disabled={loading} /> : undefined}>{toolbar}</GridToolbar>

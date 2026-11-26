@@ -1,7 +1,7 @@
 import * as React from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { CheckboxField } from "../../../forms";
-import { Button } from "../../../primitives";
+import { Button, Tooltip, TooltipProvider } from "../../../primitives";
 import { cn } from "../../../lib";
 import type { DataGridColumn, DataGridMessages } from "../DataGrid.types";
 
@@ -22,30 +22,59 @@ export function ColumnToggler<T>({ columns, visibility, onToggle, messages, clas
   React.useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   return (
     <div data-slot="columnToggler" className={cn(!unstyled && "ml-auto", className)} style={style}>
-      <Popover.Root open={disabled ? false : open} onOpenChange={setOpen}>
-        <Popover.Trigger asChild>
-          <Button variant="outline" size="sm" unstyled={unstyled} disabled={disabled}>{messages.columns}</Button>
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
-            aria-label={messages.columns}
-            align="end"
-            sideOffset={4}
-            className={cn(!unstyled && "z-50 grid max-h-80 min-w-48 gap-2 overflow-auto rounded-(--radius-ui-md) border border-ui-border bg-ui-background p-3 text-ui-foreground shadow-md")}
-          >
-            {columns.filter((column) => column.hideable !== false).map((column) => (
-              <CheckboxField
-                key={column.field}
-                label={column.header}
-                checked={visibility[column.field] !== false}
-                onCheckedChange={(checked) => onToggle(column.field, checked === true)}
+      <TooltipProvider>
+        <Popover.Root open={disabled ? false : open} onOpenChange={setOpen}>
+          <Tooltip content={messages.columns} disabled={disabled} unstyled={unstyled}>
+            <Popover.Trigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-label={messages.columns}
                 unstyled={unstyled}
                 disabled={disabled}
-              />
-            ))}
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+                className={cn(!unstyled && "h-8 w-8 p-0")}
+              >
+                <svg
+                  aria-hidden="true"
+                  focusable="false"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={cn(!unstyled && "size-4")}
+                  width={16}
+                  height={16}
+                >
+                  <path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8Z" />
+                  <circle cx="8" cy="8" r="2" />
+                </svg>
+              </Button>
+            </Popover.Trigger>
+          </Tooltip>
+          <Popover.Portal>
+            <Popover.Content
+              aria-label={messages.columns}
+              align="end"
+              sideOffset={4}
+              className={cn(!unstyled && "z-50 grid max-h-80 min-w-48 gap-2 overflow-auto rounded-(--radius-ui-md) border border-ui-border bg-ui-background p-3 text-ui-foreground shadow-md")}
+            >
+              {columns.filter((column) => column.hideable !== false).map((column) => (
+                <CheckboxField
+                  key={column.field}
+                  label={column.header}
+                  checked={visibility[column.field] !== false}
+                  onCheckedChange={(checked) => onToggle(column.field, checked === true)}
+                  unstyled={unstyled}
+                  disabled={disabled}
+                />
+              ))}
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+      </TooltipProvider>
     </div>
   );
 }

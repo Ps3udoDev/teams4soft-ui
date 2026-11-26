@@ -167,6 +167,8 @@ export interface DataGridProps<T> {
   columnVisibility?: Record<string, boolean>;
   onColumnVisibilityChange?: (visibility: Record<string, boolean>) => void;
   columnToggler?: boolean;
+  /** Dibuja divisores verticales de 1 px entre columnas visibles. */
+  columnDividers?: boolean;
   persistKey?: string;
   selectionMode?: DataGridSelectionMode;
   selection?: string[];

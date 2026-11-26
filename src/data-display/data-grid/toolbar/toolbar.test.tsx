@@ -24,6 +24,15 @@ describe("GridToolbar", () => {
     expect(container.querySelector('[data-slot="columnToggler"]')).not.toHaveClass("ml-auto");
   });
 
+  it("separa la barra de la tabla 8 px salvo en unstyled", () => {
+    const { container, rerender } = render(
+      <GridToolbar toggler={<button>Columnas</button>} />,
+    );
+    expect(container.firstChild).toHaveClass("mb-2");
+    rerender(<GridToolbar toggler={<button>Columnas</button>} unstyled />);
+    expect(container.firstChild).not.toHaveClass("mb-2");
+  });
+
   it("omite el contenedor sin contenido", () => {
     const { container } = render(<GridToolbar />);
     expect(container).toBeEmptyDOMElement();
@@ -67,5 +76,29 @@ describe("ColumnToggler", () => {
     await user.click(screen.getByRole("button", { name: "Columnas" }));
     await user.click(screen.getByRole("checkbox", { name: "Póliza" }));
     expect(screen.getByRole("checkbox", { name: "Póliza" })).toBeChecked();
+  });
+
+  it("usa icono decorativo de 16 px, nombre accesible, apertura con teclado y cierre con Escape", async () => {
+    const user = userEvent.setup();
+    const onToggle = vi.fn();
+    render(<ColumnToggler columns={columns} visibility={{ policy: true, amount: true }} onToggle={onToggle} messages={dataGridMessagesEs} />);
+    const trigger = screen.getByRole("button", { name: "Columnas" });
+    expect(trigger).toHaveTextContent("");
+    expect(trigger).toHaveClass("h-8", "w-8");
+    const svg = trigger.querySelector("svg");
+    expect(svg).toHaveAttribute("aria-hidden", "true");
+    expect(svg).toHaveAttribute("width", "16");
+    expect(svg).toHaveAttribute("height", "16");
+
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    const amountCheckbox = screen.getByRole("checkbox", { name: "Importe" });
+    await user.click(amountCheckbox);
+    expect(onToggle).toHaveBeenLastCalledWith("amount", false);
+
+    await user.keyboard("{Escape}");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveFocus();
   });
 });

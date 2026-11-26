@@ -145,7 +145,7 @@ export const BotonPropio: Story = {
 };
 
 function InDialogExample() {
-  const [open, setOpen] = React.useState(true);
+  const [open, setOpen] = React.useState(false);
   const { calls, log } = useBackLog();
   const search = React.useMemo(() => createPeopleSearch(log), [log]);
   return <>
@@ -157,7 +157,7 @@ function InDialogExample() {
 }
 export const ConCriteriosEnDialog: Story = {
   render: () => <InDialogExample />,
-  parameters: { docs: { description: { story: "El campo dentro de un `Dialog`: el menú de criterios, el modal de resultados y el formulario se apilan por encima del diálogo contenedor." } } },
+  parameters: { docs: { description: { story: "Inicia cerrado para no bloquear la vista Docs. Pulsa «Abrir captura» para abrir el `Dialog`: el menú de criterios, el modal de resultados y el formulario se apilan por encima del diálogo contenedor y Escape devuelve el foco al diálogo padre y luego al botón original." } } },
 };
 
 const TOTAL_10K = 10_000;

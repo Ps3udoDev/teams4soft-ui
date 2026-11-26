@@ -17,7 +17,7 @@ export interface GridToolbarProps {
 export function GridToolbar({ children, toggler, addLabel, onAdd, disabled, className, style, unstyled = false }: GridToolbarProps) {
   if (!children && !toggler && !onAdd) return null;
   return (
-    <div data-slot="toolbar" className={cn(!unstyled && "flex flex-wrap items-center justify-between gap-2", className)} style={style}>
+    <div data-slot="toolbar" className={cn(!unstyled && "mb-2 flex flex-wrap items-center justify-between gap-2", className)} style={style}>
       {onAdd && <Button type="button" size="sm" unstyled={unstyled} disabled={disabled} onClick={onAdd}>{addLabel}</Button>}
       {children}
       {toggler}

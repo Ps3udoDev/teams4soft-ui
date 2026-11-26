@@ -416,6 +416,36 @@ describe("DataGrid: pulido de controles", () => {
     expect(within(host).queryByRole("columnheader", { name: /Póliza/ })).not.toBeInTheDocument();
     expect(localStorage.getItem(key)).toContain('"policy":false');
   });
+
+  it("columnDividers activa el atributo en la raíz en caliente, respeta unstyled y mantiene sticky/resize/ocultación", async () => {
+    const user = userEvent.setup();
+    const cols: DataGridColumn<Premium>[] = [
+      { field: "policy", header: "Póliza", frozen: "left", resizable: true, minWidth: 140 },
+      { field: "collectedAmount", header: "Imp. cobrado" },
+      { field: "dueDate", header: "Vencimiento" },
+    ];
+    const { container, rerender } = render(<DataGrid columns={cols} value={rows} getRowId={getRowId} />);
+    const root = container.querySelector('[data-slot="root"]')!;
+    expect(root).not.toHaveAttribute("data-column-dividers");
+
+    // Cambio de prop en caliente sobre filas memorizadas.
+    rerender(<DataGrid columns={cols} value={rows} getRowId={getRowId} columnDividers />);
+    expect(root).toHaveAttribute("data-column-dividers", "true");
+    // El tirador de redimensionado y la columna fija se conservan intactos.
+    expect(screen.getByRole("separator", { name: "Póliza" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /Póliza/ })).toHaveAttribute("data-frozen", "left");
+
+    // Ocultar una columna intermedia deja solo dos columnas visibles sin romper los separadores.
+    await user.click(screen.getByRole("button", { name: "Columnas" }));
+    await user.click(screen.getByRole("checkbox", { name: "Imp. cobrado" }));
+    await user.keyboard("{Escape}");
+    expect(screen.getAllByRole("columnheader")).toHaveLength(2);
+    expect(root).toHaveAttribute("data-column-dividers", "true");
+
+    // Con unstyled se omite el atributo de estilo.
+    rerender(<DataGrid columns={cols} value={rows} getRowId={getRowId} columnDividers unstyled />);
+    expect(root).not.toHaveAttribute("data-column-dividers");
+  });
 });
 
 describe("DataGrid: menú de filtros", () => {
