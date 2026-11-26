@@ -1,0 +1,138 @@
+import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+
+export function validateReleaseCandidate({ version, tag, isPrerelease, isAncestorOfMain }) {
+  if (!version || typeof version !== "string") {
+    throw new Error("Missing package version");
+  }
+  const expectedTag = `v${version}`;
+  if (tag !== expectedTag) {
+    throw new Error(`Tag mismatch: expected ${expectedTag}, got ${tag}`);
+  }
+  if (!isAncestorOfMain) {
+    throw new Error("Candidate commit is not an ancestor of authorized branch main");
+  }
+  const hasPrereleaseSuffix = version.includes("-");
+  if (hasPrereleaseSuffix !== Boolean(isPrerelease)) {
+    throw new Error(
+      `Prerelease/channel mismatch: version ${version} (prerelease=${hasPrereleaseSuffix}) vs release flag (${isPrerelease})`
+    );
+  }
+  return {
+    channel: hasPrereleaseSuffix ? "next" : "latest",
+  };
+}
+
+export function computeTarballDigest(tarballBytes) {
+  const hash = createHash("sha512").update(tarballBytes);
+  const sha512Hex = createHash("sha512").update(tarballBytes).digest("hex");
+  return {
+    integrity: `sha512-${hash.digest("base64")}`,
+    sha512Hex,
+  };
+}
+
+export function verifyManifestDigest({ manifest, expectedSha, expectedTag, tarballBytes }) {
+  if (!manifest || typeof manifest !== "object") {
+    throw new Error("Invalid release manifest");
+  }
+  if (manifest.gitSha !== expectedSha) {
+    throw new Error(`SHA mismatch: manifest has ${manifest.gitSha}, expected ${expectedSha}`);
+  }
+  if (manifest.tag !== expectedTag) {
+    throw new Error(`Tag mismatch: manifest has ${manifest.tag}, expected ${expectedTag}`);
+  }
+  const { integrity } = computeTarballDigest(tarballBytes);
+  if (manifest.integrity !== integrity) {
+    throw new Error(`Tarball digest mismatch: manifest has ${manifest.integrity}, computed ${integrity}`);
+  }
+}
+
+export async function checkPublishIdempotency({
+  pkgName,
+  version,
+  integrity,
+  registryUrl = "https://registry.npmjs.org",
+  fetchImpl = fetch,
+}) {
+  const url = `${registryUrl.replace(/\/$/, "")}/${encodeURIComponent(pkgName)}/${encodeURIComponent(version)}`;
+  const res = await fetchImpl(url, { headers: { accept: "application/json" } });
+  if (res.status === 404) {
+    return { action: "publish" };
+  }
+  if (!res.ok) {
+    throw new Error(`Registry lookup failed with HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  const existingIntegrity = data?.dist?.integrity;
+  if (existingIntegrity === integrity) {
+    return { action: "skip_already_published", integrity: existingIntegrity };
+  }
+  throw new Error(
+    `Version ${pkgName}@${version} already exists with different integrity (${existingIntegrity} !== ${integrity})`
+  );
+}
+
+function runCli() {
+  const [command, ...rest] = process.argv.slice(2);
+  if (command === "validate") {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+    const tag = process.env.RELEASE_TAG || process.env.GITHUB_REF_NAME || "";
+    const isPrerelease = process.env.IS_PRERELEASE === "true";
+    const sha = process.env.GITHUB_SHA || execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+    let isAncestorOfMain = false;
+    try {
+      execSync(`git merge-base --is-ancestor ${sha} origin/main`, { stdio: "ignore" });
+      isAncestorOfMain = true;
+    } catch {
+      isAncestorOfMain = false;
+    }
+    const { channel } = validateReleaseCandidate({
+      version: pkg.version,
+      tag,
+      isPrerelease,
+      isAncestorOfMain,
+    });
+    console.log(JSON.stringify({ package: pkg.name, version: pkg.version, tag, sha, channel }));
+    return;
+  }
+
+  if (command === "manifest") {
+    const artifactDir = rest[0] || "release-artifact";
+    const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+    const tag = process.env.RELEASE_TAG || process.env.GITHUB_REF_NAME || `v${pkg.version}`;
+    const channel = pkg.version.includes("-") ? "next" : "latest";
+    const gitSha = process.env.GITHUB_SHA || execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+    const tarball = readdirSync(artifactDir).find(f => f.endsWith(".tgz"));
+    if (!tarball) throw new Error(`No .tgz found in ${artifactDir}`);
+    const bytes = readFileSync(join(artifactDir, tarball));
+    const { integrity, sha512Hex } = computeTarballDigest(bytes);
+    const lockfileSha256 = createHash("sha256").update(readFileSync("pnpm-lock.yaml")).digest("hex");
+    const manifest = {
+      package: pkg.name,
+      version: pkg.version,
+      gitSha,
+      tag,
+      channel,
+      tarball,
+      integrity,
+      sha512Hex,
+      artifactName: `release-candidate-${gitSha}`,
+      osvAuditFile: `osv-audit-${gitSha}.json`,
+      lockfileSha256,
+      builtAt: new Date().toISOString(),
+    };
+    writeFileSync(join(artifactDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    console.log(JSON.stringify(manifest, null, 2));
+    return;
+  }
+
+  throw new Error(`Unknown command: ${command}`);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runCli();
+}
