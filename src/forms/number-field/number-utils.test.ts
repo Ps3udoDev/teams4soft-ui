@@ -86,3 +86,14 @@ describe("formatWhileTyping", () => {
     expect(formatWhileTyping("-12", 3)).toEqual({ text: "12", caret: 2 });
   });
 });
+
+describe("moneda ida y vuelta (cero, vacío y centavos)", () => {
+  it("conserva cero, vacío y centavos al formatear y volver a parsear", () => {
+    for (const value of [0, 0.05, 1234.56, 999999.99]) {
+      const formatted = formatNumber(value, { mode: "currency" });
+      expect(parseNumber(formatted)).toEqual({ ok: true, value });
+    }
+    expect(formatNumber(null, { mode: "currency" })).toBe("");
+    expect(parseNumber("")).toEqual({ ok: true, value: null });
+  });
+});

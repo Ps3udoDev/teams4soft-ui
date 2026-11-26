@@ -32,7 +32,16 @@ async function verify(load, format) {
   }
   const cases = {
     Button: h(root.Button, null, "contenido-button"),
+    Divider: h(root.Divider, { orientation: "horizontal" }),
     Dialog: h(root.Dialog, { open: false, title: "Diálogo" }),
+    ContextMenu: h(root.ContextMenu, { triggerLabel: "Acciones", items: [{ id: "a", label: "Ver", onSelect: noop }] }),
+    PageShell: h(root.PageShell, { title: "Página" }, "cuerpo-shell"),
+    SectionPanel: h(root.SectionPanel, { title: "Sección", collapsible: true }, "cuerpo-panel"),
+    Tabs: h(root.Tabs, { defaultValue: "a", items: [{ value: "a", label: "Uno", content: "panel-uno" }] }),
+    FilePickerField: h(root.FilePickerField, { label: "Archivo" }),
+    TextareaField: h(root.TextareaField, { label: "Notas", value: "texto-nota", onValueChange: noop }),
+    StatusTag: h(root.StatusTag, { tone: "success" }, "Liquidado"),
+    InlineMessage: h(root.InlineMessage, { tone: "info" }, "Aviso en línea"),
     DateField: h(root.DateField, { label: "contenido-fecha", value: null, onChange: noop }),
     SearchableSelectField: h(root.SearchableSelectField, {
       label: "contenido-select",
@@ -51,16 +60,26 @@ async function verify(load, format) {
   for (const [name, element] of Object.entries(cases)) renderToString(element);
   assert(renderToString(cases.DataGrid).includes("contenido-grid"), "DataGrid sin filas");
   assert(renderToString(cases.Button).includes("contenido-button"), "Button sin contenido");
+  assert(renderToString(cases.PageShell).includes("cuerpo-shell"), "PageShell sin contenido");
+  assert(renderToString(cases.Tabs).includes("panel-uno"), "Tabs sin contenido");
+  assert(renderToString(cases.StatusTag).includes("Liquidado"), "StatusTag sin texto");
+  assert(renderToString(cases.InlineMessage).includes("Aviso en línea"), "InlineMessage sin texto");
   console.log(format + ": raíz, subpaths y render correctos con React " + React.version);
 }
 `;
 
 const requireChecks = `
+const fs = require("node:fs");
 for (const subpath of ${JSON.stringify(REQUIRE_SUBPATHS)}) {
   const mod = require("${PACKAGE}/" + subpath);
   if (Object.keys(mod).length === 0) throw new Error("subpath vacío: " + subpath);
 }
-console.log("require sin require(esm): ${REQUIRE_SUBPATHS.join(", ")} correctos");
+for (const cssExport of ["styles.css", "tokens.css"]) {
+  const cssPath = require.resolve("${PACKAGE}/" + cssExport);
+  const content = fs.readFileSync(cssPath, "utf8");
+  if (!content.trim()) throw new Error("CSS vacío: " + cssExport);
+}
+console.log("require sin require(esm) y CSS del tarball (${REQUIRE_SUBPATHS.join(", ")}, styles.css, tokens.css) correctos");
 `;
 
 try {

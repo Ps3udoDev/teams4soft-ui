@@ -190,4 +190,12 @@ describe("parseDateInput — captura parcial opt-in", () => {
     expect(parseDateInput("4", { ...options, referenceDate: "2026-02-31" })).toEqual({ status: "invalid" });
     expect(parseDateInput("4/10/26", { ...options, referenceDate: "2026-02-31" })).toEqual({ status: "valid", value: "2026-10-04" });
   });
+
+  it("conserva el día civil en límites de año (01-01 y 12-31) sin desplazamiento", () => {
+    for (const iso of ["2026-01-01", "2026-12-31", "2024-02-29"]) {
+      const d = fromDateFieldValue(iso)!;
+      expect(toDateFieldValue(d)).toBe(iso);
+      expect(formatIso(iso, { displayFormat: "dd/MM/yyyy" })).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
+    }
+  });
 });
