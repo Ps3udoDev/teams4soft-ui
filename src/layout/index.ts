@@ -15,3 +15,5 @@ export { PageShell } from "./page-shell/PageShell";
 export type { PageShellProps, PageShellClassNames } from "./page-shell/PageShell.types";
 export { SectionPanel } from "./section-panel/SectionPanel";
 export type { SectionPanelProps, SectionPanelClassNames } from "./section-panel/SectionPanel.types";
+export { Tabs } from "./tabs/Tabs";
+export type { TabsProps, TabsClassNames, TabItem, TabsOrientation } from "./tabs/Tabs.types";
