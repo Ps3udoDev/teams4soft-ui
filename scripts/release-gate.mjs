@@ -81,6 +81,86 @@ export async function checkPublishIdempotency({
   return { action: "skip_already_published", integrity: existingIntegrity };
 }
 
+export function evaluatePromotionDossier({
+  candidate,
+  pilotEvidences = [],
+  exceptions = [],
+  checks = {},
+  approvals = {},
+  evaluatedAt = new Date().toISOString().slice(0, 10),
+}) {
+  const reasons = [];
+  if (!candidate?.version || candidate.version.includes("-")) {
+    reasons.push(`Candidate version must be stable (got ${candidate?.version ?? "missing"})`);
+  }
+  if (candidate?.tag !== `v${candidate?.version}`) {
+    reasons.push(`Candidate tag mismatch: expected v${candidate?.version}, got ${candidate?.tag}`);
+  }
+  if (!candidate?.gitSha || !candidate?.integrity?.startsWith("sha512-")) {
+    reasons.push("Candidate must include gitSha and sha512 tarball integrity");
+  }
+
+  const requiredChecks = ["react18", "react19", "node22", "node24", "node26", "esmCjsCss", "a11y", "performance"];
+  for (const key of requiredChecks) {
+    const entry = checks[key];
+    if (!entry || entry.passed !== true) {
+      reasons.push(`Check '${key}' is missing or failed`);
+    } else if (entry.tarballIntegrity !== candidate?.integrity) {
+      reasons.push(`Check '${key}' tested a different artifact digest (${entry.tarballIntegrity ?? "none"})`);
+    }
+  }
+
+  if (pilotEvidences.length === 0) {
+    reasons.push("At least one frontend pilot evidence entry is required");
+  }
+  for (const pilot of pilotEvidences) {
+    if (pilot.tarballIntegrity !== candidate?.integrity) {
+      reasons.push(`Pilot '${pilot.module}' tested a different tarball digest (${pilot.tarballIntegrity ?? "none"})`);
+    }
+    if (!pilot.testedFrontendSha || pilot.testedFrontendSha !== pilot.approvedFrontendSha) {
+      reasons.push(
+        `Pilot '${pilot.module}' frontend SHA mismatch (${pilot.testedFrontendSha ?? "none"} !== ${pilot.approvedFrontendSha ?? "none"})`
+      );
+    }
+  }
+
+  for (const exc of exceptions) {
+    if (!exc.expiresAt || exc.expiresAt < evaluatedAt) {
+      reasons.push(`Security exception '${exc.id}' expired on ${exc.expiresAt ?? "unknown"}`);
+    }
+  }
+
+  for (const role of ["platform", "frontend", "qa", "maintainer"]) {
+    if (!approvals[role]) {
+      reasons.push(`Missing approval from '${role}'`);
+    }
+  }
+
+  return { approved: reasons.length === 0, reasons };
+}
+
+export function verifyPublishedPackage({
+  expectedVersion,
+  expectedChannel,
+  expectedIntegrity,
+  distTags,
+  versionMetadata,
+}) {
+  if (!distTags || distTags[expectedChannel] !== expectedVersion) {
+    throw new Error(
+      `Dist-tag '${expectedChannel}' points to ${distTags?.[expectedChannel] ?? "none"}, expected ${expectedVersion}`
+    );
+  }
+  const actualIntegrity = versionMetadata?.dist?.integrity;
+  if (actualIntegrity !== expectedIntegrity) {
+    throw new Error(`Published integrity mismatch: ${actualIntegrity} !== ${expectedIntegrity}`);
+  }
+  if (!versionMetadata?.dist?.attestations?.provenance) {
+    throw new Error(`Published package ${expectedVersion} is missing SLSA provenance attestation`);
+  }
+  return { verified: true, version: expectedVersion, channel: expectedChannel, integrity: actualIntegrity };
+}
+
 function gitOutput(args) {
   return execFileSync("git", args, { encoding: "utf8" }).trim();
 }
