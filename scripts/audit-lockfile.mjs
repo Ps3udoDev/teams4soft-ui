@@ -186,11 +186,23 @@ export function parsePnpmLockfile(content) {
     }
   };
 
+  const resolvePkgFromRef = (name, ref) => {
+    const cleanRef = stripPeerSuffix(ref);
+    if (/^(link|file|workspace):/.test(cleanRef)) return null;
+    if (cleanRef.includes("@")) {
+      const parsed = splitPkgKey(cleanRef);
+      if (parsed) return { pkgId: `${parsed.name}@${parsed.version}`, name: parsed.name, version: parsed.version };
+    }
+    return { pkgId: `${name}@${cleanRef}`, name, version: cleanRef };
+  };
+
   for (const root of importerRoots) {
+    const resolvedRoot = resolvePkgFromRef(root.name, root.ref);
+    if (!resolvedRoot) continue;
     const rootSnap = resolveSnapshotKey(root.name, root.ref);
-    const rootPkgId = `${root.name}@${stripPeerSuffix(root.ref)}`;
+    const rootPkgId = resolvedRoot.pkgId;
     if (!allPackages.has(rootPkgId)) {
-      allPackages.set(rootPkgId, { name: root.name, version: stripPeerSuffix(root.ref) });
+      allPackages.set(rootPkgId, { name: resolvedRoot.name, version: resolvedRoot.version });
     }
     const queue = [{ snapKey: rootSnap, pkgId: rootPkgId, scope: root.scope, path: `${root.scope}:${rootPkgId}` }];
     const visited = new Set([`${root.scope}|${rootSnap}`]);
@@ -201,9 +213,12 @@ export function parsePnpmLockfile(content) {
       const node = snapshotGraph.get(current.snapKey);
       if (!node) continue;
       for (const edge of node.deps) {
+        const resolvedChild = resolvePkgFromRef(edge.name, edge.ref);
+        if (!resolvedChild) continue;
         const childSnap = resolveSnapshotKey(edge.name, edge.ref);
-        const childPkgId = `${edge.name}@${stripPeerSuffix(edge.ref)}`;
-        const childScope = edge.optional && current.scope !== "runtime" ? "optional" : current.scope;
+        const childPkgId = resolvedChild.pkgId;
+        // Keep dev and packageManager optional edges inside their own scope so "optional" stays production-scoped.
+        const childScope = current.scope;
         const visitKey = `${childScope}|${childSnap}`;
         const childPath = `${current.path} > ${childPkgId}`;
         if (!visited.has(visitKey)) {
@@ -301,11 +316,16 @@ export function createOsvClient({ fetchImpl = fetch, maxRetries = 3, retryDelayM
 }
 
 function normalizeSeverity(detail) {
-  const dbSev = detail?.database_specific?.severity;
-  if (typeof dbSev === "string" && dbSev.trim()) {
-    const s = dbSev.trim().toLowerCase();
-    if (s === "medium") return "moderate";
-    return s;
+  const candidates = [
+    detail?.database_specific?.severity,
+    ...(Array.isArray(detail?.affected) ? detail.affected.map(a => a?.database_specific?.severity) : []),
+  ];
+  for (const raw of candidates) {
+    if (typeof raw === "string" && raw.trim()) {
+      const s = raw.trim().toLowerCase();
+      if (s === "medium") return "moderate";
+      return s;
+    }
   }
   const sevList = Array.isArray(detail?.severity) ? detail.severity : [];
   for (const item of sevList) {
@@ -323,6 +343,10 @@ function normalizeSeverity(detail) {
 function isMaliciousAdvisory(id, aliases, detail) {
   if (id.startsWith("MAL-")) return true;
   if (aliases.some(a => a.startsWith("MAL-"))) return true;
+  if (Array.isArray(detail?.database_specific?.["malicious-packages-origins"]) &&
+      detail.database_specific["malicious-packages-origins"].length > 0) {
+    return true;
+  }
   return Boolean(detail?.database_specific?.malicious_package);
 }
 
@@ -330,13 +354,19 @@ function matchException(advisory, exceptions, now) {
   const ids = new Set([advisory.id, ...advisory.aliases]);
   const matching = exceptions.filter(ex => {
     if (!ex || !ids.has(ex.id)) return false;
-    if (!ex.owner || !ex.mitigation || !ex.expiresAt) return false;
+    if (!ex.owner || !ex.mitigation || !ex.expiresAt || !ex.scope) return false;
+    const allowedScopes = new Set(Array.isArray(ex.scope) ? ex.scope : [ex.scope]);
+    // Every scope reached by this advisory must be explicitly covered by the exception.
+    if (advisory.scopes.length === 0 || !advisory.scopes.every(sc => allowedScopes.has(sc))) {
+      return false;
+    }
     if (ex.package) {
-      const target = ex.version ? `${ex.package}@${ex.version}` : null;
-      return advisory.packages.every(p => (target ? p === target : p.startsWith(`${ex.package}@`)));
+      if (!ex.version) return false;
+      const target = `${ex.package}@${ex.version}`;
+      return advisory.packages.every(p => p === target);
     }
     if (Array.isArray(ex.packages) && ex.packages.length > 0) {
-      return advisory.packages.every(p => ex.packages.includes(p));
+      return ex.packages.every(p => p.includes("@")) && advisory.packages.every(p => ex.packages.includes(p));
     }
     return false;
   });
@@ -396,10 +426,15 @@ export async function auditLockfile({
 
         for (let j = 0; j < chunk.length; j++) {
           const item = chunk[j];
-          const entry = res.results[j] ?? {};
+          const entry = res.results[j];
+          if (!entry || typeof entry !== "object") {
+            throw new Error(`OSV querybatch invalid result entry at index ${j}`);
+          }
           const vulns = Array.isArray(entry.vulns) ? entry.vulns : [];
           for (const v of vulns) {
-            if (!v?.id) continue;
+            if (!v || typeof v.id !== "string" || !v.id) {
+              throw new Error(`OSV querybatch malformed vuln item for ${item.pkg.id}`);
+            }
             if (!pkgToAdvisories.has(item.pkg.id)) pkgToAdvisories.set(item.pkg.id, new Set());
             pkgToAdvisories.get(item.pkg.id).add(v.id);
           }
@@ -435,15 +470,22 @@ export async function auditLockfile({
 
   for (const [id, entry] of advisoryMap.entries()) {
     let detail = null;
+    let detailComplete = true;
     try {
       detail = await client.getVulnerability(id);
+      if (!detail || typeof detail !== "object" || typeof detail.id !== "string" || !detail.id) {
+        detailComplete = false;
+        complete = false;
+        blockReasons.push(`OSV detail incomplete for ${id}: missing id in response`);
+      }
     } catch (err) {
+      detailComplete = false;
       complete = false;
       blockReasons.push(`OSV detail incomplete for ${id}: ${err.message}`);
     }
 
     const aliases = Array.isArray(detail?.aliases) ? [...new Set(detail.aliases)].sort() : [];
-    const severity = detail ? normalizeSeverity(detail) : "unknown";
+    const severity = detailComplete ? normalizeSeverity(detail) : "unknown";
     const malicious = isMaliciousAdvisory(id, aliases, detail);
     const affectedPackages = [...entry.pkgIds].sort();
     const advPaths = {};
@@ -473,10 +515,12 @@ export async function auditLockfile({
       exception: null,
     };
 
-    if (malicious) {
+    if (!detailComplete) {
+      advisory.status = "incomplete";
+    } else if (malicious) {
       advisory.status = "blocked_malicious";
       blockReasons.push(`Malicious advisory ${id} (${affectedPackages.join(", ")})`);
-    } else if (severity === "high" || severity === "critical") {
+    } else if (severity === "high" || severity === "critical" || severity === "unknown") {
       advisory.status = "blocked_severity";
       blockReasons.push(`${severity.toUpperCase()} advisory ${id} (${affectedPackages.join(", ")})`);
     } else {

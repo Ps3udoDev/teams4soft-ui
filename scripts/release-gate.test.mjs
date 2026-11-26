@@ -99,7 +99,7 @@ describe("checkPublishIdempotency", () => {
     assert.equal(res.action, "publish");
   });
 
-  it("returns skip_already_published when exact version exists with identical integrity", async () => {
+  it("returns skip_already_published when exact version exists with identical integrity and provenance", async () => {
     const res = await checkPublishIdempotency({
       pkgName: "@teams4soft/teams4soft-ui",
       version: "1.0.0",
@@ -107,10 +107,31 @@ describe("checkPublishIdempotency", () => {
       fetchImpl: async () => ({
         status: 200,
         ok: true,
-        json: async () => ({ dist: { integrity: "sha512-abc" } }),
+        json: async () => ({
+          dist: {
+            integrity: "sha512-abc",
+            attestations: { provenance: { predicateType: "https://slsa.dev/provenance/v1" } },
+          },
+        }),
       }),
     });
     assert.equal(res.action, "skip_already_published");
+  });
+
+  it("throws when version exists with identical integrity but missing provenance attestation", async () => {
+    await assert.rejects(
+      () => checkPublishIdempotency({
+        pkgName: "@teams4soft/teams4soft-ui",
+        version: "1.0.0",
+        integrity: "sha512-abc",
+        fetchImpl: async () => ({
+          status: 200,
+          ok: true,
+          json: async () => ({ dist: { integrity: "sha512-abc" } }),
+        }),
+      }),
+      /provenance|attestation/i
+    );
   });
 
   it("throws when version already exists with different integrity", async () => {

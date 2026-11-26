@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -68,12 +68,21 @@ export async function checkPublishIdempotency({
   }
   const data = await res.json();
   const existingIntegrity = data?.dist?.integrity;
-  if (existingIntegrity === integrity) {
-    return { action: "skip_already_published", integrity: existingIntegrity };
+  if (existingIntegrity !== integrity) {
+    throw new Error(
+      `Version ${pkgName}@${version} already exists with different integrity (${existingIntegrity} !== ${integrity})`
+    );
   }
-  throw new Error(
-    `Version ${pkgName}@${version} already exists with different integrity (${existingIntegrity} !== ${integrity})`
-  );
+  if (!data?.dist?.attestations?.provenance) {
+    throw new Error(
+      `Version ${pkgName}@${version} already exists with matching integrity but missing provenance attestation`
+    );
+  }
+  return { action: "skip_already_published", integrity: existingIntegrity };
+}
+
+function gitOutput(args) {
+  return execFileSync("git", args, { encoding: "utf8" }).trim();
 }
 
 function runCli() {
@@ -82,10 +91,20 @@ function runCli() {
     const pkg = JSON.parse(readFileSync("package.json", "utf8"));
     const tag = process.env.RELEASE_TAG || process.env.GITHUB_REF_NAME || "";
     const isPrerelease = process.env.IS_PRERELEASE === "true";
-    const sha = process.env.GITHUB_SHA || execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+    const headSha = gitOutput(["rev-parse", "HEAD"]);
+    const sha = process.env.GITHUB_SHA || headSha;
+    if (headSha !== sha) {
+      throw new Error(`Checkout HEAD (${headSha}) does not match expected SHA (${sha})`);
+    }
+    if (tag) {
+      const tagCommit = gitOutput(["rev-parse", `refs/tags/${tag}^{commit}`]);
+      if (tagCommit !== sha) {
+        throw new Error(`Tag ${tag} points to ${tagCommit}, expected ${sha}`);
+      }
+    }
     let isAncestorOfMain = false;
     try {
-      execSync(`git merge-base --is-ancestor ${sha} origin/main`, { stdio: "ignore" });
+      execFileSync("git", ["merge-base", "--is-ancestor", sha, "origin/main"], { stdio: "ignore" });
       isAncestorOfMain = true;
     } catch {
       isAncestorOfMain = false;
@@ -105,7 +124,7 @@ function runCli() {
     const pkg = JSON.parse(readFileSync("package.json", "utf8"));
     const tag = process.env.RELEASE_TAG || process.env.GITHUB_REF_NAME || `v${pkg.version}`;
     const channel = pkg.version.includes("-") ? "next" : "latest";
-    const gitSha = process.env.GITHUB_SHA || execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+    const gitSha = process.env.GITHUB_SHA || gitOutput(["rev-parse", "HEAD"]);
     const tarball = readdirSync(artifactDir).find(f => f.endsWith(".tgz"));
     if (!tarball) throw new Error(`No .tgz found in ${artifactDir}`);
     const bytes = readFileSync(join(artifactDir, tarball));

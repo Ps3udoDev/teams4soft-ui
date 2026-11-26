@@ -373,4 +373,108 @@ describe("auditLockfile", () => {
     assert.equal(mal.malicious, true);
     assert.equal(mal.status, "blocked_malicious");
   });
+
+  it("rejects dev exception when advisory reaches runtime scope or lacks exact version/scope", async () => {
+    const client = makeOsvClient({
+      batchHandler: (queries) => ({
+        results: queries.map(q =>
+          q.package.name === "shared-lib" ? { vulns: [{ id: "GHSA-shared-1" }] } : {}
+        ),
+      }),
+      vulnDetails: {
+        "GHSA-shared-1": { id: "GHSA-shared-1", aliases: [], database_specific: { severity: "MODERATE" } },
+      },
+    });
+
+    const report = await auditLockfile({
+      lockfileContent: MULTI_DOC_LOCKFILE,
+      osvClient: client,
+      now: new Date("2026-11-26T00:00:00Z"),
+      exceptions: [
+        {
+          id: "GHSA-shared-1",
+          package: "shared-lib",
+          version: "1.0.0",
+          scope: "dev",
+          mitigation: "Claims dev-only, but shared-lib is also in runtime",
+          owner: "Ps3udoDev",
+          expiresAt: "2026-12-31",
+        },
+      ],
+    });
+
+    assert.equal(report.blocked, true);
+    assert.equal(report.uniqueAdvisories[0].status, "open");
+  });
+
+  it("blocks unknown severity even when an active exception exists", async () => {
+    const client = makeOsvClient({
+      batchHandler: (queries) => ({
+        results: queries.map(q =>
+          q.package.name === "vitest" ? { vulns: [{ id: "CVE-2026-9999" }] } : {}
+        ),
+      }),
+      vulnDetails: {
+        "CVE-2026-9999": {
+          id: "CVE-2026-9999",
+          aliases: [],
+          severity: [{ type: "CVSS_V3", score: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" }],
+        },
+      },
+    });
+
+    const report = await auditLockfile({
+      lockfileContent: MULTI_DOC_LOCKFILE,
+      osvClient: client,
+      now: new Date("2026-11-26T00:00:00Z"),
+      exceptions: [
+        {
+          id: "CVE-2026-9999",
+          package: "vitest",
+          version: "4.1.10",
+          scope: "dev",
+          mitigation: "Attempted waiver on unknown severity",
+          owner: "Ps3udoDev",
+          expiresAt: "2026-12-31",
+        },
+      ],
+    });
+
+    assert.equal(report.blocked, true);
+    assert.equal(report.uniqueAdvisories[0].status, "blocked_severity");
+  });
+
+  it("marks report incomplete when getVulnerability returns malformed object or throws even with exception", async () => {
+    const client = makeOsvClient({
+      batchHandler: (queries) => ({
+        results: queries.map(q =>
+          q.package.name === "vitest" ? { vulns: [{ id: "GHSA-malformed-1" }] } : {}
+        ),
+      }),
+      vulnDetails: {
+        "GHSA-malformed-1": {},
+      },
+    });
+
+    const report = await auditLockfile({
+      lockfileContent: MULTI_DOC_LOCKFILE,
+      osvClient: client,
+      now: new Date("2026-11-26T00:00:00Z"),
+      exceptions: [
+        {
+          id: "GHSA-malformed-1",
+          package: "vitest",
+          version: "4.1.10",
+          scope: "dev",
+          mitigation: "Should not bypass incomplete detail",
+          owner: "Ps3udoDev",
+          expiresAt: "2026-12-31",
+        },
+      ],
+    });
+
+    assert.equal(report.complete, false);
+    assert.equal(report.blocked, true);
+    assert.equal(report.uniqueAdvisories[0].status, "incomplete");
+  });
 });

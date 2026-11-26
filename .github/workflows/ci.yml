@@ -31,6 +31,8 @@ jobs:
         run: pnpm typecheck
       - name: Test
         run: pnpm test
+      - name: Test security and release scripts
+        run: node --test scripts/audit-lockfile.test.mjs scripts/release-gate.test.mjs
       - name: Build
         run: pnpm build
       - name: Build Storybook
@@ -63,6 +65,8 @@ jobs:
         run: pnpm typecheck
       - name: Test
         run: pnpm test
+      - name: Test security and release scripts
+        run: node --test scripts/audit-lockfile.test.mjs scripts/release-gate.test.mjs
 
   node-floor:
     runs-on: ubuntu-latest
