@@ -13,4 +13,6 @@ export type {
   TooltipSide,
   TooltipAlign,
 } from "./tooltip/Tooltip.types";
+export { Divider } from "./divider/Divider";
+export type { DividerProps, DividerOrientation } from "./divider/Divider.types";
 

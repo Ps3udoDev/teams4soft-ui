@@ -8,3 +8,5 @@ export { confirm, notify } from "./feedback-dialog/feedback-dialog-global";
 export type { NotifyApi } from "./feedback-dialog/feedback-dialog-global";
 export { createFeedbackDialogStore } from "./feedback-dialog/feedback-dialog-store";
 export type { ConfirmOptions, NotifyOptions, FeedbackDialogRequest, FeedbackDialogStoreState, FeedbackDialogStore } from "./feedback-dialog/feedback-dialog-store";
+export { ContextMenu } from "./context-menu/ContextMenu";
+export type { ContextMenuProps, ContextMenuItem, ContextMenuClassNames } from "./context-menu/ContextMenu.types";

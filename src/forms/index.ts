@@ -58,3 +58,16 @@ export type {
   RadioOption,
 } from "./radio-group/RadioGroup.types";
 
+export { FilePickerField } from "./file-picker-field/FilePickerField";
+export type {
+  FilePickerFieldProps,
+  FilePickerFieldClassNames,
+  FileRejectReason,
+} from "./file-picker-field/FilePickerField.types";
+
+export { TextareaField } from "./textarea-field/TextareaField";
+export type {
+  TextareaFieldProps,
+  TextareaFieldClassNames,
+} from "./textarea-field/TextareaField.types";
+
