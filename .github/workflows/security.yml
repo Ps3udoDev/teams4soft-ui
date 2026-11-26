@@ -28,8 +28,19 @@ jobs:
           echo "pnpm=$(pnpm -v)"
           echo "lockfile_sha256=$(sha256sum pnpm-lock.yaml | awk '{print $1}')"
       - run: pnpm install --frozen-lockfile
-      - name: Audit dependencies
+      - name: Audit dependencies (npm)
         run: pnpm audit --audit-level high
+      - name: Test lockfile OSV auditor
+        run: node --test scripts/audit-lockfile.test.mjs
+      - name: Audit lockfile (OSV)
+        run: node scripts/audit-lockfile.mjs --out "osv-audit-${{ github.sha }}.json"
+      - name: Upload OSV audit report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: osv-audit-${{ github.sha }}
+          path: osv-audit-${{ github.sha }}.json
+          if-no-files-found: warn
 
   dependency-review:
     if: github.event_name == 'pull_request'
