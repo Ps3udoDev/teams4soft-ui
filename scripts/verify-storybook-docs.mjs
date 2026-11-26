@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -60,6 +60,24 @@ async function loadPlaywright() {
   return null;
 }
 
+function indexStaticFiles(rootDir) {
+  const files = new Map();
+  const stack = [""];
+  while (stack.length > 0) {
+    const relDir = stack.pop();
+    const absDir = relDir ? join(rootDir, relDir) : rootDir;
+    for (const entry of readdirSync(absDir, { withFileTypes: true })) {
+      const rel = relDir ? `${relDir}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        stack.push(rel);
+      } else if (entry.isFile()) {
+        files.set(`/${rel}`, join(rootDir, rel));
+      }
+    }
+  }
+  return files;
+}
+
 async function runBrowserCheck() {
   const playwright = await loadPlaywright();
   if (!playwright) {
@@ -73,11 +91,12 @@ async function runBrowserCheck() {
     return;
   }
 
+  const staticFiles = indexStaticFiles(staticDir);
   const server = createServer((req, res) => {
     const rawPath = (req.url || "/").split("?")[0];
-    const relPath = rawPath === "/" ? "index.html" : rawPath.replace(/^\/+/, "");
-    const fullPath = join(staticDir, relPath);
-    if (!existsSync(fullPath)) {
+    const lookupKey = rawPath === "/" ? "/index.html" : rawPath;
+    const fullPath = staticFiles.get(lookupKey);
+    if (!fullPath) {
       res.writeHead(404);
       res.end("Not found");
       return;
