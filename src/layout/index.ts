@@ -11,3 +11,7 @@ export type {
   FormGridItemProps,
   ResponsiveValue,
 } from "./form-grid/FormGrid.types";
+export { PageShell } from "./page-shell/PageShell";
+export type { PageShellProps, PageShellClassNames } from "./page-shell/PageShell.types";
+export { SectionPanel } from "./section-panel/SectionPanel";
+export type { SectionPanelProps, SectionPanelClassNames } from "./section-panel/SectionPanel.types";
