@@ -26,10 +26,11 @@ describe("rangos de peers", () => {
     }
   });
 
-  it("cada peer de Radix usa como mínimo la versión con la que se prueba", () => {
+  it("cada peer de Radix usa como mínimo la versión fijada con la que se prueba", () => {
     expect(radixPeers).toHaveLength(7);
     for (const name of radixPeers) {
-      expect(peerDependencies[name]).toBe(devDependencies[name]);
+      expect(devDependencies[name]).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(peerDependencies[name]).toBe(`^${devDependencies[name]}`);
     }
   });
 });

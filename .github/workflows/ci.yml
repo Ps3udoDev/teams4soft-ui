@@ -17,8 +17,14 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 24
+          node-version: "24.22.3"
           cache: pnpm
+      - name: Record toolchain baseline
+        run: |
+          echo "commit=$(git rev-parse HEAD)"
+          echo "node=$(node -v)"
+          echo "pnpm=$(pnpm -v)"
+          echo "lockfile_sha256=$(sha256sum pnpm-lock.yaml | awk '{print $1}')"
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Typecheck
@@ -27,6 +33,8 @@ jobs:
         run: pnpm test
       - name: Build
         run: pnpm build
+      - name: Build Storybook
+        run: pnpm build-storybook
       - name: Verify package contents
         run: pnpm publish --dry-run --no-git-checks
       - name: Verify clean install
@@ -39,7 +47,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 24
+          node-version: "24.22.3"
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -50,7 +58,7 @@ jobs:
         env:
           REACT_VERSION: "18"
       - name: Use React 18
-        run: pnpm add -D react@18.3.1 react-dom@18.3.1 @types/react@^18.3.0 @types/react-dom@^18.3.0
+        run: pnpm add -D react@18.3.1 react-dom@18.3.1 @types/react@18.3.28 @types/react-dom@18.3.7
       - name: Typecheck
         run: pnpm typecheck
       - name: Test
@@ -61,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [20.19.0, 22.12.0]
+        node-version: ["22.23.5", "24.22.3", "26.13.1"]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -69,6 +77,12 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
+      - name: Record toolchain baseline
+        run: |
+          echo "commit=$(git rev-parse HEAD)"
+          echo "node=$(node -v)"
+          echo "pnpm=$(pnpm -v)"
+          echo "lockfile_sha256=$(sha256sum pnpm-lock.yaml | awk '{print $1}')"
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Build
