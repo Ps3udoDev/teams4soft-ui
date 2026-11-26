@@ -2,7 +2,7 @@ import * as React from "react";
 import { cn } from "../../lib";
 import type { TabsProps } from "./Tabs.types";
 
-const listBaseClassName = "flex gap-1 border-b border-ui-border data-[orientation=vertical]:flex-col data-[orientation=vertical]:border-b-0 data-[orientation=vertical]:border-r data-[orientation=vertical]:pr-2";
+const listBaseClassName = "flex gap-1 overflow-x-auto border-b border-ui-border data-[orientation=vertical]:flex-col data-[orientation=vertical]:overflow-x-visible data-[orientation=vertical]:border-b-0 data-[orientation=vertical]:border-r data-[orientation=vertical]:pr-2";
 const tabBaseClassName =
   "rounded-(--radius-ui-sm) px-3 py-2 text-sm font-medium text-ui-foreground/70 outline-none transition-colors hover:text-ui-foreground focus-visible:ring-2 focus-visible:ring-ui-focus disabled:pointer-events-none disabled:opacity-50 data-[selected=true]:bg-ui-muted data-[selected=true]:text-ui-foreground";
 const panelBaseClassName = "min-w-0 flex-1 pt-3 data-[orientation=vertical]:pt-0 data-[orientation=vertical]:pl-4";
@@ -26,10 +26,14 @@ export const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
     ref,
   ) => {
     const baseId = React.useId();
-    const firstEnabled = items.find((i) => !i.disabled)?.value ?? items[0]?.value ?? "";
+    const enabledItems = items.filter((i) => !i.disabled);
+    const firstEnabled = enabledItems[0]?.value ?? items[0]?.value ?? "";
     const isControlled = value !== undefined;
     const [internalValue, setInternalValue] = React.useState(defaultValue ?? firstEnabled);
-    const activeValue = isControlled ? value : internalValue;
+    const rawActive = isControlled ? value : internalValue;
+    const activeExists = enabledItems.some((i) => i.value === rawActive);
+    const activeValue = !isControlled && !activeExists ? firstEnabled : rawActive;
+    const focusableFallback = activeExists ? null : firstEnabled;
     const tabRefs = React.useRef(new Map<string, HTMLButtonElement>());
 
     const selectTab = (next: string, focus = false) => {
@@ -37,8 +41,6 @@ export const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
       onValueChange?.(next);
       if (focus) tabRefs.current.get(next)?.focus();
     };
-
-    const enabledItems = items.filter((i) => !i.disabled);
 
     const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, currentVal: string) => {
       const idx = enabledItems.findIndex((i) => i.value === currentVal);
@@ -79,10 +81,11 @@ export const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
           className={cn(!unstyled && listBaseClassName, classNames?.list)}
           style={styles?.list}
         >
-          {items.map((item) => {
+          {items.map((item, idx) => {
             const selected = item.value === activeValue;
-            const tabId = `${baseId}-tab-${item.value}`;
-            const panelId = `${baseId}-panel-${item.value}`;
+            const isTabStop = selected || item.value === focusableFallback;
+            const tabId = `${baseId}-tab-${idx}`;
+            const panelId = `${baseId}-panel-${idx}`;
             return (
               <button
                 key={item.value}
@@ -95,7 +98,7 @@ export const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
                 role="tab"
                 aria-selected={selected}
                 aria-controls={panelId}
-                tabIndex={selected ? 0 : -1}
+                tabIndex={isTabStop ? 0 : -1}
                 disabled={item.disabled}
                 data-slot="tab"
                 data-selected={selected || undefined}
@@ -109,11 +112,11 @@ export const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
             );
           })}
         </div>
-        {items.map((item) => {
+        {items.map((item, idx) => {
           const selected = item.value === activeValue;
           if (!keepMounted && !selected) return null;
-          const tabId = `${baseId}-tab-${item.value}`;
-          const panelId = `${baseId}-panel-${item.value}`;
+          const tabId = `${baseId}-tab-${idx}`;
+          const panelId = `${baseId}-panel-${idx}`;
           return (
             <div
               key={item.value}

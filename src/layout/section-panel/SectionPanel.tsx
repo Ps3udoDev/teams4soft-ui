@@ -1,5 +1,5 @@
 import * as React from "react";
-import { cn } from "../../lib";
+import { cn, useClientLayoutEffect } from "../../lib";
 import type { SectionPanelProps } from "./SectionPanel.types";
 
 const rootBaseClassName = "rounded-(--radius-ui-md) border border-ui-border bg-ui-background text-ui-foreground";
@@ -47,7 +47,7 @@ export const SectionPanel = React.forwardRef<HTMLElement, SectionPanelProps>(
     const focusInsideRef = React.useRef(false);
     const prevCollapsedRef = React.useRef(isCollapsed);
 
-    React.useLayoutEffect(() => {
+    useClientLayoutEffect(() => {
       const wasCollapsed = prevCollapsedRef.current;
       prevCollapsedRef.current = isCollapsed;
       if (!wasCollapsed && isCollapsed) {

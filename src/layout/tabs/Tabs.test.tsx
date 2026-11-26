@@ -55,4 +55,29 @@ describe("Tabs", () => {
     expect(tabB).toHaveFocus();
     expect(screen.getByText("Contenido 2")).toBeVisible();
   });
+
+  it("si la pestaña activa desaparece o tiene espacios en su value, mantiene tabIndex=0 alcanzable e IDs válidos", () => {
+    const { rerender } = render(
+      <Tabs
+        defaultValue="mi tab"
+        items={[
+          { value: "mi tab", label: "Uno", content: <div>A</div> },
+          { value: "otro tab", label: "Dos", content: <div>B</div> },
+        ]}
+      />,
+    );
+    const first = screen.getByRole("tab", { name: "Uno" });
+    expect(first.id).not.toMatch(/\s/);
+    expect(first.getAttribute("aria-controls")).not.toMatch(/\s/);
+
+    rerender(
+      <Tabs
+        defaultValue="mi tab"
+        items={[{ value: "otro tab", label: "Dos", content: <div>B</div> }]}
+      />,
+    );
+    const remaining = screen.getByRole("tab", { name: "Dos" });
+    expect(remaining).toHaveAttribute("tabindex", "0");
+    expect(screen.getByText("B")).toBeVisible();
+  });
 });

@@ -75,5 +75,7 @@ describe("FilePickerField", () => {
     expect(screen.getByRole("alert")).toBeInTheDocument();
     expect(screen.getByText("recibo.pdf")).toBeInTheDocument();
     expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(fileInput).toHaveAttribute("tabindex", "-1");
+    expect(fileInput).toHaveAccessibleDescription(/tamaño máximo/i);
   });
 });

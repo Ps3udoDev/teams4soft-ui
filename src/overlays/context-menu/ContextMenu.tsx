@@ -24,9 +24,12 @@ export function ContextMenu({
   const isControlled = open !== undefined;
   const [internalOpen, setInternalOpen] = React.useState(false);
   const isOpen = isControlled ? open : internalOpen;
-  const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const triggerRef = React.useRef<HTMLElement | null>(null);
+  const menuRef = React.useRef<HTMLDivElement | null>(null);
   const itemRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
   const [activeIndex, setActiveIndex] = React.useState(0);
+  const wasOpenRef = React.useRef(false);
+  const escapeCloseRef = React.useRef(false);
 
   const setOpen = (next: boolean) => {
     if (!isControlled) setInternalOpen(next);
@@ -37,20 +40,28 @@ export function ContextMenu({
     () => items.map((item, idx) => (item.disabled ? -1 : idx)).filter((idx) => idx !== -1),
     [items],
   );
+  const enabledRef = React.useRef(enabledIndices);
+  enabledRef.current = enabledIndices;
 
   React.useEffect(() => {
-    if (!isOpen) return;
-    const first = enabledIndices[0] ?? 0;
-    setActiveIndex(first);
-    itemRefs.current[first]?.focus();
-  }, [isOpen, enabledIndices]);
-
-  const closeAndFocusTrigger = () => {
-    setOpen(false);
-    triggerRef.current?.focus();
-  };
+    if (isOpen && !wasOpenRef.current) {
+      const first = enabledRef.current[0] ?? 0;
+      setActiveIndex(first);
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
 
   const onMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      escapeCloseRef.current = true;
+      setOpen(false);
+      return;
+    }
+    if (event.key === "Tab") {
+      setOpen(false);
+      return;
+    }
     if (enabledIndices.length === 0) return;
     const pos = enabledIndices.indexOf(activeIndex);
     if (event.key === "ArrowDown") {
@@ -73,29 +84,28 @@ export function ContextMenu({
       const last = enabledIndices[enabledIndices.length - 1]!;
       setActiveIndex(last);
       itemRefs.current[last]?.focus();
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      closeAndFocusTrigger();
     }
   };
 
   return (
     <Popover.Root open={isOpen} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
+      <Popover.Trigger
+        asChild
+        ref={triggerRef as React.Ref<HTMLButtonElement>}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          if (!disabled) setOpen(true);
+        }}
+      >
         {trigger ?? (
           <Button
-            ref={triggerRef}
             type="button"
             size="sm"
             variant="ghost"
             disabled={disabled}
             aria-label={triggerLabel}
-            aria-haspopup="menu"
-            aria-expanded={isOpen}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              if (!disabled) setOpen(true);
-            }}
             className={classNames?.trigger}
             style={styles?.trigger}
           >
@@ -105,19 +115,31 @@ export function ContextMenu({
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
+          ref={menuRef}
           align={align}
           sideOffset={4}
           role="menu"
           aria-label={triggerLabel}
           onKeyDown={onMenuKeyDown}
           onOpenAutoFocus={(event) => {
+            if (enabledRef.current.length === 0) return;
             event.preventDefault();
-            const first = enabledIndices[0] ?? 0;
+            const first = enabledRef.current[0]!;
             itemRefs.current[first]?.focus();
           }}
           onCloseAutoFocus={(event) => {
+            const byEscape = escapeCloseRef.current;
+            escapeCloseRef.current = false;
+            const active = document.activeElement;
+            const shouldRestore =
+              byEscape ||
+              !active ||
+              active === document.body ||
+              Boolean(menuRef.current?.contains(active));
             event.preventDefault();
-            triggerRef.current?.focus();
+            if (shouldRestore) {
+              triggerRef.current?.focus();
+            }
           }}
           data-slot="content"
           className={cn(!unstyled && contentBaseClassName, classNames?.content)}
@@ -137,8 +159,8 @@ export function ContextMenu({
               data-tone={item.tone ?? "default"}
               onClick={() => {
                 if (item.disabled) return;
+                setOpen(false);
                 item.onSelect();
-                closeAndFocusTrigger();
               }}
               className={cn(!unstyled && itemBaseClassName, classNames?.item)}
               style={styles?.item}

@@ -192,10 +192,15 @@ describe("parseDateInput — captura parcial opt-in", () => {
   });
 
   it("conserva el día civil en límites de año (01-01 y 12-31) sin desplazamiento", () => {
-    for (const iso of ["2026-01-01", "2026-12-31", "2024-02-29"]) {
+    const cases: Array<[string, string]> = [
+      ["2026-01-01", "01/01/2026"],
+      ["2026-12-31", "31/12/2026"],
+      ["2024-02-29", "29/02/2024"],
+    ];
+    for (const [iso, expected] of cases) {
       const d = fromDateFieldValue(iso)!;
       expect(toDateFieldValue(d)).toBe(iso);
-      expect(formatIso(iso, { displayFormat: "dd/MM/yyyy" })).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
+      expect(formatIso(iso, { displayFormat: "dd/MM/yyyy" })).toBe(expected);
     }
   });
 });

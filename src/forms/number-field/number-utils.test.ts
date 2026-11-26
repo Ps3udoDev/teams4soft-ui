@@ -87,13 +87,15 @@ describe("formatWhileTyping", () => {
   });
 });
 
-describe("moneda ida y vuelta (cero, vacío y centavos)", () => {
+describe("moneda ida y vuelta (cero, vacío, redondeo y centavos)", () => {
   it("conserva cero, vacío y centavos al formatear y volver a parsear", () => {
     for (const value of [0, 0.05, 1234.56, 999999.99]) {
-      const formatted = formatNumber(value, { mode: "currency" });
-      expect(parseNumber(formatted)).toEqual({ ok: true, value });
+      const formatted = formatNumber(value, { mode: "currency", currencySymbol: "$" });
+      expect(parseNumber(formatted, { mode: "currency", currencySymbol: "$" })).toEqual({ ok: true, value });
     }
     expect(formatNumber(null, { mode: "currency" })).toBe("");
     expect(parseNumber("")).toEqual({ ok: true, value: null });
+    expect(formatNumber(12.345, { mode: "currency", minFractionDigits: 2, maxFractionDigits: 2 })).toBe("$12.35");
+    expect(formatNumber(12.344, { mode: "currency", minFractionDigits: 2, maxFractionDigits: 2 })).toBe("$12.34");
   });
 });

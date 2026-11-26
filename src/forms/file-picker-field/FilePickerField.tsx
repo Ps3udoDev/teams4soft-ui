@@ -26,7 +26,7 @@ function formatSize(bytes: number): string {
 }
 
 const controlBaseClassName =
-  "flex w-full flex-wrap items-center gap-2 rounded-(--radius-ui-md) border border-ui-border bg-ui-background px-3 py-2 text-sm text-ui-foreground data-[invalid=true]:border-ui-danger data-[disabled=true]:opacity-50";
+  "flex w-full flex-wrap items-center gap-2 rounded-(--radius-ui-md) border border-ui-border bg-ui-background px-3 py-2 text-sm text-ui-foreground focus-within:ring-2 focus-within:ring-ui-focus focus-within:ring-offset-2 focus-within:ring-offset-ui-background data-[invalid=true]:border-ui-danger data-[disabled=true]:opacity-50";
 
 export const FilePickerField = React.forwardRef<HTMLInputElement, FilePickerFieldProps>(
   (
@@ -73,6 +73,26 @@ export const FilePickerField = React.forwardRef<HTMLInputElement, FilePickerFiel
     const resolvedDisabled = disabled !== undefined ? disabled : (formCtx?.disabled ?? false);
     const effectiveError = errorMessage ?? rejectionMessage ?? undefined;
     const resolvedInvalid = invalid || Boolean(formCtx?.invalid) || Boolean(effectiveError);
+    const rejectionId = `${inputId}-rejection`;
+    const describedByTokens = [
+      ariaDescribedBy,
+      formCtx
+        ? [
+            formCtx.hasDescription ? formCtx.descriptionId : null,
+            formCtx.hasError ? formCtx.errorId : null,
+            rejectionMessage && !errorMessage ? rejectionId : null,
+          ]
+            .filter(Boolean)
+            .join(" ")
+        : [
+            description && !effectiveError ? `${inputId}-description` : null,
+            effectiveError ? `${inputId}-error` : null,
+          ]
+            .filter(Boolean)
+            .join(" "),
+    ]
+      .filter(Boolean)
+      .join(" ") || undefined;
 
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       const picked = event.target.files?.[0];
@@ -118,12 +138,13 @@ export const FilePickerField = React.forwardRef<HTMLInputElement, FilePickerFiel
           id={inputId}
           name={name}
           type="file"
+          tabIndex={-1}
           accept={accept}
           disabled={resolvedDisabled}
           required={required ?? formCtx?.required}
           aria-label={ariaLabel}
           aria-invalid={resolvedInvalid || undefined}
-          aria-describedby={ariaDescribedBy}
+          aria-describedby={describedByTokens}
           onChange={handleChange}
           className="sr-only"
         />
@@ -133,6 +154,8 @@ export const FilePickerField = React.forwardRef<HTMLInputElement, FilePickerFiel
           size="sm"
           variant="outline"
           disabled={resolvedDisabled}
+          aria-invalid={resolvedInvalid || undefined}
+          aria-describedby={describedByTokens}
           onClick={() => inputRef.current?.click()}
           className={classNames?.trigger}
           style={styles?.trigger}
@@ -171,7 +194,7 @@ export const FilePickerField = React.forwardRef<HTMLInputElement, FilePickerFiel
         <>
           {control}
           {rejectionMessage && !errorMessage ? (
-            <p role="alert" className={cn(!unstyled && "mt-1 text-sm text-ui-danger")}>
+            <p id={rejectionId} role="alert" className={cn(!unstyled && "mt-1 text-sm text-ui-danger")}>
               {rejectionMessage}
             </p>
           ) : null}
