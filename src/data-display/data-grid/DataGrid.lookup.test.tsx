@@ -677,3 +677,98 @@ describe("DataGrid: reintento del catálogo de una columna lookup", () => {
     expect(queriesOf(loadOptions)).toEqual([""]);
   });
 });
+
+describe("DataGrid: celda lookup paginada con searchLookup", () => {
+  const total10k = 10_000;
+  const pageItems = (page: number, pageSize: number): Opt[] =>
+    Array.from({ length: pageSize }, (_, i) => {
+      const id = (page - 1) * pageSize + i + 1;
+      return { value: id, label: `Proveedor ${id}`, code: `P-${id}` };
+    });
+
+  it("cero llamadas al montar, abre con page:1 pageSize:50, pagina 2 conserva criterio y doble clic confirma el ID y etiqueta", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const searchLookup = vi.fn(async (_q: string, ctx: { page: number; pageSize: number; criterion?: string; signal: AbortSignal }) => ({
+      items: pageItems(ctx.page, ctx.pageSize),
+      total: total10k,
+    }));
+    const criteria = [{ value: "code", label: "Por código" }, { value: "name", label: "Por nombre" }];
+    render(
+      <DataGrid
+        columns={[column({ searchLookup, editorProps: { criteria, defaultCriterion: "name" } })]}
+        defaultValue={twoEmpty}
+        getRowId={rowId}
+        onChange={onChange}
+      />,
+    );
+
+    await flush();
+    expect(searchLookup).not.toHaveBeenCalled();
+
+    await user.click(within(inputs()[0]!.closest("td")!).getByRole("button", { name: "Buscar" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Por código" }));
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    expect(searchLookup).toHaveBeenCalledTimes(1);
+    expect(searchLookup).toHaveBeenLastCalledWith("", expect.objectContaining({ page: 1, pageSize: 50, criterion: "code", signal: expect.any(AbortSignal) }));
+
+    await user.click(within(dialog()).getByRole("button", { name: "Página siguiente" }));
+    await waitFor(() => expect(searchLookup).toHaveBeenCalledTimes(2));
+    expect(searchLookup).toHaveBeenLastCalledWith("", expect.objectContaining({ page: 2, pageSize: 50, criterion: "code", signal: expect.any(AbortSignal) }));
+
+    await user.dblClick(await within(dialog()).findByText("Proveedor 52"));
+    await waitFor(() => expect(queryDialog()).not.toBeInTheDocument());
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(lastRows(onChange)[0]!.ramo).toBe(52);
+    expect(lastRows(onChange)[1]!.ramo).toBeNull();
+    expect(inputs()[0]).toHaveValue("Proveedor 52");
+  });
+
+  it("cambiar de póliza (reemplazar valor externo) durante la carga rechaza la respuesta antigua", async () => {
+    const user = userEvent.setup();
+    const gate = deferred<{ items: Opt[]; total: number }>();
+    const searchLookup = vi.fn(() => gate.promise);
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <DataGrid
+        columns={[column({ searchLookup })]}
+        value={[{ id: "p-1", ramo: 10, note: "poliza 1" }]}
+        getRowId={rowId}
+        onChange={onChange}
+      />,
+    );
+
+    await user.clear(inputs()[0]!);
+    onChange.mockClear();
+    await user.type(inputs()[0]!, "viejo{Enter}");
+    await waitFor(() => expect(searchLookup).toHaveBeenCalledTimes(1));
+
+    // Cambio externo de póliza (otro id de fila / nuevo contexto)
+    rerender(
+      <DataGrid
+        columns={[column({ searchLookup })]}
+        value={[{ id: "p-2", ramo: 99, note: "poliza 2" }]}
+        getRowId={rowId}
+        onChange={onChange}
+      />,
+    );
+
+    await act(async () => { gate.resolve({ items: [{ value: 77, label: "Antiguo" }], total: 1 }); });
+    await flush();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(queryDialog()).toBeNull();
+    expect(inputs()[0]).toHaveValue("99");
+  });
+
+  it("prioriza searchLookup sobre loadOptions en columnas lookup y no precarga al montar", async () => {
+    const loadOptions = makeLoader();
+    const searchLookup = vi.fn(async (_q: string, ctx: { page: number; pageSize: number }) => ({
+      items: pageItems(ctx.page, ctx.pageSize),
+      total: 100,
+    }));
+    render(<DataGrid columns={[column({ searchLookup, loadOptions })]} defaultValue={twoEmpty} getRowId={rowId} />);
+    await flush();
+    expect(loadOptions).not.toHaveBeenCalled();
+    expect(searchLookup).not.toHaveBeenCalled();
+  });
+});

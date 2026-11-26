@@ -2,7 +2,7 @@ import * as React from "react";
 import { FeedbackDialog } from "../../overlays/feedback-dialog/FeedbackDialog";
 import type { EntityLookupMessages } from "./lookup-core.types";
 
-export type NotFoundOutcome = "created" | "dismissed" | "kept";
+export type NotFoundOutcome = "created" | "dismissed" | "kept" | "aborted";
 
 export interface UseLookupNoticesOptions {
   /** Already merged with the caller's overrides. */
@@ -14,6 +14,7 @@ export interface UseLookupNoticesOptions {
 export interface UseLookupNoticesResult {
   showNotFound(label: string, emptyMessage?: React.ReactNode): Promise<NotFoundOutcome>;
   showQueryRequired(): Promise<void>;
+  dismiss(): void;
   noticesElement: React.ReactNode;
 }
 
@@ -36,10 +37,14 @@ export function useLookupNotices({ messages, notFoundMessage, onCreateRequest }:
     pending?.(outcome);
   }, []);
 
+  const dismiss = React.useCallback(() => {
+    settle("aborted");
+  }, [settle]);
+
   React.useEffect(() => () => {
     const pending = settleRef.current;
     settleRef.current = null;
-    pending?.("kept");
+    pending?.("aborted");
   }, []);
 
   const open = React.useCallback((next: Notice) => new Promise<NotFoundOutcome>((resolve) => {
@@ -88,5 +93,5 @@ export function useLookupNotices({ messages, notFoundMessage, onCreateRequest }:
     );
   }
 
-  return { showNotFound, showQueryRequired, noticesElement };
+  return { showNotFound, showQueryRequired, dismiss, noticesElement };
 }

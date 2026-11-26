@@ -1111,3 +1111,166 @@ describe("EntityLookupField importación", () => {
     expect(typeof mod.EntityLookupField).toBe("function");
   });
 });
+
+describe("EntityLookupField vigencia de intención y concurrencia", () => {
+  it("dos búsquedas resueltas en orden inverso (ignorando abort): solo aplica la vigente", async () => {
+    let resolveA!: (v: LookupSearchResponse<Prov>) => void;
+    let resolveB!: (v: LookupSearchResponse<Prov>) => void;
+    const search = vi.fn((q: string) => new Promise<LookupSearchResponse<Prov>>((resolve) => {
+      if (q === "A") resolveA = resolve;
+      else resolveB = resolve;
+    }));
+    const { user, onSelectionChange } = setup({ search });
+
+    await user.type(input(), "A{Enter}");
+    await waitFor(() => expect(search).toHaveBeenCalledWith("A", expect.anything()));
+    await user.clear(input());
+    await user.type(input(), "B{Enter}");
+    await waitFor(() => expect(search).toHaveBeenCalledWith("B", expect.anything()));
+
+    await act(async () => { resolveB({ items: [prov(2)], total: 1 }); });
+    await waitFor(() => expect(onSelectionChange).toHaveBeenCalledWith(prov(2)));
+
+    await act(async () => { resolveA({ items: [prov(1)], total: 1 }); });
+    expect(onSelectionChange).toHaveBeenCalledTimes(1);
+    expect(input()).toHaveValue("Proveedor 2");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("limpiar mientras una búsqueda está en vuelo invalida su resultado tardío", async () => {
+    let resolveA!: (v: LookupSearchResponse<Prov>) => void;
+    const search = vi.fn(() => new Promise<LookupSearchResponse<Prov>>((resolve) => { resolveA = resolve; }));
+    const { user, onSelectionChange } = setup({ search });
+
+    await user.type(input(), "A{Enter}");
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(1));
+    await user.clear(input());
+
+    await act(async () => { resolveA({ items: [prov(1)], total: 1 }); });
+    expect(onSelectionChange).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(input()).toHaveValue("");
+  });
+
+  it("cambio externo de selección (cambio de póliza) durante búsqueda invalida la respuesta antigua", async () => {
+    let resolveA!: (v: LookupSearchResponse<Prov>) => void;
+    const search = vi.fn(() => new Promise<LookupSearchResponse<Prov>>((resolve) => { resolveA = resolve; }));
+    const onSelectionChange = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <EntityLookupField<Prov>
+        selectedItem={prov(1)}
+        onSelectionChange={onSelectionChange}
+        getItemId={(p) => p.id}
+        getItemLabel={(p) => p.name}
+        columns={columns}
+        search={search}
+      />,
+    );
+
+    await user.clear(input());
+    await user.type(input(), "busqueda-poliza-1{Enter}");
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(1));
+
+    // Cambio externo de entidad / póliza
+    rerender(
+      <EntityLookupField<Prov>
+        selectedItem={prov(9)}
+        onSelectionChange={onSelectionChange}
+        getItemId={(p) => p.id}
+        getItemLabel={(p) => p.name}
+        columns={columns}
+        search={search}
+      />,
+    );
+    expect(input()).toHaveValue("Proveedor 9");
+
+    await act(async () => { resolveA({ items: [prov(3)], total: 1 }); });
+    expect(onSelectionChange).not.toHaveBeenCalledWith(prov(3));
+    expect(input()).toHaveValue("Proveedor 9");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("en StrictMode: error con reintento, cero resultados y cancelación sin alta accidental", async () => {
+    let calls = 0;
+    const onSearchError = vi.fn();
+    const onCreateRequest = vi.fn();
+    const search = vi.fn(async (q: string): Promise<LookupSearchResponse<Prov>> => {
+      calls++;
+      if (calls === 1) throw new Error("network");
+      if (q === "vacio") return { items: [], total: 0 };
+      return { items: [prov(1)], total: 200 };
+    });
+    const user = userEvent.setup();
+    render(
+      <React.StrictMode>
+        <Harness search={search} onSearchError={onSearchError} onCreateRequest={onCreateRequest} />
+      </React.StrictMode>,
+    );
+
+    await user.type(input(), "uno{Enter}");
+    await waitFor(() => expect(onSearchError).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    // Reintento: 1 fila con total 200 -> abre modal (no autoselecciona)
+    await user.keyboard("{Enter}");
+    await screen.findByRole("dialog", { name: "Seleccionar elemento" });
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(onCreateRequest).not.toHaveBeenCalled();
+
+    // Cero resultados -> aviso notFound y cancelar ("No") no dispara alta accidental
+    await user.clear(input());
+    await user.type(input(), "vacio{Enter}");
+    expect(await screen.findByText(/no fue encontrado/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "No" }));
+    expect(onCreateRequest).not.toHaveBeenCalled();
+  });
+
+  it("en StrictMode: defaultOpen={true} remoto lista las filas sin cerrarse ni quedar colgado", async () => {
+    const search = vi.fn(async (): Promise<LookupSearchResponse<Prov>> => ({ items: provs(1, 3), total: 3 }));
+    render(
+      <React.StrictMode>
+        <Harness search={search} defaultOpen />
+      </React.StrictMode>,
+    );
+    expect(await screen.findByRole("dialog", { name: "Seleccionar elemento" })).toBeInTheDocument();
+    await waitFor(() => expect(bodyRows()).toHaveLength(3));
+  });
+
+  it("cambio externo de selección cierra un aviso notFound pendiente sin limpiar la nueva entidad", async () => {
+    const onSelectionChange = vi.fn();
+    const user = userEvent.setup();
+    const search = vi.fn(async (): Promise<LookupSearchResponse<Prov>> => ({ items: [], total: 0 }));
+    const { rerender } = render(
+      <EntityLookupField<Prov>
+        selectedItem={prov(1)}
+        onSelectionChange={onSelectionChange}
+        getItemId={(p) => p.id}
+        getItemLabel={(p) => p.name}
+        columns={columns}
+        search={search}
+      />,
+    );
+
+    await user.clear(input());
+    onSelectionChange.mockClear();
+    await user.type(input(), "inexistente{Enter}");
+    expect(await screen.findByText(/No se encontró/)).toBeInTheDocument();
+
+    rerender(
+      <EntityLookupField<Prov>
+        selectedItem={prov(9)}
+        onSelectionChange={onSelectionChange}
+        getItemId={(p) => p.id}
+        getItemLabel={(p) => p.name}
+        columns={columns}
+        search={search}
+      />,
+    );
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(onSelectionChange).not.toHaveBeenCalled();
+    expect(input()).toHaveValue("Proveedor 9");
+  });
+});

@@ -176,4 +176,20 @@ describe("DataGrid: el foco en modo cliente con loading", () => {
     expect(screen.getAllByRole("textbox", { name: "Póliza" })[0]).toBe(input);
     expect(input).toHaveFocus();
   });
+
+  it("tras ordenar en cliente, editar la primera fila visible actualiza su ID correcto y conserva el foco al refrescar", async () => {
+    const user = userEvent.setup();
+    const onChange = (data: { rows: Row[] }) => { latestRows = data.rows; };
+    let latestRows: Row[] = rows;
+    render(<DataGrid columns={editable} getRowId={getRowId} defaultValue={rows} onChange={onChange} />);
+    await user.click(button("Ordenar por Importe"));
+    await user.click(button("Ordenar por Importe"));
+    const first = screen.getAllByRole("textbox", { name: "Póliza" })[0]!;
+    expect(first).toHaveValue("Pol 25");
+    await user.clear(first);
+    await user.type(first, "Pol 25 editada");
+    await user.tab();
+    expect(latestRows.find(r => r.id === "r-25")?.policy).toBe("Pol 25 editada");
+    expect(latestRows.find(r => r.id === "r-1")?.policy).toBe("Pol 1");
+  });
 });

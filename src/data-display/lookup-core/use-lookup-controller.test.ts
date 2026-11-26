@@ -38,6 +38,55 @@ describe("useLookupController remote", () => {
     expect(result.current.state.status).toBe("idle");
   });
 
+  it("opens chooser when server returns 1 row on page with total > 1, and selects when total === 1 on commit", async () => {
+    const paged = setup(async () => ({ items: [row(1)], total: 200 }));
+    await act(async () => {
+      expect(await paged.result.current.runSearch("a", { intent: "commit" })).toEqual({ type: "choose" });
+    });
+    expect(paged.result.current.state).toMatchObject({ status: "choosing", rows: [row(1)], total: 200 });
+
+    const exact = setup(async () => ({ items: [row(1)], total: 1 }));
+    await act(async () => {
+      expect(await exact.result.current.runSearch("a", { intent: "commit" })).toEqual({ type: "selected", item: row(1) });
+    });
+    expect(exact.result.current.state.status).toBe("idle");
+
+    const browseExact = setup(async () => ({ items: [row(1)], total: 1 }));
+    await act(async () => {
+      expect(await browseExact.result.current.runSearch("a", { intent: "browse" })).toEqual({ type: "choose" });
+    });
+    expect(browseExact.result.current.state).toMatchObject({ status: "choosing", rows: [row(1)], total: 1 });
+
+    const browseMany = setup(async () => ({ items: [row(1)], total: 200 }));
+    await act(async () => {
+      expect(await browseMany.result.current.runSearch("a", { intent: "browse" })).toEqual({ type: "choose" });
+    });
+    expect(browseMany.result.current.state).toMatchObject({ status: "choosing", rows: [row(1)], total: 200 });
+  });
+
+  it("invalidate aborts in-flight search and discards late resolution even when transport ignores abort", async () => {
+    const d = deferred<LookupSearchResponse<Row>>();
+    let signal!: AbortSignal;
+    const { result } = setup((_q, ctx) => {
+      signal = ctx.signal;
+      return d.promise;
+    });
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = result.current.runSearch("a", { intent: "commit" });
+    });
+    act(() => {
+      result.current.invalidate();
+    });
+    expect(signal.aborted).toBe(true);
+    expect(result.current.state.status).toBe("idle");
+    await act(async () => {
+      d.resolve({ items: [row(1)], total: 1 });
+      expect(await pending).toEqual({ type: "aborted" });
+    });
+    expect(result.current.state.status).toBe("idle");
+  });
+
   it("opens the chooser for a single result when autoSelectSingle is off or intent is browse", async () => {
     const off = setup(async () => [row(1)], { autoSelectSingle: false });
     await act(async () => {

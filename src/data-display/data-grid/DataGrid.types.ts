@@ -1,5 +1,6 @@
 import type * as React from "react";
 import type { GridChange } from "./grid-rows-store";
+import type { LookupSearchContext, LookupSearchResponse } from "../lookup-core/lookup-core.types";
 
 export type DataGridColumnType = "text" | "number" | "currency" | "percent" | "date" | "select" | "lookup" | "checkbox" | "radio" | "custom";
 export type DataGridFilterKind = "text" | "select" | "number" | "date";
@@ -73,6 +74,12 @@ export interface DataGridColumn<T, TOption = unknown> {
    * En `lookup`, un catálogo que falló se reintenta una vez por cada cambio de las filas.
    */
   loadOptions?: (query: string) => Promise<TOption[]>;
+  /**
+   * Búsqueda paginada remota para columnas `lookup`: recibe texto y `{ page, pageSize, criterion, signal }` y devuelve
+   * `{ items, total }` o un arreglo. Tiene prioridad sobre `loadOptions` en columnas `lookup`, no precarga al montar
+   * ni usa la caché plana de `loadOptions`.
+   */
+  searchLookup?: (query: string, ctx: LookupSearchContext) => Promise<LookupSearchResponse<TOption>>;
   /** Columnas del modal de una columna `lookup`. Por defecto, una con la etiqueta. */
   lookupColumns?: DataGridColumn<TOption extends object ? TOption : any>[];
   render?: (ctx: DataGridCellContext<T>) => React.ReactNode;
@@ -179,7 +186,12 @@ export interface DataGridProps<T> {
    * Tras guardar, llama a `ref.reset(rows)` para marcarlas como guardadas.
    * La selección conserva los ids de otras páginas.
    */
-  serverSide?: { totalRecords: number; onQueryChange: (query: DataGridQuery) => void };
+  serverSide?: {
+    totalRecords: number;
+    onQueryChange: (query: DataGridQuery) => void;
+    /** Si devuelve `false`, cancela el cambio de página, orden o filtro antes de mutar el estado de la grilla. */
+    onBeforeQueryChange?: (next: DataGridQuery) => boolean;
+  };
   loading?: boolean;
   toolbar?: React.ReactNode;
   onRowClick?: (row: T, event: React.MouseEvent<HTMLTableRowElement>) => void;

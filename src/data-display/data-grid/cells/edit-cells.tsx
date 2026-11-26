@@ -136,9 +136,9 @@ function LookupEditor<T>({ column, value, onCommit, onPopoverOpenChange, trackSe
       {...withEditorProps(column, { className, classNames: { root: cn(!unstyled && "min-w-40"), trigger: cn(!unstyled && "h-(--ui-control-height) w-(--ui-control-height) shrink-0") } })}
       aria-label={label} aria-describedby={linked.describedBy}
       selectedItem={lookup.selectedItem} getItemId={lookup.getItemId} getItemLabel={lookup.getItemLabel}
-      search={query => {
+      search={(query, ctx) => {
         setSearchFailed(false);
-        const search = lookup.search(query);
+        const search = lookup.search(query, ctx);
         return trackSearch ? trackSearch(search) : search;
       }}
       onSearchError={failure => { setSearchFailed(true); (editorProps.onSearchError as ((failure: unknown) => void) | undefined)?.(failure); }}
@@ -183,9 +183,9 @@ export const editCellRegistry: Partial<Record<DataGridColumnType, React.Componen
   radio: RadioEditor,
 };
 
-/** Un lookup sin `loadOptions` ni `options` no tiene dónde buscar: se queda en lectura y `cellTypes` puede darle celda. */
+/** Un lookup sin `searchLookup`, `loadOptions` ni `options` no tiene dónde buscar: se queda en lectura y `cellTypes` puede darle celda. */
 export function editorFor<T>(column: DataGridColumn<T>): React.ComponentType<EditCellProps<any>> | undefined {
   const type = column.type ?? "text";
-  if (type === "lookup" && !column.loadOptions && column.options === undefined) return undefined;
+  if (type === "lookup" && !column.searchLookup && !column.loadOptions && column.options === undefined) return undefined;
   return editCellRegistry[type as keyof typeof editCellRegistry];
 }

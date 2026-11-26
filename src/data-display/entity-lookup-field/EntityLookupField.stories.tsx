@@ -159,3 +159,93 @@ export const ConCriteriosEnDialog: Story = {
   render: () => <InDialogExample />,
   parameters: { docs: { description: { story: "El campo dentro de un `Dialog`: el menú de criterios, el modal de resultados y el formulario se apilan por encima del diálogo contenedor." } } },
 };
+
+const TOTAL_10K = 10_000;
+const makeSyntheticPerson = (index: number): Person => ({
+  id: index + 1,
+  code: `P${String(index + 1).padStart(5, "0")}`,
+  firstName: `Nombre${(index % 50) + 1}`,
+  lastName: `Apellido${(index % 100) + 1}`,
+  motherLastName: `Materno${(index % 40) + 1}`,
+  city: ["Quito", "Guayaquil", "Cuenca"][index % 3]!,
+});
+
+function Catalogo10kExample() {
+  const [selected, setSelected] = React.useState<Person | null>(null);
+  const [inputValue, setInputValue] = React.useState("");
+  const [submitState, setSubmitState] = React.useState<string>("sin envío");
+  const { calls, log } = useBackLog();
+
+  const search = React.useCallback(async (query: string, ctx: { page: number; pageSize: number; criterion?: string; signal: AbortSignal }) => {
+    log({ query, page: ctx.page, pageSize: ctx.pageSize, criterion: ctx.criterion });
+    await new Promise((r) => setTimeout(r, 120));
+    if (ctx.signal.aborted) return null;
+    const needle = query.trim().toLowerCase();
+    const start = (ctx.page - 1) * ctx.pageSize;
+    if (!needle) {
+      const count = Math.max(0, Math.min(ctx.pageSize, TOTAL_10K - start));
+      return { items: Array.from({ length: count }, (_, i) => makeSyntheticPerson(start + i)), total: TOTAL_10K };
+    }
+    const matched: Person[] = [];
+    for (let i = 0; i < TOTAL_10K; i++) {
+      const p = makeSyntheticPerson(i);
+      const hay = ctx.criterion === "code" ? p.code : `${p.code} ${p.firstName} ${p.lastName}`;
+      if (hay.toLowerCase().includes(needle)) matched.push(p);
+    }
+    return { items: matched.slice(start, start + ctx.pageSize), total: matched.length };
+  }, [log]);
+
+  const isDirtyMismatch = selected !== null && inputValue !== personLabel(selected);
+
+  return <div className="grid max-w-xl gap-3">
+    <EntityLookupField<Person>
+      {...base}
+      label="Agente fiscal (10 000 registros)"
+      selectedItem={selected}
+      onSelectionChange={(next) => {
+        setSelected(next);
+        setInputValue(next ? personLabel(next) : "");
+      }}
+      inputValue={inputValue}
+      onInputValueChange={setInputValue}
+      search={search}
+      criteria={criteria}
+      pageSize={50}
+      restoreCancelledText
+      clearable
+      invalid={isDirtyMismatch}
+      errorMessage={isDirtyMismatch ? "El texto editado no coincide con la selección confirmada. Seleccione una opción válida o restaure." : undefined}
+      placeholder="Abra «…» o escriba código / nombre"
+    />
+    <div className="flex gap-2">
+      <Button
+        onClick={() => {
+          if (!selected || isDirtyMismatch) {
+            setSubmitState("bloqueado: texto sin confirmar (no se envía el ID previo)");
+            return;
+          }
+          setSubmitState(`enviado ID ${selected.id} (${selected.code})`);
+        }}
+      >
+        Generar
+      </Button>
+      <Button variant="outline" onClick={() => setInputValue(selected ? personLabel(selected) : "")}>
+        Restaurar etiqueta confirmada
+      </Button>
+    </div>
+    <Selected item={selected} />
+    <output aria-live="polite" className="block text-xs">Envío: {submitState}</output>
+    <BackLog calls={calls} />
+  </div>;
+}
+
+export const Catalogo10kPaginado: Story = {
+  render: () => <Catalogo10kExample />,
+  parameters: {
+    docs: {
+      description: {
+        story: "Catálogo sintético determinista de 10 000 registros en páginas de 50 (cero peticiones al montar, 1 al abrir «…», 1 al cambiar de página). Verifica Enter, Aceptar, doble clic, cancelar, limpiar y la regla contractual agente A / texto B: editar el texto sobre una selección previa bloquea el envío del ID anterior hasta confirmar o restaurar la etiqueta.",
+      },
+    },
+  },
+};

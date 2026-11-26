@@ -1,5 +1,6 @@
 import * as React from "react";
 import type { DataGridColumn } from "./DataGrid.types";
+import type { LookupSearchContext, LookupSearchResponse } from "../lookup-core/lookup-core.types";
 import { normalizeText } from "./filters/filter-fns";
 import { dataGridMessagesEs } from "./messages";
 import { createOptionsCache } from "./options-cache";
@@ -101,12 +102,13 @@ export function createRemoteOptions() {
     getVersion: () => version,
     /** Devuelve la columna con `options` del catálogo; conserva su identidad mientras nada cambie. */
     resolve<T>(column: DataGridColumn<T>): DataGridColumn<T> {
-      if (!column.loadOptions || !hasRemoteCatalog(column.type)) return column;
+      const pagedLookup = column.type === "lookup" && column.searchLookup !== undefined;
+      if (!pagedLookup && (!column.loadOptions || !hasRemoteCatalog(column.type))) return column;
       const staticOptions = column.options !== undefined;
-      const base = staticOptions ? column.options : results.get(column.field)?.get("");
+      const base = pagedLookup ? column.options : staticOptions ? column.options : results.get(column.field)?.get("");
       const extras = picked.get(column.field);
-      if (staticOptions && !extras) return column;
-      const pending = !staticOptions && base === undefined && !failed.has(column.field);
+      if ((staticOptions || pagedLookup) && !extras) return column;
+      const pending = !pagedLookup && !staticOptions && base === undefined && !failed.has(column.field);
       const cached = resolved.get(column);
       if (cached && cached.base === base && cached.extras === extras && cached.pending === pending) return cached.column as DataGridColumn<T>;
       const options = base || extras ? [...(base ?? []), ...(extras ?? [])] : undefined;
@@ -139,7 +141,7 @@ export function useRemoteOptions<T>(columns: DataGridColumn<T>[]) {
   for (const column of columns) if (column.loadOptions) store.register(column.field, column.loadOptions);
   const version = React.useSyncExternalStore(store.subscribe, store.getVersion, store.getVersion);
   const resolvedColumns = React.useMemo(
-    () => columns.some(column => column.loadOptions) ? columns.map(column => store.resolve(column)) : columns,
+    () => columns.some(column => column.loadOptions || (column.type === "lookup" && column.searchLookup)) ? columns.map(column => store.resolve(column)) : columns,
     // La versión cambia solo cuando un catálogo llega o falla, o se recuerda una opción elegida.
     [columns, store, version],
   );
@@ -148,7 +150,8 @@ export function useRemoteOptions<T>(columns: DataGridColumn<T>[]) {
 
 /** Solo las columnas remotas visibles cargan "" (una oculta lo hace al mostrarse). */
 export function useCatalogLoading<T>(store: RemoteOptionsStore, columns: DataGridColumn<T>[], visibility: Record<string, boolean>, rows: readonly T[]) {
-  const loadsCatalog = (column: DataGridColumn<T>) => column.loadOptions && column.options === undefined && visibility[column.field] !== false;
+  const loadsCatalog = (column: DataGridColumn<T>) =>
+    !(column.type === "lookup" && column.searchLookup) && column.loadOptions && column.options === undefined && visibility[column.field] !== false;
   React.useEffect(() => {
     for (const column of columns) {
       if (hasRemoteCatalog(column.type) && loadsCatalog(column)) store.ensureCatalog(column.field);
@@ -202,14 +205,15 @@ export function useColumnOptions<T, O>(column: DataGridColumn<T, O>, query: stri
 /** Lo que un `SearchableSelectField` de una columna remota necesita: opciones, estado y manejadores. */
 export function useRemoteSelect<T, O>(column: DataGridColumn<T, O>, value: unknown, forceEnabled = false) {
   const { store, loadOptionsError } = useRemoteContext();
-  const remote = column.loadOptions !== undefined;
+  const pagedLookup = column.type === "lookup" && column.searchLookup !== undefined;
+  const remote = !pagedLookup && column.loadOptions !== undefined;
   const field = column.field;
   const [query, setQuery] = React.useState("");
   const [opened, setOpened] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   React.useEffect(() => () => clearTimeout(timer.current), []);
   // Con options estáticas junto a loadOptions nada se carga hasta que se abre el selector.
-  const { options: found, loading, error, retry } = useColumnOptions(column, query, column.options === undefined || opened || forceEnabled);
+  const { options: found, loading, error, retry } = useColumnOptions(column, query, remote && (column.options === undefined || opened || forceEnabled));
 
   const baseValue = (column.getOptionValue ?? optionValueOf) as ValueOf;
   const baseLabel = (column.getOptionLabel ?? optionLabelOf) as (option: any) => string;
@@ -255,7 +259,8 @@ export function useRemoteSelect<T, O>(column: DataGridColumn<T, O>, value: unkno
 export function useRemoteLookup<T, O>(column: DataGridColumn<T, O>, value: unknown) {
   const { store, loadOptionsError } = useRemoteContext();
   const { field, loadOptions: loader, options } = column;
-  if (loader) store.register(field, loader as Loader);
+  const searchLookup = column.type === "lookup" ? column.searchLookup : undefined;
+  if (!searchLookup && loader) store.register(field, loader as Loader);
   const baseValue = (column.getOptionValue ?? optionValueOf) as ValueOf;
   const baseLabel = (column.getOptionLabel ?? optionLabelOf) as (option: any) => string;
 
@@ -264,7 +269,8 @@ export function useRemoteLookup<T, O>(column: DataGridColumn<T, O>, value: unkno
   const known = value == null ? undefined : (store.findOption(field, value, baseValue) ?? options?.find(option => baseValue(option) === value)) as O | undefined;
   const selectedItem: O | null = value == null ? null : known ?? placeholder;
 
-  const search = (query: string): Promise<O[]> => {
+  const search = (query: string, ctx: LookupSearchContext): Promise<LookupSearchResponse<O>> => {
+    if (searchLookup) return searchLookup(query, ctx);
     if (loader) return store.load(field, query) as Promise<O[]>;
     const needle = normalizeText(query);
     return Promise.resolve((options ?? []).filter(option => normalizeText(baseLabel(option)).includes(needle)));
@@ -274,7 +280,7 @@ export function useRemoteLookup<T, O>(column: DataGridColumn<T, O>, value: unkno
     selectedItem, search, loadOptionsError,
     getItemId: (item: O) => (item === placeholder ? value : baseValue(item)) as string | number,
     getItemLabel: (item: O) => item === placeholder ? String(value) : baseLabel(item),
-    remember: (item: O) => { if (loader) store.remember(field, item, baseValue); },
+    remember: (item: O) => { if (searchLookup || loader) store.remember(field, item, baseValue); },
     valueOf: (item: O) => baseValue(item),
   };
 }
