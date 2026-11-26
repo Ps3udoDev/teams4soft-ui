@@ -152,4 +152,18 @@ describe("createGridRowsStore", () => {
     expect(store.getBaseRow("r-1")).toBe(next);
     expect(store.getBaseRow("no-existe")).toBeUndefined();
   });
+
+  it("replaceCurrent con filas reordenadas conserva la base por ID y detecta solo los dirtyIds reales", () => {
+    const store = make();
+    store.edit("r-2", "name", "b-editado");
+    // Refetch reordenado preservando el borrador de r-2
+    store.replaceCurrent([
+      { id: "r-3", name: "c", qty: 3 },
+      { id: "r-2", name: "b-editado", qty: 2 },
+      { id: "r-1", name: "a", qty: 1 },
+    ]);
+    expect(store.getDiff()).toEqual({ dirtyIds: ["r-2"], addedIds: [], removedIds: [] });
+    expect(store.getRow("r-2")?.name).toBe("b-editado");
+    expect(store.getBaseRow("r-2")?.name).toBe("b");
+  });
 });

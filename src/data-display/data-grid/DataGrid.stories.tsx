@@ -500,3 +500,141 @@ export const PrimasPorCobrarCompleta: Story = {
   render: () => <PrimasCompletaExample />,
   parameters: { docs: { description: { story: "Reproduce la captura de Primas por cobrar sobre 500 cuotas en un servidor simulado (400 ms): paginación, orden y filtros en el servidor; casilla «Imputar», sucursal (select), ramo (columna `lookup` con modal), texto editable con `maxLength`, importes que recalculan «Neto» con `grid.patchRow`, comisión editable por fila, celda propia de estado, «Agregar» y eliminar fila (columna fija a la derecha). Endoso simula la consulta de cuotas al confirmar. Las ediciones confirmadas se guardan en el servidor simulado y sobreviven al cambio de página." } } },
 };
+
+type Remote10kRow = { id: string; policy: string; providerId: number | null; amount: number };
+type ProviderOpt = { value: number; code: string; label: string };
+
+const TOTAL_10K = 10_000;
+const make10kRow = (index: number): Remote10kRow => ({
+  id: `pol-${index + 1}`,
+  policy: `POL-${String(10_001 + index)}`,
+  providerId: (index % 200) + 1,
+  amount: 500 + ((index * 37) % 1000),
+});
+const make10kProvider = (index: number): ProviderOpt => ({
+  value: index + 1,
+  code: `PRV-${String(index + 1).padStart(5, "0")}`,
+  label: `Proveedor ${index + 1}`,
+});
+
+function Catalogo10kPaginadoExample() {
+  const [rows, setRows] = React.useState<Remote10kRow[]>([]);
+  const [total, setTotal] = React.useState(0);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [simulateError, setSimulateError] = React.useState(false);
+  const [simulateEmpty, setSimulateEmpty] = React.useState(false);
+  const [drafts, setDrafts] = React.useState<Record<string, Partial<Remote10kRow>>>({});
+  const [lookupCalls, setLookupCalls] = React.useState(0);
+  const lastQueryRef = React.useRef<DataGridQuery>({ pageIndex: 0, pageSize: 50, sorting: [], filters: {} });
+  const requestRef = React.useRef(0);
+  const simulateErrorRef = React.useRef(simulateError);
+  simulateErrorRef.current = simulateError;
+  const simulateEmptyRef = React.useRef(simulateEmpty);
+  simulateEmptyRef.current = simulateEmpty;
+
+  const loadPage = React.useCallback((query: DataGridQuery) => {
+    lastQueryRef.current = query;
+    const req = ++requestRef.current;
+    setLoading(true);
+    setError(null);
+    void delay(150).then(() => {
+      if (req !== requestRef.current) return;
+      if (simulateErrorRef.current) {
+        setError("Error al consultar la página remota. Reintente.");
+        setLoading(false);
+        return;
+      }
+      if (simulateEmptyRef.current) {
+        setRows([]);
+        setTotal(0);
+        setLoading(false);
+        return;
+      }
+      const start = query.pageIndex * query.pageSize;
+      const count = Math.max(0, Math.min(query.pageSize, TOTAL_10K - start));
+      setRows(Array.from({ length: count }, (_, i) => make10kRow(start + i)));
+      setTotal(TOTAL_10K);
+      setLoading(false);
+    });
+  }, []);
+
+  const composedRows = React.useMemo(
+    () => rows.map((row) => (drafts[row.id] ? { ...row, ...drafts[row.id] } : row)),
+    [rows, drafts],
+  );
+
+  const serverSide = React.useMemo(() => ({ totalRecords: total, onQueryChange: loadPage }), [total, loadPage]);
+
+  const columns = React.useMemo<DataGridColumn<Remote10kRow>[]>(() => [
+    textColumn<Remote10kRow>("policy", "Póliza", { editable: true, frozen: "left", minWidth: 140 }),
+    {
+      field: "providerId",
+      header: "Proveedor (10k paginado)",
+      type: "lookup",
+      editable: true,
+      minWidth: 240,
+      filter: false,
+      lookupColumns: [
+        { field: "code", header: "Código", minWidth: 110 },
+        { field: "label", header: "Nombre", minWidth: 180 },
+      ],
+      searchLookup: async (query, ctx) => {
+        setLookupCalls((c) => c + 1);
+        await delay(100);
+        if (ctx.signal.aborted) return null;
+        const needle = query.trim().toLowerCase();
+        const start = (ctx.page - 1) * ctx.pageSize;
+        if (!needle) {
+          const count = Math.max(0, Math.min(ctx.pageSize, TOTAL_10K - start));
+          return { items: Array.from({ length: count }, (_, i) => make10kProvider(start + i)), total: TOTAL_10K };
+        }
+        const matched: ProviderOpt[] = [];
+        for (let i = 0; i < TOTAL_10K; i++) {
+          const opt = make10kProvider(i);
+          if (opt.code.toLowerCase().includes(needle) || opt.label.toLowerCase().includes(needle)) matched.push(opt);
+        }
+        return { items: matched.slice(start, start + ctx.pageSize), total: matched.length };
+      },
+    },
+    amountColumn<Remote10kRow>("amount", "Importe", { editable: true, minWidth: 130 }),
+  ], []);
+
+  return <div className="grid gap-4">
+    <div className="flex flex-wrap items-center gap-2">
+      <Button variant="outline" onClick={() => setSimulateError((v) => !v)}>{simulateError ? "Error simulado: ON" : "Error simulado: OFF"}</Button>
+      <Button variant="outline" onClick={() => setSimulateEmpty((v) => !v)}>{simulateEmpty ? "Vacío simulado: ON" : "Vacío simulado: OFF"}</Button>
+      <Button onClick={() => loadPage(lastQueryRef.current)}>Recargar / Reintentar</Button>
+    </div>
+    {error ? <p role="alert" className="text-sm text-ui-danger">{error}</p> : null}
+    <DataGrid
+      columns={columns}
+      value={composedRows}
+      getRowId={(r) => r.id}
+      loading={loading}
+      serverSide={serverSide}
+      pagination={{ pageSize: 50, pageSizeOptions: [25, 50, 100] }}
+      emptyState={{ title: "Sin pólizas para los criterios actuales", hint: "Desactive el modo vacío o reintente la carga." }}
+      onChange={(data, change) => {
+        if (change.type === "edit" && change.rowId) {
+          const row = data.rows.find((r) => r.id === change.rowId);
+          if (row) setDrafts((prev) => ({ ...prev, [change.rowId!]: row }));
+        }
+      }}
+    />
+    <output aria-live="polite" className="rounded border border-ui-border p-3 text-xs">
+      Borradores conservados por ID: {Object.keys(drafts).length} · Consultas lookup paginadas: {lookupCalls}
+    </output>
+  </div>;
+}
+
+export const Catalogo10kPaginado: Story = {
+  render: () => <Catalogo10kPaginadoExample />,
+  parameters: {
+    docs: {
+      description: {
+        story: "Catálogo sintético determinista de 10 000 filas paginado de 50 en 50 con celda `lookup` usando `searchLookup` (cero precarga al montar), estados de carga inicial/recarga, error con reintento, vacío, retorno de foco por teclado y preservación de borradores por ID entre páginas.",
+      },
+    },
+  },
+};

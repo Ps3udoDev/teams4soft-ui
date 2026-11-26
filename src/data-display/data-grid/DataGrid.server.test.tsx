@@ -565,3 +565,130 @@ describe("DataGrid: serverSide, avisos de desarrollo", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 });
+
+describe("DataGrid: serverSide, paridad de consulta, orden y borradores por ID", () => {
+  it("editar tras ordenar y filtrar modifica únicamente la fila por su ID y conserva borradores al refrescar", async () => {
+    const user = userEvent.setup();
+    const onQuery = vi.fn();
+    function Parent() {
+      const [drafts, setDrafts] = React.useState<Record<string, Partial<Premium>>>({});
+      const [query, setQuery] = React.useState<DataGridQuery>({ pageIndex: 0, pageSize: 10, sorting: [], filters: {} });
+      const base = React.useMemo(() => {
+        let list = [...pageRows(0), ...pageRows(1)];
+        const filter = query.filters.policy;
+        if (filter && typeof filter.value === "string") {
+          list = list.filter(r => r.policy.toLowerCase().includes(filter.value as string));
+        }
+        if (query.sorting[0]?.field === "policy" && query.sorting[0].desc) {
+          list = [...list].reverse();
+        }
+        return list.slice(query.pageIndex * query.pageSize, (query.pageIndex + 1) * query.pageSize);
+      }, [query]);
+      const composed = React.useMemo(
+        () => base.map(r => (drafts[r.id] ? { ...r, ...drafts[r.id] } : r)),
+        [base, drafts],
+      );
+      const serverSide = React.useMemo(() => ({
+        totalRecords: 20,
+        onQueryChange: (q: DataGridQuery) => { onQuery(q); setQuery(q); },
+      }), []);
+      return (
+        <DataGrid
+          columns={editableColumns}
+          getRowId={getRowId}
+          value={composed}
+          serverSide={serverSide}
+          onChange={(data, change) => {
+            if (change.type === "edit" && change.rowId) {
+              const row = data.rows.find(r => r.id === change.rowId);
+              if (row) setDrafts(prev => ({ ...prev, [change.rowId!]: { policy: row.policy } }));
+            }
+          }}
+        />
+      );
+    }
+
+    render(<Parent />);
+    // Ordenar descendente -> la primera fila visible pasa a ser r-20 ("Pol 20")
+    await user.click(screen.getByRole("button", { name: "Ordenar por Póliza" }));
+    await user.click(screen.getByRole("button", { name: "Ordenar por Póliza" }));
+    expect(onQuery).toHaveBeenLastCalledWith(expect.objectContaining({ pageIndex: 0, sorting: [{ field: "policy", desc: true }] }));
+
+    const firstInput = () => within(bodyRows()[0]!).getByRole("textbox", { name: "Póliza" });
+    expect(firstInput()).toHaveValue("Pol 20");
+    await user.clear(firstInput());
+    await user.type(firstInput(), "Pol 20-EDIT");
+    await user.tab();
+
+    // Ir a página 2 y volver a página 1: el borrador recompuesto por ID sobrevive al refetch
+    await next(user);
+    expect(firstInput()).toHaveValue("Pol 10");
+    await click(user, "Página anterior");
+    expect(firstInput()).toHaveValue("Pol 20-EDIT");
+    expect(within(bodyRows()[1]!).getByRole("textbox", { name: "Póliza" })).toHaveValue("Pol 19");
+  });
+
+  it("cancelar navegación con cambios pendientes conserva página, selección y valor del borrador", async () => {
+    const user = userEvent.setup();
+    function GuardedParent() {
+      const [page, setPage] = React.useState(0);
+      const [rowsByPage, setRowsByPage] = React.useState<Record<number, Premium[]>>({ 0: pageRows(0), 1: pageRows(1) });
+      const [selection, setSelection] = React.useState<string[]>([]);
+      const [dirty, setDirty] = React.useState(false);
+      const [pendingPage, setPendingPage] = React.useState<number | null>(null);
+      const [gridKey, setGridKey] = React.useState(0);
+
+      const serverSide = React.useMemo(() => ({
+        totalRecords: 20,
+        onQueryChange: (q: DataGridQuery) => {
+          if (q.pageIndex === page) return;
+          if (dirty) {
+            setPendingPage(q.pageIndex);
+            return;
+          }
+          setPage(q.pageIndex);
+        },
+      }), [page, dirty]);
+
+      return (
+        <div>
+          <DataGrid
+            key={gridKey}
+            columns={editableColumns}
+            getRowId={getRowId}
+            value={rowsByPage[page]}
+            selectionMode="multiple"
+            selection={selection}
+            onSelectionChange={setSelection}
+            serverSide={serverSide}
+            onChange={(data) => {
+              setRowsByPage(prev => ({ ...prev, [page]: data.rows }));
+              setDirty(data.dirtyIds.length > 0);
+            }}
+          />
+          {pendingPage !== null && (
+            <div role="alertdialog" aria-label="Cambios sin guardar">
+              <button onClick={() => { setPendingPage(null); setGridKey(k => k + 1); }}>Cancelar navegación</button>
+              <button onClick={() => { setDirty(false); setPage(pendingPage); setPendingPage(null); }}>Descartar y avanzar</button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    render(<GuardedParent />);
+    await user.click(screen.getAllByRole("checkbox", { name: "Seleccionar fila" })[0]!);
+    const firstInput = () => within(bodyRows()[0]!).getByRole("textbox", { name: "Póliza" });
+    await user.clear(firstInput());
+    await user.type(firstInput(), "Borrador-1");
+    await user.tab();
+
+    await next(user);
+    expect(screen.getByRole("alertdialog", { name: "Cambios sin guardar" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancelar navegación" }));
+
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(firstInput()).toHaveValue("Borrador-1");
+    expect(screen.getAllByRole("checkbox", { name: "Seleccionar fila" })[0]).toBeChecked();
+  });
+});
