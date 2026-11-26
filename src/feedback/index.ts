@@ -46,3 +46,7 @@ export type {
   ToastStatus,
   ToastEntry,
 } from "./toast/Toast.types";
+export { StatusTag } from "./status-tag/StatusTag";
+export type { StatusTagProps, StatusTagTone } from "./status-tag/StatusTag.types";
+export { InlineMessage } from "./inline-message/InlineMessage";
+export type { InlineMessageProps, InlineMessageTone } from "./inline-message/InlineMessage.types";
