@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-11-26",
+  "exceptions": [
+    {
+      "id": "GHSA-g7r4-m6w7-qqqr",
+      "package": "esbuild",
+      "version": "0.27.7",
+      "scope": "dev",
+      "mitigation": "Low severity affecting only the esbuild dev server on Windows. esbuild is dev-only (tsup 8.5.1, storybook 10.6.8, vite 8.3.8) and is never bundled or shipped in the published npm tarball. Remove once tsup/storybook migrate to esbuild >= 0.28.1.",
+      "owner": "Ps3udoDev",
+      "expiresAt": "2027-01-25"
+    },
+    {
+      "id": "GHSA-3g3m-2fjr-6pw4",
+      "package": "glob",
+      "version": "13.0.6",
+      "scope": "dev",
+      "mitigation": "Moderate severity reachable only via Storybook docgen (@storybook/react-vite@10.6.8 > @joshwooding/vite-plugin-react-docgen-typescript@0.7.0) during local/CI Storybook builds on trusted repo sources. Never shipped in dist tarball. Remove once upstream migrates to glob >= 14.0.2.",
+      "owner": "Ps3udoDev",
+      "expiresAt": "2027-01-25"
+    },
+    {
+      "id": "GHSA-g3hv-75wg-m249",
+      "package": "minimatch",
+      "version": "10.2.5",
+      "scope": "dev",
+      "mitigation": "Moderate ReDoS/amplification reachable only via Storybook docgen (glob@13.0.6 > minimatch@10.2.5) on trusted static globs in this repository. Never shipped in dist tarball. Remove once upstream migrates to glob >= 14.0.2 / minimatch >= 11.0.1.",
+      "owner": "Ps3udoDev",
+      "expiresAt": "2027-01-25"
+    }
+  ]
+}

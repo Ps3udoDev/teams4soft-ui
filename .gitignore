@@ -18,8 +18,10 @@ skills-lock.json
 # Skills de Claude instaladas localmente (no commiteables)
 .claude/
 
-# Docs locales no commiteables (plan 2b y presentación)
+# Docs locales no commiteables (planes, especificaciones y presentación)
 docs/*
 !docs/migration/
+docs/migration/*
+!docs/migration/excepciones-seguridad.json
 # tija (local)
 .tija/

@@ -6,41 +6,162 @@ on:
 
 permissions:
   contents: read
-  id-token: write # requerido para provenance
 
 jobs:
-  publish:
+  build-and-verify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 24
-          registry-url: "https://registry.npmjs.org"
+          node-version: "24.22.3"
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - name: Verify clean install (React 19)
-        run: node scripts/verify-clean-install.mjs
-      - name: Verify clean install (React 18)
-        run: node scripts/verify-clean-install.mjs
+      - name: Record toolchain baseline
+        run: |
+          echo "commit=$(git rev-parse HEAD)"
+          echo "tag=${GITHUB_REF_NAME}"
+          echo "node=$(node -v)"
+          echo "pnpm=$(pnpm -v)"
+          echo "lockfile_sha256=$(sha256sum pnpm-lock.yaml | awk '{print $1}')"
+      - name: Validate release tag, branch ancestry and channel
         env:
-          REACT_VERSION: "18"
-      - name: Verify release type matches version
-        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
           IS_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          case "$VERSION" in
-            *-*) HAS_SUFFIX=true ;;
-            *) HAS_SUFFIX=false ;;
-          esac
-          if [ "$HAS_SUFFIX" != "$IS_PRERELEASE" ]; then
-            echo "::error::package.json version $VERSION (pre-release suffix: $HAS_SUFFIX) does not match the GitHub Release prerelease flag ($IS_PRERELEASE)"
-            exit 1
-          fi
-      - name: Publish to npm
-        run: pnpm publish --access public --provenance --no-git-checks --tag ${{ github.event.release.prerelease && 'next' || 'latest' }}
+          git fetch origin +refs/heads/main:refs/remotes/origin/main
+          node scripts/release-gate.mjs validate
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
+      - name: Test security and release gate scripts
+        run: node --test scripts/audit-lockfile.test.mjs scripts/release-gate.test.mjs
+      - name: Build
+        run: pnpm build
+      - name: Audit lockfile (OSV)
+        run: |
+          mkdir -p release-artifact
+          node scripts/audit-lockfile.mjs --out "release-artifact/osv-audit-${GITHUB_SHA}.json"
+      - name: Pack tarball once and write manifest
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          pnpm pack --pack-destination release-artifact
+          node scripts/release-gate.mjs manifest release-artifact
+      - name: Verify exact tarball clean install (React 19)
+        run: |
+          TARBALL=$(node -p "'release-artifact/' + require('./release-artifact/manifest.json').tarball")
+          node scripts/verify-clean-install.mjs "$TARBALL"
+      - name: Verify exact tarball clean install (React 18)
+        env:
+          REACT_VERSION: "18"
+        run: |
+          TARBALL=$(node -p "'release-artifact/' + require('./release-artifact/manifest.json').tarball")
+          node scripts/verify-clean-install.mjs "$TARBALL"
+      - name: Upload verified release candidate artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: release-artifact
+          if-no-files-found: error
+
+  publish:
+    needs: build-and-verify
+    runs-on: ubuntu-latest
+    environment: Production
+    permissions:
+      contents: read
+      id-token: write # npm OIDC trusted publisher + provenance
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.22.3"
+          registry-url: "https://registry.npmjs.org"
+      - name: Download verified release candidate artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: release-artifact
+      - name: Verify artifact digest, OSV evidence and registry idempotency
+        id: verify
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_TAG: ${{ github.event.release.tag_name }}
+          IS_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          node --input-type=module -e '
+            import { createHash } from "node:crypto";
+            import { appendFileSync, readFileSync } from "node:fs";
+            import { basename, join } from "node:path";
+
+            const manifest = JSON.parse(readFileSync("release-artifact/manifest.json", "utf8"));
+            const expectedChannel = process.env.IS_PRERELEASE === "true" ? "next" : "latest";
+            if (manifest.package !== "@teams4soft/teams4soft-ui") {
+              throw new Error(`Unexpected package: ${manifest.package}`);
+            }
+            if (manifest.gitSha !== process.env.EXPECTED_SHA) {
+              throw new Error(`SHA mismatch: ${manifest.gitSha} !== ${process.env.EXPECTED_SHA}`);
+            }
+            if (manifest.tag !== process.env.EXPECTED_TAG || `v${manifest.version}` !== process.env.EXPECTED_TAG) {
+              throw new Error(`Tag/version mismatch: ${manifest.tag} / ${manifest.version} vs ${process.env.EXPECTED_TAG}`);
+            }
+            if (manifest.channel !== expectedChannel) {
+              throw new Error(`Channel mismatch: ${manifest.channel} !== ${expectedChannel}`);
+            }
+            if (!manifest.tarball || basename(manifest.tarball) !== manifest.tarball || !manifest.tarball.endsWith(".tgz") || /[\r\n]/.test(manifest.tarball)) {
+              throw new Error(`Invalid tarball name: ${manifest.tarball}`);
+            }
+
+            const osvAudit = JSON.parse(readFileSync(join("release-artifact", `osv-audit-${process.env.EXPECTED_SHA}.json`), "utf8"));
+            if (osvAudit.commitSha !== process.env.EXPECTED_SHA || osvAudit.complete !== true || osvAudit.blocked !== false) {
+              throw new Error("OSV audit evidence missing, incomplete, or blocked for this candidate SHA");
+            }
+
+            const bytes = readFileSync(join("release-artifact", manifest.tarball));
+            const integrity = "sha512-" + createHash("sha512").update(bytes).digest("base64");
+            if (integrity !== manifest.integrity) {
+              throw new Error(`Digest mismatch: ${integrity} !== ${manifest.integrity}`);
+            }
+
+            const url = `https://registry.npmjs.org/${encodeURIComponent(manifest.package)}/${encodeURIComponent(manifest.version)}`;
+            const res = await fetch(url, { headers: { accept: "application/json" } });
+            let alreadyPublished = false;
+            if (res.status === 200) {
+              const data = await res.json();
+              if (data?.dist?.integrity !== integrity) {
+                throw new Error(`Version ${manifest.package}@${manifest.version} already exists with different integrity.`);
+              }
+              if (!data?.dist?.attestations?.provenance) {
+                throw new Error(`Version ${manifest.package}@${manifest.version} already exists without provenance attestation.`);
+              }
+              console.log(`Already published with identical integrity (${integrity}) and provenance; marking idempotent retry complete.`);
+              alreadyPublished = true;
+            } else if (res.status !== 404) {
+              throw new Error(`Unexpected npm registry status: ${res.status}`);
+            }
+
+            appendFileSync(process.env.GITHUB_OUTPUT, [
+              `tarball=${manifest.tarball}`,
+              `channel=${manifest.channel}`,
+              `already_published=${alreadyPublished}`,
+            ].join("\n") + "\n");
+          '
+      - name: Publish verified tarball via npm OIDC
+        if: steps.verify.outputs.already_published != 'true'
+        env:
+          TARBALL: ${{ steps.verify.outputs.tarball }}
+          CHANNEL: ${{ steps.verify.outputs.channel }}
+        run: |
+          npm publish "release-artifact/${TARBALL}" \
+            --access public \
+            --provenance \
+            --tag "${CHANNEL}" \
+            --ignore-scripts

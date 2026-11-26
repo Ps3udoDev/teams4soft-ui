@@ -19,11 +19,28 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 24
+          node-version: "24.22.3"
           cache: pnpm
+      - name: Record toolchain baseline
+        run: |
+          echo "commit=$(git rev-parse HEAD)"
+          echo "node=$(node -v)"
+          echo "pnpm=$(pnpm -v)"
+          echo "lockfile_sha256=$(sha256sum pnpm-lock.yaml | awk '{print $1}')"
       - run: pnpm install --frozen-lockfile
-      - name: Audit dependencies
+      - name: Audit dependencies (npm)
         run: pnpm audit --audit-level high
+      - name: Test security and release gate scripts
+        run: node --test scripts/audit-lockfile.test.mjs scripts/release-gate.test.mjs
+      - name: Audit lockfile (OSV)
+        run: node scripts/audit-lockfile.mjs --out "osv-audit-${GITHUB_SHA}.json"
+      - name: Upload OSV audit report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: osv-audit-${{ github.sha }}
+          path: osv-audit-${{ github.sha }}.json
+          if-no-files-found: warn
 
   dependency-review:
     if: github.event_name == 'pull_request'
@@ -41,7 +58,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: github/codeql-action/init@4187e74d05793876e9989daffde9c3e66b4acd07 # v3
+      - uses: github/codeql-action/init@915412ff23e8b7659517e607487dbeae018f2934 # v4
         with:
           languages: javascript-typescript
-      - uses: github/codeql-action/analyze@4187e74d05793876e9989daffde9c3e66b4acd07 # v3
+      - uses: github/codeql-action/analyze@915412ff23e8b7659517e607487dbeae018f2934 # v4
